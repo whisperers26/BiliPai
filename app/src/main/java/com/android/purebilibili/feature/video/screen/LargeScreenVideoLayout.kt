@@ -225,6 +225,8 @@ internal fun LargeScreenVideoLayout(
                     onOpenBilibiliLink = onOpenBilibiliLink,
                     requestedTabName = null,
                     onRequestedTabConsumed = {},
+                    fixedTab = resolveSecondaryFixedTab(metrics.mode),
+                    showHeader = shouldShowSecondaryHeader(metrics.mode),
                     danmakuEnabled = danmakuChrome.enabled,
                     onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
                     onDanmakuToggle = danmakuChrome.onToggle,

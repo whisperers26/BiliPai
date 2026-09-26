@@ -168,6 +168,15 @@ internal fun shouldReserveStatusBarAbovePlayer(mode: LargeScreenVideoLayoutMode)
     return mode == LargeScreenVideoLayoutMode.AlmostSquare
 }
 
+/** The near-square side pane is comments only; the player already offers danmaku actions. */
+internal fun resolveSecondaryFixedTab(mode: LargeScreenVideoLayoutMode): TabletSecondaryTab? {
+    return if (mode == LargeScreenVideoLayoutMode.AlmostSquare) TabletSecondaryTab.COMMENTS else null
+}
+
+internal fun shouldShowSecondaryHeader(mode: LargeScreenVideoLayoutMode): Boolean {
+    return mode != LargeScreenVideoLayoutMode.AlmostSquare
+}
+
 internal fun resolveShowRelatedInIntro(mode: LargeScreenVideoLayoutMode): Boolean {
     return mode == LargeScreenVideoLayoutMode.AlmostSquare
 }

@@ -216,6 +216,17 @@ class LargeScreenVideoLayoutPolicyTest {
     }
 
     @Test
+    fun almostSquareSidePaneShowsOnlyCommentsWithoutHeaderRow() {
+        assertEquals(
+            TabletSecondaryTab.COMMENTS,
+            resolveSecondaryFixedTab(LargeScreenVideoLayoutMode.AlmostSquare),
+        )
+        assertFalse(shouldShowSecondaryHeader(LargeScreenVideoLayoutMode.AlmostSquare))
+        assertEquals(null, resolveSecondaryFixedTab(LargeScreenVideoLayoutMode.Landscape))
+        assertTrue(shouldShowSecondaryHeader(LargeScreenVideoLayoutMode.Landscape))
+    }
+
+    @Test
     fun galaxyFoldInnerPortrait_playerFillsFullWidthBeforeDetailPanes() {
         // Galaxy Z Fold inner display: 2256 x 2504 px at density 3.0 -> 752 x 835dp.
         val metrics = resolveLargeScreenVideoMetrics(

@@ -743,6 +743,7 @@ internal fun TabletSecondaryContent(
     requestedTabName: String?,
     onRequestedTabConsumed: () -> Unit,
     fixedTab: TabletSecondaryTab? = null,
+    showHeader: Boolean = true,
     introContent: (@Composable () -> Unit)? = null,
     applyStatusBarPadding: Boolean = true,
     includeRelatedTab: Boolean = true,
@@ -911,7 +912,9 @@ internal fun TabletSecondaryContent(
             .then(if (applyStatusBarPadding) Modifier.statusBarsPadding() else Modifier)
             .background(MaterialTheme.colorScheme.background)
     ) {
-        if (fixedTab == null && tabs.size > 1) {
+        if (!showHeader) {
+            // Content only: the tab and danmaku row is left out.
+        } else if (fixedTab == null && tabs.size > 1) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
