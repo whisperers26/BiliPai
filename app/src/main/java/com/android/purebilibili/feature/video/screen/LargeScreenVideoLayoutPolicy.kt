@@ -185,6 +185,19 @@ internal fun shouldUseCompactVideoInfo(mode: LargeScreenVideoLayoutMode): Boolea
     return mode == LargeScreenVideoLayoutMode.AlmostSquare
 }
 
+/** What the compact info pane pins below the video info. */
+internal enum class CompactInfoBottomContent { Related, Actions, None }
+
+/** The owner row's more button swaps 更多推荐 for the full action buttons row. */
+internal fun resolveCompactInfoBottomContent(
+    actionsExpanded: Boolean,
+    hasRelated: Boolean,
+): CompactInfoBottomContent = when {
+    actionsExpanded -> CompactInfoBottomContent.Actions
+    hasRelated -> CompactInfoBottomContent.Related
+    else -> CompactInfoBottomContent.None
+}
+
 internal data class TabletVideoInfoSpacing(
     val fontScale: Float,
     val topPaddingDp: Float,

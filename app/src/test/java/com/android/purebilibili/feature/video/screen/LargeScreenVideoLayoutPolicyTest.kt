@@ -242,6 +242,26 @@ class LargeScreenVideoLayoutPolicyTest {
     }
 
     @Test
+    fun compactInfoMoreButtonSwapsRelatedVideosForTheActionButtons() {
+        assertEquals(
+            CompactInfoBottomContent.Related,
+            resolveCompactInfoBottomContent(actionsExpanded = false, hasRelated = true),
+        )
+        assertEquals(
+            CompactInfoBottomContent.Actions,
+            resolveCompactInfoBottomContent(actionsExpanded = true, hasRelated = true),
+        )
+        assertEquals(
+            CompactInfoBottomContent.Actions,
+            resolveCompactInfoBottomContent(actionsExpanded = true, hasRelated = false),
+        )
+        assertEquals(
+            CompactInfoBottomContent.None,
+            resolveCompactInfoBottomContent(actionsExpanded = false, hasRelated = false),
+        )
+    }
+
+    @Test
     fun galaxyFoldInnerPortrait_playerFillsFullWidthBeforeDetailPanes() {
         // Galaxy Z Fold inner display: 2256 x 2504 px at density 3.0 -> 752 x 835dp.
         val metrics = resolveLargeScreenVideoMetrics(
