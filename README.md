@@ -1,3 +1,5 @@
+**BiliPai魔改，仅为个人使用，折叠屏体验优化**
+
 <div align="center">
 
 <img src="docs/images/233娘.jpeg" height="96" alt="BiliPai" />
