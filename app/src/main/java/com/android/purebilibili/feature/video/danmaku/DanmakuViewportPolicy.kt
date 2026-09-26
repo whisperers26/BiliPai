@@ -14,6 +14,20 @@ data class DanmakuViewport(
     }
 }
 
+private const val DANMAKU_REFERENCE_VIDEO_ASPECT = 16f / 9f
+
+/**
+ * Short side of a 16:9 video fitted fullscreen into the window, which is what the danmaku
+ * surface measures in fullscreen. Near-square screens (foldable inner displays) letterbox it,
+ * so their raw short side would shrink every danmaku.
+ */
+fun resolveDanmakuReferenceShortSidePx(windowWidthPx: Int, windowHeightPx: Int): Float {
+    if (windowWidthPx <= 0 || windowHeightPx <= 0) return 0f
+    val shortSide = minOf(windowWidthPx, windowHeightPx).toFloat()
+    val longSide = maxOf(windowWidthPx, windowHeightPx).toFloat()
+    return minOf(shortSide, longSide / DANMAKU_REFERENCE_VIDEO_ASPECT)
+}
+
 fun resolveDanmakuViewport(
     widthPx: Int,
     heightPx: Int,

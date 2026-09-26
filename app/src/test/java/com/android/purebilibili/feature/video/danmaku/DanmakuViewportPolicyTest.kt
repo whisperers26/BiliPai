@@ -24,6 +24,25 @@ class DanmakuViewportPolicyTest {
     }
 
     @Test
+    fun `reference is the short side of a fullscreen video frame`() {
+        // Tall phone: a 16:9 frame fills the short side either way round.
+        assertEquals(1080f, resolveDanmakuReferenceShortSidePx(1080, 2392), 0f)
+        assertEquals(1080f, resolveDanmakuReferenceShortSidePx(2392, 1080), 0f)
+        // Near-square foldable inner screen: the fullscreen frame is letterboxed.
+        assertEquals(2504f * 9f / 16f, resolveDanmakuReferenceShortSidePx(2256, 2504), 0.001f)
+        assertEquals(0f, resolveDanmakuReferenceShortSidePx(0, 2504), 0f)
+    }
+
+    @Test
+    fun `foldable fullscreen video keeps full size and inline stays close to it`() {
+        val reference = resolveDanmakuReferenceShortSidePx(2256, 2504)
+        val fullscreen = requireNotNull(resolveDanmakuViewport(2504, 1409, 3f, reference))
+        val inline = requireNotNull(resolveDanmakuViewport(1624, 913, 3f, reference))
+        assertEquals(1f, fullscreen.scale, 0.001f)
+        assertTrue(inline.scale > 0.6f)
+    }
+
+    @Test
     fun `proportional geometry retains line budget including scaled interline spacing`() {
         fun lines(scale: Float) = resolveDanmakuVisibleLineCount(
             visibleHeightPx = 500f * scale,
