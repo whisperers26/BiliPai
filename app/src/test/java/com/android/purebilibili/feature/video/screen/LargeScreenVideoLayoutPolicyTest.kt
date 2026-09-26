@@ -203,6 +203,19 @@ class LargeScreenVideoLayoutPolicyTest {
     }
 
     @Test
+    fun almostSquarePlayerSitsBelowStatusBarWhileOtherModesPadTheSidePane() {
+        assertTrue(shouldReserveStatusBarAbovePlayer(LargeScreenVideoLayoutMode.AlmostSquare))
+        assertFalse(shouldReserveStatusBarAbovePlayer(LargeScreenVideoLayoutMode.Landscape))
+        assertFalse(shouldReserveStatusBarAbovePlayer(LargeScreenVideoLayoutMode.Split))
+        val source = java.io.File(
+            "app/src/main/java/com/android/purebilibili/feature/video/screen/LargeScreenVideoLayout.kt"
+        ).takeIf { it.exists() } ?: java.io.File(
+            "src/main/java/com/android/purebilibili/feature/video/screen/LargeScreenVideoLayout.kt"
+        )
+        assertTrue(source.readText().contains("windowInsetsTopHeight(WindowInsets.statusBars)"))
+    }
+
+    @Test
     fun galaxyFoldInnerPortrait_playerFillsFullWidthBeforeDetailPanes() {
         // Galaxy Z Fold inner display: 2256 x 2504 px at density 3.0 -> 752 x 835dp.
         val metrics = resolveLargeScreenVideoMetrics(

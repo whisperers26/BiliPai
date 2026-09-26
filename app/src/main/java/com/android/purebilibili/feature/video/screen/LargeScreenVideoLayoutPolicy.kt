@@ -160,6 +160,14 @@ internal fun resolveLargeScreenVideoMetrics(
     )
 }
 
+/**
+ * The near-square layout stacks the player at the top of the window, so it starts below the
+ * status bar; the other modes keep the player column edge-to-edge and pad the side pane instead.
+ */
+internal fun shouldReserveStatusBarAbovePlayer(mode: LargeScreenVideoLayoutMode): Boolean {
+    return mode == LargeScreenVideoLayoutMode.AlmostSquare
+}
+
 internal fun resolveShowRelatedInIntro(mode: LargeScreenVideoLayoutMode): Boolean {
     return mode == LargeScreenVideoLayoutMode.AlmostSquare
 }

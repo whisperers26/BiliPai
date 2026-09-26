@@ -8,6 +8,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -130,8 +134,7 @@ internal fun LargeScreenVideoLayout(
                 enableVerticalExpand = true,
             )
         }
-        val applySideStatusBarPadding =
-            metrics.mode != LargeScreenVideoLayoutMode.AlmostSquare
+        val applySideStatusBarPadding = !shouldReserveStatusBarAbovePlayer(metrics.mode)
         val showRelatedInIntro = resolveShowRelatedInIntro(metrics.mode)
         val relatedTabFirst = resolveRelatedTabFirstInSecondary(
             mode = metrics.mode,
@@ -303,6 +306,8 @@ internal fun LargeScreenVideoLayout(
             }
             LargeScreenVideoLayoutMode.AlmostSquare -> {
                 Column(modifier = Modifier.fillMaxSize()) {
+                    // Page-colored, matching the status bar color the tablet layout applies.
+                    Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
                     player(
                         Modifier
                             .fillMaxWidth()
