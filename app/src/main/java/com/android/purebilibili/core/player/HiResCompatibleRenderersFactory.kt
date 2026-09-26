@@ -42,6 +42,13 @@ internal class HiResCompatibleRenderersFactory(
     context: Context
 ) : DefaultRenderersFactory(context) {
 
+    init {
+        // 默认 Sonic 变速只作用于之后写入的音频，AudioTrack 里已缓冲的几百毫秒仍按旧速度播放；
+        // 视频渲染器却立即按新速度排帧，导致长按倍速开始/结束时画面卡顿、丢帧。
+        // 交给 AudioTrack 的 PlaybackParams 变速，已缓冲音频也立即变速，音频时钟与视频同步切换。
+        setEnableAudioOutputPlaybackParameters(true)
+    }
+
     override fun buildAudioRenderers(
         context: Context,
         extensionRendererMode: Int,
