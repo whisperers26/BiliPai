@@ -18,6 +18,7 @@ Use this file as the project-specific overlay on top of the global Codex/OMX gui
 - This repository (`whisperers26/BiliPai`) is a fork of `jay3-yy/BiliPai`.
 - `main` mirrors the original repository and must stay clean: never commit, push, or merge fork-specific work into it.
 - `mymain` is the fork's working branch. Base new work on `mymain`, and target and merge pull requests into `mymain`, not `main`.
+- Releases are published from `mymain` only, with `scripts/publish_fork_release.sh` (bump `versionName`/`versionCode` and push first). The in-app update checker reads `whisperers26/BiliPai` releases, and release APKs are signed with the fork's own keystore configured via `bili.release.*` in `~/.gradle/gradle.properties`.
 - `origin` pushes need the `whisperers26` GitHub account (the account signed in to `gh`). If a push is denied for another account, push with `git -c credential.helper= -c "credential.helper=!gh auth git-credential" push`.
 
 ## Working defaults
