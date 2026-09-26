@@ -20,7 +20,7 @@ import com.bytedance.danmaku.render.engine.data.DanmakuData
 import com.bytedance.danmaku.render.engine.render.IRenderLayer
 import com.bytedance.danmaku.render.engine.render.draw.DrawItem
 import com.bytedance.danmaku.render.engine.render.layer.line.BaseRenderLine
-import com.bytedance.danmaku.render.engine.utils.HIGH_REFRESH_MAX_TIME
+import com.bytedance.danmaku.render.engine.utils.resolveStepperTime
 import com.bytedance.danmaku.render.engine.utils.STEPPER_TIME
 
 /**
@@ -60,11 +60,7 @@ class ScrollLine(controller: DanmakuController,
             mLastTypeSettingTime = System.currentTimeMillis()
         } else {
             val newTypeSettingTime = System.currentTimeMillis()
-            mStepperTime = if (newTypeSettingTime - mLastTypeSettingTime < HIGH_REFRESH_MAX_TIME) {
-                newTypeSettingTime - mLastTypeSettingTime
-            } else {
-                STEPPER_TIME
-            }
+            mStepperTime = resolveStepperTime(newTypeSettingTime - mLastTypeSettingTime)
             mLastTypeSettingTime = newTypeSettingTime
         }
 
