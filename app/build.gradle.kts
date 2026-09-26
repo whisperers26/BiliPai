@@ -103,6 +103,11 @@ val buildWorkflowRunUrl = providers.gradleProperty("bili.build.workflowRunUrl")
 val buildReleaseTag = providers.gradleProperty("bili.build.releaseTag")
     .orElse("")
     .get()
+// Release 签名：keystore 与密码放在仓库外（~/.gradle/gradle.properties），未配置时 release 保持未签名。
+val releaseStoreFile = providers.gradleProperty("bili.release.storeFile").orNull
+val releaseStorePassword = providers.gradleProperty("bili.release.storePassword").orNull
+val releaseKeyAlias = providers.gradleProperty("bili.release.keyAlias").orNull
+val releaseKeyPassword = providers.gradleProperty("bili.release.keyPassword").orNull
 
 android {
     namespace = "com.android.purebilibili"
@@ -146,8 +151,20 @@ android {
         }
     }
 
+    signingConfigs {
+        if (releaseStoreFile != null) {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             // Disable PNG crunching to avoid AAPT errors
             isCrunchPngs = false
             buildConfigField("boolean", "ALLOW_HARDCODED_DNS_FALLBACK", "false")
