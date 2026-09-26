@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.live
 
 import android.content.res.Configuration
 import android.view.Surface
+import com.android.purebilibili.core.store.DanmakuSettingsScope
 import com.android.purebilibili.core.util.AppDisplayContextInput
 import com.android.purebilibili.core.util.resolveAppDisplayContext
 import kotlin.test.Test
@@ -17,6 +18,28 @@ class LiveRoomLayoutPolicyTest {
         assertTrue(shouldUseLiveChatMediaOverlay(LiveRoomLayoutMode.PortraitVerticalOverlay))
         assertFalse(shouldUseLiveChatMediaOverlay(LiveRoomLayoutMode.PortraitPanel))
         assertFalse(shouldUseLiveChatMediaOverlay(LiveRoomLayoutMode.LandscapeSplit))
+    }
+
+    @Test
+    fun `only the fullscreen video overlay reads the landscape danmaku profile`() {
+        // Matches the video player: fullscreen picks the profile, not the window orientation,
+        // so a foldable's portrait-oriented fullscreen still shares the video's landscape settings.
+        assertEquals(
+            DanmakuSettingsScope.LANDSCAPE,
+            resolveLiveDanmakuSettingsScope(LiveRoomLayoutMode.LandscapeOverlay)
+        )
+        assertEquals(
+            DanmakuSettingsScope.PORTRAIT,
+            resolveLiveDanmakuSettingsScope(LiveRoomLayoutMode.LandscapeSplit)
+        )
+        assertEquals(
+            DanmakuSettingsScope.PORTRAIT,
+            resolveLiveDanmakuSettingsScope(LiveRoomLayoutMode.PortraitPanel)
+        )
+        assertEquals(
+            DanmakuSettingsScope.PORTRAIT,
+            resolveLiveDanmakuSettingsScope(LiveRoomLayoutMode.PortraitVerticalOverlay)
+        )
     }
 
     @Test

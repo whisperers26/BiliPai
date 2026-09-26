@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.live
 
+import com.android.purebilibili.core.store.DanmakuSettingsScope
+import com.android.purebilibili.core.store.resolveDanmakuSettingsScope
 import com.android.purebilibili.core.util.AppDisplayContext
 import com.android.purebilibili.core.util.shouldUsePhonePlayerOrientation
 import kotlin.math.roundToInt
@@ -15,6 +17,13 @@ enum class LiveRoomLayoutMode {
 internal fun shouldUseLiveChatMediaOverlay(layoutMode: LiveRoomLayoutMode): Boolean =
     layoutMode == LiveRoomLayoutMode.LandscapeOverlay ||
         layoutMode == LiveRoomLayoutMode.PortraitVerticalOverlay
+
+/**
+ * Mirrors the video player: only fullscreen playback reads the landscape danmaku profile.
+ * Foldables keep a portrait window in fullscreen, so orientation alone would pick the wrong one.
+ */
+internal fun resolveLiveDanmakuSettingsScope(layoutMode: LiveRoomLayoutMode): DanmakuSettingsScope =
+    resolveDanmakuSettingsScope(isLandscape = layoutMode == LiveRoomLayoutMode.LandscapeOverlay)
 
 data class LivePortraitOverlayMetrics(
     val panelHeightFraction: Float,
