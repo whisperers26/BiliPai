@@ -79,9 +79,7 @@ import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.core.util.AnalyticsHelper
 import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.core.store.DanmakuSettings
-import com.android.purebilibili.core.store.DanmakuSettingsScope
 import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.store.resolveDanmakuSettingsScope
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
 import com.android.purebilibili.core.util.applyPlayerRequestedOrientation
@@ -298,8 +296,8 @@ fun LivePlayerScreen(
     } else {
         isInteractionPanelVisible
     }
-    val liveDanmakuSettingsScope = remember(isLandscape) {
-        resolveDanmakuSettingsScope(isLandscape = isLandscape)
+    val liveDanmakuSettingsScope = remember(liveLayoutMode) {
+        resolveLiveDanmakuSettingsScope(liveLayoutMode)
     }
     val liveDanmakuSettings by SettingsManager
         .getDanmakuSettings(context, liveDanmakuSettingsScope)
@@ -462,7 +460,7 @@ fun LivePlayerScreen(
         val trimmed = keyword.trim()
         if (trimmed.isBlank()) return
         coroutineScope.launch {
-            val scope = if (isLandscape) DanmakuSettingsScope.LANDSCAPE else DanmakuSettingsScope.PORTRAIT
+            val scope = liveDanmakuSettingsScope
             val currentRaw = SettingsManager.getDanmakuBlockRulesRaw(context, scope).first()
             val nextRaw = listOf(currentRaw, trimmed)
                 .filter { it.isNotBlank() }
