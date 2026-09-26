@@ -199,6 +199,19 @@ class LargeScreenVideoLayoutPolicyTest {
             isVerticalVideo = false,
         )
         assertEquals(LargeScreenVideoLayoutMode.AlmostSquare, metrics.mode)
-        assertEquals(940f * 0.4f, metrics.playerHeightDp, 1f)
+        assertEquals(665f * 9f / 16f, metrics.playerHeightDp, 1f)
+    }
+
+    @Test
+    fun galaxyFoldInnerPortrait_playerFillsFullWidthBeforeDetailPanes() {
+        // Galaxy Z Fold inner display: 2256 x 2504 px at density 3.0 -> 752 x 835dp.
+        val metrics = resolveLargeScreenVideoMetrics(
+            windowWidthDp = 752f,
+            windowHeightDp = 835f,
+            isVerticalVideo = false,
+        )
+        assertEquals(LargeScreenVideoLayoutMode.AlmostSquare, metrics.mode)
+        assertEquals(752f, metrics.playerWidthDp, 0f)
+        assertEquals(752f * 9f / 16f, metrics.playerHeightDp, 1f)
     }
 }

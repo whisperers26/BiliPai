@@ -12,7 +12,6 @@ internal const val LARGE_SCREEN_VIDEO_MIN_SIDE_PANE_DP = 280f
 internal const val LARGE_SCREEN_VIDEO_MAX_SIDE_PANE_DP = 425f
 internal const val LARGE_SCREEN_VIDEO_SIDE_PANE_BREAKPOINT_DP = 560f
 internal const val LARGE_SCREEN_VIDEO_SQUARE_MIN_HEIGHT_FRACTION = 0.39f
-internal const val LARGE_SCREEN_VIDEO_SQUARE_PLAYER_HEIGHT_FRACTION = 0.4f
 internal const val FOLDABLE_COVER_COMPACT_PLAYER_HEIGHT_FRACTION = 0.5f
 internal const val FOLDABLE_COVER_COMPACT_HEIGHT_MAX_DP = 480f
 
@@ -151,11 +150,11 @@ internal fun resolveLargeScreenVideoMetrics(
             introBelowPlayer = true,
         )
     }
-    val squareHeight = windowHeightDp * LARGE_SCREEN_VIDEO_SQUARE_PLAYER_HEIGHT_FRACTION
+    // The player takes the full-width 16:9 frame first; the detail panes share what is left.
     return LargeScreenVideoMetrics(
         mode = LargeScreenVideoLayoutMode.AlmostSquare,
         playerWidthDp = windowWidthDp,
-        playerHeightDp = squareHeight,
+        playerHeightDp = fullWidthPlayerHeight,
         sidePaneWidthDp = 0f,
         introBelowPlayer = true,
     )
