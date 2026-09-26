@@ -1422,7 +1422,6 @@ private fun ScrollableVideoInfoSection(
     modifier: Modifier = Modifier,
     ownerTrailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     val windowSizeClass = LocalWindowSizeClass.current
     val adaptiveInfo = LocalAppWindowAdaptiveInfo.current
     val systemReduceMotion = rememberSystemReduceMotion()
@@ -1593,111 +1592,126 @@ private fun ScrollableVideoInfoSection(
 
         // 6. 更多推荐 (水平滚动)。大屏右栏已有相关推荐 Tab 时不再重复。
         if (showRelatedVideos && relatedVideos.isNotEmpty()) {
-        item {
-            Spacer(modifier = Modifier.height(24.dp))
-            AppText(
-                text = "更多推荐",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+            item {
+                TabletRelatedVideosSection(
+                    relatedVideos = relatedVideos,
+                    onRelatedVideoClick = onRelatedVideoClick,
+                )
+            }
+        }
+    }
+}
 
-            if (relatedVideos.isNotEmpty()) {
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(end = 4.dp)
-                ) {
-                    itemsIndexed(
-                        items = relatedVideos.take(10),
-                        key = { index, video ->
-                            resolveIndexedVideoLazyKey(
-                                namespace = "tablet_related_video",
-                                index = index,
-                                bvid = video.bvid,
-                                aid = video.aid,
-                                cid = video.cid,
-                            )
-                        },
-                    ) { _, video ->
-                        Column(
-                            modifier = Modifier
-                                .width(160.dp)
-                                .clickable {
-                                    val activity = (context as? android.app.Activity) ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
-                                    val options = activity?.let {
-                                        android.app.ActivityOptions.makeSceneTransitionAnimation(it).toBundle()
-                                    }
-                                    val navOptions = android.os.Bundle(options ?: android.os.Bundle.EMPTY)
-                                    if (video.cid > 0L) {
-                                        navOptions.putLong(VIDEO_NAV_TARGET_CID_KEY, video.cid)
-                                    }
-                                    onRelatedVideoClick(video.bvid, navOptions)
+@Composable
+private fun TabletRelatedVideosSection(
+    relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo>,
+    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Column(modifier = modifier) {
+        Spacer(modifier = Modifier.height(24.dp))
+        AppText(
+            text = "更多推荐",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (relatedVideos.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(end = 4.dp)
+            ) {
+                itemsIndexed(
+                    items = relatedVideos.take(10),
+                    key = { index, video ->
+                        resolveIndexedVideoLazyKey(
+                            namespace = "tablet_related_video",
+                            index = index,
+                            bvid = video.bvid,
+                            aid = video.aid,
+                            cid = video.cid,
+                        )
+                    },
+                ) { _, video ->
+                    Column(
+                        modifier = Modifier
+                            .width(160.dp)
+                            .clickable {
+                                val activity = (context as? android.app.Activity) ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
+                                val options = activity?.let {
+                                    android.app.ActivityOptions.makeSceneTransitionAnimation(it).toBundle()
                                 }
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .aspectRatio(1.6f)
-                                    .clip(AppShapes.container(ContainerLevel.Chip))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                coil3.compose.AsyncImage(
-                                    model = com.android.purebilibili.core.util.FormatUtils.fixImageUrl(video.pic),
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                                com.android.purebilibili.feature.home.components.cards.VideoCardCoverDurationText(
-                                    text = com.android.purebilibili.core.util.FormatUtils.formatDuration(video.duration),
-                                    modifier = Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .padding(4.dp),
-                                )
+                                val navOptions = android.os.Bundle(options ?: android.os.Bundle.EMPTY)
+                                if (video.cid > 0L) {
+                                    navOptions.putLong(VIDEO_NAV_TARGET_CID_KEY, video.cid)
+                                }
+                                onRelatedVideoClick(video.bvid, navOptions)
                             }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            AppText(
-                                text = video.title,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 2,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                lineHeight = 16.sp
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(1.6f)
+                                .clip(AppShapes.container(ContainerLevel.Chip))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            coil3.compose.AsyncImage(
+                                model = com.android.purebilibili.core.util.FormatUtils.fixImageUrl(video.pic),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            AppText(
-                                text = video.owner.name,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            com.android.purebilibili.feature.home.components.cards.VideoCardCoverDurationText(
+                                text = com.android.purebilibili.core.util.FormatUtils.formatDuration(video.duration),
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(4.dp),
                             )
                         }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        AppText(
+                            text = video.title,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            lineHeight = 16.sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        AppText(
+                            text = video.owner.name,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
                     }
                 }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.3f),
-                            shape = AppShapes.container(ContainerLevel.Chip)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AppText(
-                        text = "暂无更多推荐",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    )
-                }
             }
-            // 底部留白，防止被圆角遮挡
-            Spacer(modifier = Modifier.height(24.dp))
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.3f),
+                        shape = AppShapes.container(ContainerLevel.Chip)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                AppText(
+                    text = "暂无更多推荐",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+            }
         }
-        }
+        // 底部留白，防止被圆角遮挡
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
