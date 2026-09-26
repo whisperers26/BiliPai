@@ -201,6 +201,7 @@ internal fun LargeScreenVideoLayout(
                     videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
                     modifier = modifier,
                     showRelatedVideos = showRelatedInIntro,
+                    compact = shouldUseCompactVideoInfo(metrics.mode),
                 )
             }
         }

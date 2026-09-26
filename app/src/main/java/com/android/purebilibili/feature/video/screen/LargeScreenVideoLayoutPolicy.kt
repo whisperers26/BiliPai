@@ -177,6 +177,45 @@ internal fun shouldShowSecondaryHeader(mode: LargeScreenVideoLayoutMode): Boolea
     return mode != LargeScreenVideoLayoutMode.AlmostSquare
 }
 
+/**
+ * The near-square info pane sits under a full-width player, so it keeps 更多推荐 pinned and fully
+ * visible below the video info and tightens text and gaps to make room.
+ */
+internal fun shouldUseCompactVideoInfo(mode: LargeScreenVideoLayoutMode): Boolean {
+    return mode == LargeScreenVideoLayoutMode.AlmostSquare
+}
+
+internal data class TabletVideoInfoSpacing(
+    val fontScale: Float,
+    val topPaddingDp: Float,
+    val relatedTopGapDp: Float,
+    val relatedHeaderGapDp: Float,
+    val relatedBottomGapDp: Float,
+    val relatedCardWidthDp: Float,
+)
+
+internal fun resolveTabletVideoInfoSpacing(compact: Boolean): TabletVideoInfoSpacing {
+    return if (compact) {
+        TabletVideoInfoSpacing(
+            fontScale = 0.82f,
+            topPaddingDp = 2f,
+            relatedTopGapDp = 4f,
+            relatedHeaderGapDp = 4f,
+            relatedBottomGapDp = 4f,
+            relatedCardWidthDp = 104f,
+        )
+    } else {
+        TabletVideoInfoSpacing(
+            fontScale = 1f,
+            topPaddingDp = 12f,
+            relatedTopGapDp = 24f,
+            relatedHeaderGapDp = 12f,
+            relatedBottomGapDp = 24f,
+            relatedCardWidthDp = 160f,
+        )
+    }
+}
+
 internal fun resolveShowRelatedInIntro(mode: LargeScreenVideoLayoutMode): Boolean {
     return mode == LargeScreenVideoLayoutMode.AlmostSquare
 }

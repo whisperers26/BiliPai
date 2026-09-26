@@ -227,6 +227,21 @@ class LargeScreenVideoLayoutPolicyTest {
     }
 
     @Test
+    fun almostSquareUsesCompactInfoThatTightensEverySpacing() {
+        assertTrue(shouldUseCompactVideoInfo(LargeScreenVideoLayoutMode.AlmostSquare))
+        assertFalse(shouldUseCompactVideoInfo(LargeScreenVideoLayoutMode.Landscape))
+        val regular = resolveTabletVideoInfoSpacing(compact = false)
+        val compact = resolveTabletVideoInfoSpacing(compact = true)
+        assertEquals(1f, regular.fontScale, 0f)
+        assertTrue(compact.fontScale < 1f)
+        assertTrue(compact.topPaddingDp < regular.topPaddingDp)
+        assertTrue(compact.relatedTopGapDp < regular.relatedTopGapDp)
+        assertTrue(compact.relatedHeaderGapDp < regular.relatedHeaderGapDp)
+        assertTrue(compact.relatedBottomGapDp < regular.relatedBottomGapDp)
+        assertTrue(compact.relatedCardWidthDp < regular.relatedCardWidthDp)
+    }
+
+    @Test
     fun galaxyFoldInnerPortrait_playerFillsFullWidthBeforeDetailPanes() {
         // Galaxy Z Fold inner display: 2256 x 2504 px at density 3.0 -> 752 x 835dp.
         val metrics = resolveLargeScreenVideoMetrics(

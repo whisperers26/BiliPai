@@ -24,6 +24,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
@@ -614,6 +616,7 @@ internal fun TabletVideoInfoPane(
     videoNoteDefaultCollapsed: Boolean = true,
     modifier: Modifier = Modifier,
     showRelatedVideos: Boolean = true,
+    compact: Boolean = false,
 ) {
     val context = LocalContext.current
     var confirmDeleteNote by rememberSaveable(success.info.bvid) { mutableStateOf(false) }
@@ -696,6 +699,7 @@ internal fun TabletVideoInfoPane(
             onOpenBilibiliLink?.invoke("https://www.bilibili.com/read/cv$cvid")
         },
         modifier = modifier,
+        compact = compact,
     )
 
     VideoNoteEditorSheet(
@@ -1420,6 +1424,7 @@ private fun ScrollableVideoInfoSection(
     relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo> = emptyList(),
     showRelatedVideos: Boolean = true,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
     ownerTrailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val windowSizeClass = LocalWindowSizeClass.current
@@ -1443,159 +1448,188 @@ private fun ScrollableVideoInfoSection(
         entranceVisible = true
     }
 
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = 12.dp)
-    ) {
-        // 1. 视频标题
-        item {
-            TabletVideoInfoStaggeredItem(
-                visible = entranceVisible,
-                index = 0,
-                spec = entranceSpec,
-            ) {
-                VideoTitleWithDesc(
-                    info = info,
-                    videoTags = videoTags,
-                    bgmList = resolveDisplayBgmList(
-                        bgmInfo = bgmInfo,
-                        bgmInfoList = bgmInfoList
-                    ),
-                    onBgmClick = onBgmClick,
-                    onRelatedVideoClick = onRelatedVideoClick,
-                    onDescriptionUrlClick = onOpenBilibiliLink,
-                    onTagClick = onSearchKeywordClick
+    val spacing = remember(compact) { resolveTabletVideoInfoSpacing(compact) }
+    val hasRelated = showRelatedVideos && relatedVideos.isNotEmpty()
+    // Compact: 更多推荐 is measured first so it always shows in full; only the info above scrolls.
+    val pinRelated = compact && hasRelated
+    val density = LocalDensity.current
+    val infoDensity = remember(density, spacing.fontScale) {
+        Density(density.density, density.fontScale * spacing.fontScale)
+    }
+    CompositionLocalProvider(LocalDensity provides infoDensity) {
+        Column(modifier = modifier) {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    bottom = if (pinRelated) 0.dp else 16.dp,
+                    top = spacing.topPaddingDp.dp,
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-        }
-
-        // 2. UP主信息
-        item {
-            TabletVideoInfoStaggeredItem(
-                visible = entranceVisible,
-                index = 1,
-                spec = entranceSpec,
             ) {
-                UpInfoSection(
-                    info = info,
-                    isFollowing = isFollowing,
-                    onFollowClick = onFollowClick,
-                    onUpClick = onUpClick,
-                    followerCount = ownerFollowerCount,
-                    videoCount = ownerVideoCount,
-                    horizontalPadding = 0.dp,
-                    trailingContent = ownerTrailingContent,
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-        }
+                // 1. 视频标题
+                item {
+                    TabletVideoInfoStaggeredItem(
+                        visible = entranceVisible,
+                        index = 0,
+                        spec = entranceSpec,
+                    ) {
+                        VideoTitleWithDesc(
+                            info = info,
+                            videoTags = videoTags,
+                            bgmList = resolveDisplayBgmList(
+                                bgmInfo = bgmInfo,
+                                bgmInfoList = bgmInfoList
+                            ),
+                            onBgmClick = onBgmClick,
+                            onRelatedVideoClick = onRelatedVideoClick,
+                            onDescriptionUrlClick = onOpenBilibiliLink,
+                            onTagClick = onSearchKeywordClick
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                }
 
-        // 3. 互动按钮
-        item {
-            TabletVideoInfoStaggeredItem(
-                visible = entranceVisible,
-                index = 2,
-                spec = entranceSpec,
-            ) {
-                ActionButtonsRow(
-                    info = info,
-                    isLiked = isLiked,
-                    isFavorited = isFavorited,
-                    coinCount = coinCount,
-                    isInWatchLater = isInWatchLater,
-                    onLikeClick = onLikeClick,
-                    onCoinClick = onCoinClick,
-                    onFavoriteClick = onFavoriteClick,
-                    onFavoriteLongClick = onFavoriteLongClick,
-                    onTripleClick = onTripleClick,
-                    onDownloadClick = onDownloadClick,
-                    onWatchLaterClick = onWatchLaterClick,
-                    downloadProgress = downloadProgress ?: -1f,
-                    onCommentClick = { /* 平板模式不需要跳转评论 */ },
-                    showCommentAction = false,
-                    onShareClick = onShareClick
-                )
-            }
-        }
+                // 2. UP主信息
+                item {
+                    TabletVideoInfoStaggeredItem(
+                        visible = entranceVisible,
+                        index = 1,
+                        spec = entranceSpec,
+                    ) {
+                        UpInfoSection(
+                            info = info,
+                            isFollowing = isFollowing,
+                            onFollowClick = onFollowClick,
+                            onUpClick = onUpClick,
+                            followerCount = ownerFollowerCount,
+                            videoCount = ownerVideoCount,
+                            horizontalPadding = 0.dp,
+                            trailingContent = ownerTrailingContent,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                }
 
-        // 4. AI 视频总结
-        if (shouldShowAiSummaryEntry(
-                aiSummary = aiSummary,
-                isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
-            )
-        ) {
-            item {
-                TabletVideoInfoStaggeredItem(
-                    visible = entranceVisible,
-                    index = 3,
-                    spec = entranceSpec,
-                ) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    AiSummaryCard(
+                // 3. 互动按钮
+                item {
+                    TabletVideoInfoStaggeredItem(
+                        visible = entranceVisible,
+                        index = 2,
+                        spec = entranceSpec,
+                    ) {
+                        ActionButtonsRow(
+                            info = info,
+                            isLiked = isLiked,
+                            isFavorited = isFavorited,
+                            coinCount = coinCount,
+                            isInWatchLater = isInWatchLater,
+                            onLikeClick = onLikeClick,
+                            onCoinClick = onCoinClick,
+                            onFavoriteClick = onFavoriteClick,
+                            onFavoriteLongClick = onFavoriteLongClick,
+                            onTripleClick = onTripleClick,
+                            onDownloadClick = onDownloadClick,
+                            onWatchLaterClick = onWatchLaterClick,
+                            downloadProgress = downloadProgress ?: -1f,
+                            onCommentClick = { /* 平板模式不需要跳转评论 */ },
+                            showCommentAction = false,
+                            onShareClick = onShareClick
+                        )
+                    }
+                }
+
+                // 4. AI 视频总结
+                if (shouldShowAiSummaryEntry(
                         aiSummary = aiSummary,
-                        onTimestampClick = onTimestampClick,
-                        onCreateNoteDraftClick = onCreateNoteDraftFromAiSummary,
+                        isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
                     )
-                }
-            }
-        } else if (videoAiSummaryEntryEnabled && aiSummaryPrompt != null) {
-            item {
-                TabletVideoInfoStaggeredItem(
-                    visible = entranceVisible,
-                    index = 3,
-                    spec = entranceSpec,
                 ) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    AiSummaryPromptCard(
-                        promptState = aiSummaryPrompt,
-                        onActionClick = onRetryAiSummary,
-                    )
+                    item {
+                        TabletVideoInfoStaggeredItem(
+                            visible = entranceVisible,
+                            index = 3,
+                            spec = entranceSpec,
+                        ) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            AiSummaryCard(
+                                aiSummary = aiSummary,
+                                onTimestampClick = onTimestampClick,
+                                onCreateNoteDraftClick = onCreateNoteDraftFromAiSummary,
+                            )
+                        }
+                    }
+                } else if (videoAiSummaryEntryEnabled && aiSummaryPrompt != null) {
+                    item {
+                        TabletVideoInfoStaggeredItem(
+                            visible = entranceVisible,
+                            index = 3,
+                            spec = entranceSpec,
+                        ) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            AiSummaryPromptCard(
+                                promptState = aiSummaryPrompt,
+                                onActionClick = onRetryAiSummary,
+                            )
+                        }
+                    }
+                }
+
+                // 5. 视频笔记
+                if (shouldShowVideoNoteCard(videoNoteEnabled)) {
+                    item {
+                        TabletVideoInfoStaggeredItem(
+                            visible = entranceVisible,
+                            index = 4,
+                            spec = entranceSpec,
+                        ) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            VideoNoteCard(
+                                noteState = videoNoteState,
+                                isLoggedIn = isLoggedIn,
+                                onCreateOrEditClick = onOpenVideoNoteEditor,
+                                onRetryClick = onRetryVideoNote,
+                                onDeleteClick = onDeleteVideoNoteClick,
+                                onShareClick = onShareVideoNote,
+                                onPublicNoteClick = onPublicVideoNoteClick,
+                                defaultCollapsed = videoNoteDefaultCollapsed,
+                            )
+                        }
+                    }
+                }
+
+                // 6. 分P选择器（合集已移到右侧内容栏）
+                item {
+                    if (info.pages.size > 1) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        PagesSelector(
+                            pages = info.pages,
+                            currentPageIndex = currentPageIndex,
+                            onPageSelect = onPageSelect
+                        )
+                    }
+                }
+
+                // 6. 更多推荐 (水平滚动)。大屏右栏已有相关推荐 Tab 时不再重复。
+                if (hasRelated && !pinRelated) {
+                    item {
+                        TabletRelatedVideosSection(
+                            relatedVideos = relatedVideos,
+                            onRelatedVideoClick = onRelatedVideoClick,
+                            spacing = spacing,
+                        )
+                    }
                 }
             }
-        }
-
-        // 5. 视频笔记
-        if (shouldShowVideoNoteCard(videoNoteEnabled)) {
-            item {
-                TabletVideoInfoStaggeredItem(
-                    visible = entranceVisible,
-                    index = 4,
-                    spec = entranceSpec,
-                ) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    VideoNoteCard(
-                        noteState = videoNoteState,
-                        isLoggedIn = isLoggedIn,
-                        onCreateOrEditClick = onOpenVideoNoteEditor,
-                        onRetryClick = onRetryVideoNote,
-                        onDeleteClick = onDeleteVideoNoteClick,
-                        onShareClick = onShareVideoNote,
-                        onPublicNoteClick = onPublicVideoNoteClick,
-                        defaultCollapsed = videoNoteDefaultCollapsed,
-                    )
-                }
-            }
-        }
-
-        // 6. 分P选择器（合集已移到右侧内容栏）
-        item {
-            if (info.pages.size > 1) {
-                Spacer(modifier = Modifier.height(12.dp))
-                PagesSelector(
-                    pages = info.pages,
-                    currentPageIndex = currentPageIndex,
-                    onPageSelect = onPageSelect
-                )
-            }
-        }
-
-        // 6. 更多推荐 (水平滚动)。大屏右栏已有相关推荐 Tab 时不再重复。
-        if (showRelatedVideos && relatedVideos.isNotEmpty()) {
-            item {
+            if (pinRelated) {
                 TabletRelatedVideosSection(
                     relatedVideos = relatedVideos,
                     onRelatedVideoClick = onRelatedVideoClick,
+                    spacing = spacing,
+                    // Pinned to the window bottom, so it clears the gesture bar itself.
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .navigationBarsPadding(),
                 )
             }
         }
@@ -1606,18 +1640,19 @@ private fun ScrollableVideoInfoSection(
 private fun TabletRelatedVideosSection(
     relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo>,
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
+    spacing: TabletVideoInfoSpacing,
     modifier: Modifier = Modifier,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     Column(modifier = modifier) {
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(spacing.relatedTopGapDp.dp))
         AppText(
             text = "更多推荐",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(spacing.relatedHeaderGapDp.dp))
 
         if (relatedVideos.isNotEmpty()) {
             LazyRow(
@@ -1639,7 +1674,7 @@ private fun TabletRelatedVideosSection(
                 ) { _, video ->
                     Column(
                         modifier = Modifier
-                            .width(160.dp)
+                            .width(spacing.relatedCardWidthDp.dp)
                             .clickable {
                                 val activity = (context as? android.app.Activity) ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
                                 val options = activity?.let {
@@ -1711,7 +1746,7 @@ private fun TabletRelatedVideosSection(
             }
         }
         // 底部留白，防止被圆角遮挡
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(spacing.relatedBottomGapDp.dp))
     }
 }
 
