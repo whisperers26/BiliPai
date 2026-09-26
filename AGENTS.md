@@ -13,6 +13,13 @@ Use this file as the project-specific overlay on top of the global Codex/OMX gui
 - `plugin-sdk/`: plugin API surface used by the app's third-party plugin system (published via maven-publish).
 - `dolby-ffmpeg-decoder/`: media3 FFmpeg decoder extension for Dolby audio in the player.
 
+## Fork branch policy
+
+- This repository (`whisperers26/BiliPai`) is a fork of `jay3-yy/BiliPai`.
+- `main` mirrors the original repository and must stay clean: never commit, push, or merge fork-specific work into it.
+- `mymain` is the fork's working branch. Base new work on `mymain`, and target and merge pull requests into `mymain`, not `main`.
+- `origin` pushes need the `whisperers26` GitHub account (the account signed in to `gh`). If a push is denied for another account, push with `git -c credential.helper= -c "credential.helper=!gh auth git-credential" push`.
+
 ## Working defaults
 
 - Prefer small, targeted changes over broad rewrites.
