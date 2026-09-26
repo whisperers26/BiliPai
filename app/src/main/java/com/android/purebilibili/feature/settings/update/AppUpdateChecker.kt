@@ -95,8 +95,12 @@ internal data class AppUpdateReleaseCandidate(
     val buildMetadata: AppReleaseBuildMetadata? = null
 )
 
+// Updates come from the whisperers26 fork, whose APKs are signed with the fork's own key.
+internal const val APP_UPDATE_GITHUB_REPO = "whisperers26/BiliPai"
+internal const val APP_UPDATE_RELEASES_URL = "https://github.com/$APP_UPDATE_GITHUB_REPO/releases"
+
 object AppUpdateChecker {
-    private const val RELEASES_API = "https://api.github.com/repos/jay3-yy/BiliPai/releases"
+    private const val RELEASES_API = "https://api.github.com/repos/$APP_UPDATE_GITHUB_REPO/releases"
     private const val CONNECT_TIMEOUT_MS = 6000
     private const val READ_TIMEOUT_MS = 8000
     private val releaseJson = Json { ignoreUnknownKeys = true }
@@ -331,7 +335,7 @@ object AppUpdateChecker {
         if (tagName.isBlank()) return null
         val releaseUrl = releaseObject["html_url"]?.jsonPrimitive?.content
             ?.takeIf { it.isNotBlank() }
-            ?: "https://github.com/jay3-yy/BiliPai/releases"
+            ?: APP_UPDATE_RELEASES_URL
         val releaseNotes = releaseObject["body"]?.jsonPrimitive?.content.orEmpty().trim()
         val publishedAt = releaseObject["published_at"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         val isPrerelease = releaseObject["prerelease"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false

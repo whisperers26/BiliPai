@@ -14,8 +14,8 @@ import com.android.purebilibili.core.theme.LocalAppUiStyle
 import kotlinx.coroutines.delay
 import java.io.File
 
-internal const val GITHUB_RELEASE_DOWNLOAD_URL = "https://github.com/jay3-yy/BiliPai/releases/latest"
-internal const val GITHUB_TEST_DOWNLOAD_URL = "https://github.com/jay3-yy/BiliPai/releases"
+internal const val GITHUB_RELEASE_DOWNLOAD_URL = "$APP_UPDATE_RELEASES_URL/latest"
+internal const val GITHUB_TEST_DOWNLOAD_URL = APP_UPDATE_RELEASES_URL
 
 /** Owns update state and delegates rendering to the active theme's native dialog. */
 @Composable
