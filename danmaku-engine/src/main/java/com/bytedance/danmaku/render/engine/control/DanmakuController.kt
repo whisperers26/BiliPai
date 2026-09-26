@@ -144,9 +144,13 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
     /**
      * Append data to end of the [DataManager].
      * You need to ensure the chronological order of the data by yourself.
+     * The draw loop idles once the screen is blank, so wake it for the new data.
      */
     fun appendData(dataList: List<DanmakuData>) {
         mDataManager.appendData(dataList)
+        if (config.common.pauseInvalidateWhenBlank) {
+            mDanmakuView.postInvalidateCompat()
+        }
     }
 
     /** Remove consumed history without pause/setData/start. */
