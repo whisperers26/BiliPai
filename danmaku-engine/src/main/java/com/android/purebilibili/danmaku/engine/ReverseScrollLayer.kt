@@ -16,7 +16,7 @@ import com.bytedance.danmaku.render.engine.touch.ITouchDelegate
 import com.bytedance.danmaku.render.engine.touch.ITouchTarget
 import com.bytedance.danmaku.render.engine.utils.EVENT_DANMAKU_DISMISS
 import com.bytedance.danmaku.render.engine.utils.EVENT_DANMAKU_SHOW
-import com.bytedance.danmaku.render.engine.utils.HIGH_REFRESH_MAX_TIME
+import com.bytedance.danmaku.render.engine.utils.resolveStepperTime
 import com.bytedance.danmaku.render.engine.utils.STEPPER_TIME
 import java.util.LinkedList
 
@@ -154,7 +154,7 @@ private class ReverseScrollLine(
     override fun typesetting(playTime: Long, isPlaying: Boolean, configChanged: Boolean): Int {
         val now = System.currentTimeMillis()
         if (lastTypesettingTime >= 0L) {
-            stepperTime = (now - lastTypesettingTime).takeIf { it < HIGH_REFRESH_MAX_TIME } ?: STEPPER_TIME
+            stepperTime = resolveStepperTime(now - lastTypesettingTime)
         }
         lastTypesettingTime = now
 
