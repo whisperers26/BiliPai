@@ -287,5 +287,4 @@ internal fun resolveDanmakuFallbackMaxLines(displayAreaRatio: Float): Int {
     }
 }
 
-internal const val DEFAULT_DANMAKU_TEXT_SIZE_PX = 42f
 private const val BILIBILI_STANDARD_DANMAKU_FONT_SIZE = 25f
