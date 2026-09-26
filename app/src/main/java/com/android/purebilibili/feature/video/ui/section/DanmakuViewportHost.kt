@@ -17,7 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
 import com.android.purebilibili.feature.video.danmaku.DanmakuViewport
-import com.android.purebilibili.feature.video.danmaku.resolveDanmakuReferenceShortSidePx
+import com.android.purebilibili.feature.video.danmaku.resolveDanmakuReferenceWidthPx
 import com.android.purebilibili.feature.video.danmaku.resolveDanmakuViewport
 
 /** One measured surface for ordinary, authored and interactive danmaku. */
@@ -35,13 +35,13 @@ internal fun DanmakuViewportHost(
             val metrics = context.getSystemService(WindowManager::class.java).maximumWindowMetrics
             // Fullscreen hides system bars; only the display cutout constrains this reference.
             val safe = metrics.windowInsets.getInsetsIgnoringVisibility(WindowInsets.Type.displayCutout())
-            resolveDanmakuReferenceShortSidePx(metrics.bounds.width() - safe.left - safe.right,
+            resolveDanmakuReferenceWidthPx(metrics.bounds.width() - safe.left - safe.right,
                 metrics.bounds.height() - safe.top - safe.bottom)
         } else {
             val width = display.maximumWindowWidthDp
             val height = display.maximumWindowHeightDp
             if (width != null && height != null) {
-                resolveDanmakuReferenceShortSidePx((width * density.density).toInt(),
+                resolveDanmakuReferenceWidthPx((width * density.density).toInt(),
                     (height * density.density).toInt())
             } else 0f
         }

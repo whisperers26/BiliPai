@@ -114,9 +114,9 @@ class DanmakuConfigPolicyTest {
 
     @Test
     fun `text size composes user preference density and viewport without a small window floor`() {
-        val fullscreen = requireNotNull(resolveDanmakuViewport(2392, 1080, 3f, 1080f))
-        val inline = requireNotNull(resolveDanmakuViewport(1080, 608, 3f, 1080f))
-        assertEquals(608f / 1080f,
+        val fullscreen = requireNotNull(resolveDanmakuViewport(1920, 1080, 3f, 1920f))
+        val inline = requireNotNull(resolveDanmakuViewport(1080, 608, 3f, 1920f))
+        assertEquals(1080f / 1920f,
             resolveDanmakuTextSizePx(inline, 1.5f) / resolveDanmakuTextSizePx(fullscreen, 1.5f), 0.001f)
         assertEquals(1.5f,
             resolveDanmakuTextSizePx(inline, 1.5f) / resolveDanmakuTextSizePx(inline, 1f), 0.001f)
