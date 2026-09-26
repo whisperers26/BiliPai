@@ -14,19 +14,33 @@ data class DanmakuViewport(
     }
 }
 
+private const val DANMAKU_REFERENCE_VIDEO_ASPECT = 16f / 9f
+
+/**
+ * Width of a 16:9 video fitted fullscreen into the window; danmaku reach full size there.
+ * Tall phones are limited by their short side, near-square foldable screens by their long side.
+ */
+fun resolveDanmakuReferenceWidthPx(windowWidthPx: Int, windowHeightPx: Int): Float {
+    if (windowWidthPx <= 0 || windowHeightPx <= 0) return 0f
+    val shortSide = minOf(windowWidthPx, windowHeightPx).toFloat()
+    val longSide = maxOf(windowWidthPx, windowHeightPx).toFloat()
+    return minOf(longSide, shortSide * DANMAKU_REFERENCE_VIDEO_ASPECT)
+}
+
+/** Danmaku scale with the shown video width only, so equal widths always give equal text. */
 fun resolveDanmakuViewport(
     widthPx: Int,
     heightPx: Int,
     density: Float,
-    referenceShortSidePx: Float
+    referenceWidthPx: Float
 ): DanmakuViewport? {
     if (widthPx <= 0 || heightPx <= 0 || !density.isFinite() || density <= 0f ||
-        !referenceShortSidePx.isFinite() || referenceShortSidePx <= 0f
+        !referenceWidthPx.isFinite() || referenceWidthPx <= 0f
     ) return null
     return DanmakuViewport(
         widthPx = widthPx,
         heightPx = heightPx,
         density = density,
-        scale = (minOf(widthPx, heightPx) / referenceShortSidePx).coerceAtMost(1f)
+        scale = (widthPx / referenceWidthPx).coerceAtMost(1f)
     )
 }

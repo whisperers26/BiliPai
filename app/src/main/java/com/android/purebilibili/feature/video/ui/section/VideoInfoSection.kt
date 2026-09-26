@@ -747,6 +747,8 @@ fun UpInfoSection(
     sourceRouteForSharedElement: String? = null,
     horizontalPadding: androidx.compose.ui.unit.Dp = 12.dp,
     modifier: Modifier = Modifier,
+    /** Placed right before the follow button, e.g. an inline like action. */
+    leadingActionContent: (@Composable RowScope.() -> Unit)? = null,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val playerControlVisibility by com.android.purebilibili.core.store.SettingsManager
@@ -995,6 +997,9 @@ fun UpInfoSection(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            if (leadingActionContent != null) {
+                                leadingActionContent()
+                            }
                             if (playerControlVisibility.showFollowButton) {
                                 followButtonContent()
                             }
@@ -1040,6 +1045,10 @@ fun UpInfoSection(
                         }
                     }
 
+                    if (leadingActionContent != null) {
+                        leadingActionContent()
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
                     if (playerControlVisibility.showFollowButton) {
                         followButtonContent()
                     }

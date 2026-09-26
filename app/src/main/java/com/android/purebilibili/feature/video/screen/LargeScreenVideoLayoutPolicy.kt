@@ -12,7 +12,6 @@ internal const val LARGE_SCREEN_VIDEO_MIN_SIDE_PANE_DP = 280f
 internal const val LARGE_SCREEN_VIDEO_MAX_SIDE_PANE_DP = 425f
 internal const val LARGE_SCREEN_VIDEO_SIDE_PANE_BREAKPOINT_DP = 560f
 internal const val LARGE_SCREEN_VIDEO_SQUARE_MIN_HEIGHT_FRACTION = 0.39f
-internal const val LARGE_SCREEN_VIDEO_SQUARE_PLAYER_HEIGHT_FRACTION = 0.4f
 internal const val FOLDABLE_COVER_COMPACT_PLAYER_HEIGHT_FRACTION = 0.5f
 internal const val FOLDABLE_COVER_COMPACT_HEIGHT_MAX_DP = 480f
 
@@ -151,14 +150,80 @@ internal fun resolveLargeScreenVideoMetrics(
             introBelowPlayer = true,
         )
     }
-    val squareHeight = windowHeightDp * LARGE_SCREEN_VIDEO_SQUARE_PLAYER_HEIGHT_FRACTION
+    // The player takes the full-width 16:9 frame first; the detail panes share what is left.
     return LargeScreenVideoMetrics(
         mode = LargeScreenVideoLayoutMode.AlmostSquare,
         playerWidthDp = windowWidthDp,
-        playerHeightDp = squareHeight,
+        playerHeightDp = fullWidthPlayerHeight,
         sidePaneWidthDp = 0f,
         introBelowPlayer = true,
     )
+}
+
+/**
+ * The near-square layout stacks the player at the top of the window, so it starts below the
+ * status bar; the other modes keep the player column edge-to-edge and pad the side pane instead.
+ */
+internal fun shouldReserveStatusBarAbovePlayer(mode: LargeScreenVideoLayoutMode): Boolean {
+    return mode == LargeScreenVideoLayoutMode.AlmostSquare
+}
+
+/** The near-square side pane is comments only; the player already offers danmaku actions. */
+internal fun resolveSecondaryFixedTab(mode: LargeScreenVideoLayoutMode): TabletSecondaryTab? {
+    return if (mode == LargeScreenVideoLayoutMode.AlmostSquare) TabletSecondaryTab.COMMENTS else null
+}
+
+internal fun shouldShowSecondaryHeader(mode: LargeScreenVideoLayoutMode): Boolean {
+    return mode != LargeScreenVideoLayoutMode.AlmostSquare
+}
+
+/**
+ * The near-square info pane sits under a full-width player, so it keeps 更多推荐 pinned and fully
+ * visible below the video info and tightens the gaps around it.
+ */
+internal fun shouldUseCompactVideoInfo(mode: LargeScreenVideoLayoutMode): Boolean {
+    return mode == LargeScreenVideoLayoutMode.AlmostSquare
+}
+
+/** What the compact info pane pins below the video info. */
+internal enum class CompactInfoBottomContent { Related, Actions, None }
+
+/** The owner row's more button swaps 更多推荐 for the full action buttons row. */
+internal fun resolveCompactInfoBottomContent(
+    actionsExpanded: Boolean,
+    hasRelated: Boolean,
+): CompactInfoBottomContent = when {
+    actionsExpanded -> CompactInfoBottomContent.Actions
+    hasRelated -> CompactInfoBottomContent.Related
+    else -> CompactInfoBottomContent.None
+}
+
+internal data class TabletVideoInfoSpacing(
+    val topPaddingDp: Float,
+    val relatedTopGapDp: Float,
+    val relatedHeaderGapDp: Float,
+    val relatedBottomGapDp: Float,
+    val relatedCardWidthDp: Float,
+)
+
+internal fun resolveTabletVideoInfoSpacing(compact: Boolean): TabletVideoInfoSpacing {
+    return if (compact) {
+        TabletVideoInfoSpacing(
+            topPaddingDp = 2f,
+            relatedTopGapDp = 4f,
+            relatedHeaderGapDp = 4f,
+            relatedBottomGapDp = 4f,
+            relatedCardWidthDp = 160f,
+        )
+    } else {
+        TabletVideoInfoSpacing(
+            topPaddingDp = 12f,
+            relatedTopGapDp = 24f,
+            relatedHeaderGapDp = 12f,
+            relatedBottomGapDp = 24f,
+            relatedCardWidthDp = 160f,
+        )
+    }
 }
 
 internal fun resolveShowRelatedInIntro(mode: LargeScreenVideoLayoutMode): Boolean {

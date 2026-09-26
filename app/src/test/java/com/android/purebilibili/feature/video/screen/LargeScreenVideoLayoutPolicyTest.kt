@@ -199,6 +199,77 @@ class LargeScreenVideoLayoutPolicyTest {
             isVerticalVideo = false,
         )
         assertEquals(LargeScreenVideoLayoutMode.AlmostSquare, metrics.mode)
-        assertEquals(940f * 0.4f, metrics.playerHeightDp, 1f)
+        assertEquals(665f * 9f / 16f, metrics.playerHeightDp, 1f)
+    }
+
+    @Test
+    fun almostSquarePlayerSitsBelowStatusBarWhileOtherModesPadTheSidePane() {
+        assertTrue(shouldReserveStatusBarAbovePlayer(LargeScreenVideoLayoutMode.AlmostSquare))
+        assertFalse(shouldReserveStatusBarAbovePlayer(LargeScreenVideoLayoutMode.Landscape))
+        assertFalse(shouldReserveStatusBarAbovePlayer(LargeScreenVideoLayoutMode.Split))
+        val source = java.io.File(
+            "app/src/main/java/com/android/purebilibili/feature/video/screen/LargeScreenVideoLayout.kt"
+        ).takeIf { it.exists() } ?: java.io.File(
+            "src/main/java/com/android/purebilibili/feature/video/screen/LargeScreenVideoLayout.kt"
+        )
+        assertTrue(source.readText().contains("windowInsetsTopHeight(WindowInsets.statusBars)"))
+    }
+
+    @Test
+    fun almostSquareSidePaneShowsOnlyCommentsWithoutHeaderRow() {
+        assertEquals(
+            TabletSecondaryTab.COMMENTS,
+            resolveSecondaryFixedTab(LargeScreenVideoLayoutMode.AlmostSquare),
+        )
+        assertFalse(shouldShowSecondaryHeader(LargeScreenVideoLayoutMode.AlmostSquare))
+        assertEquals(null, resolveSecondaryFixedTab(LargeScreenVideoLayoutMode.Landscape))
+        assertTrue(shouldShowSecondaryHeader(LargeScreenVideoLayoutMode.Landscape))
+    }
+
+    @Test
+    fun almostSquareUsesCompactInfoThatTightensEverySpacing() {
+        assertTrue(shouldUseCompactVideoInfo(LargeScreenVideoLayoutMode.AlmostSquare))
+        assertFalse(shouldUseCompactVideoInfo(LargeScreenVideoLayoutMode.Landscape))
+        val regular = resolveTabletVideoInfoSpacing(compact = false)
+        val compact = resolveTabletVideoInfoSpacing(compact = true)
+        assertTrue(compact.topPaddingDp < regular.topPaddingDp)
+        assertTrue(compact.relatedTopGapDp < regular.relatedTopGapDp)
+        assertTrue(compact.relatedHeaderGapDp < regular.relatedHeaderGapDp)
+        assertTrue(compact.relatedBottomGapDp < regular.relatedBottomGapDp)
+        // Recommendations keep full-size, readable cards; only the gaps tighten.
+        assertEquals(regular.relatedCardWidthDp, compact.relatedCardWidthDp, 0f)
+    }
+
+    @Test
+    fun compactInfoMoreButtonSwapsRelatedVideosForTheActionButtons() {
+        assertEquals(
+            CompactInfoBottomContent.Related,
+            resolveCompactInfoBottomContent(actionsExpanded = false, hasRelated = true),
+        )
+        assertEquals(
+            CompactInfoBottomContent.Actions,
+            resolveCompactInfoBottomContent(actionsExpanded = true, hasRelated = true),
+        )
+        assertEquals(
+            CompactInfoBottomContent.Actions,
+            resolveCompactInfoBottomContent(actionsExpanded = true, hasRelated = false),
+        )
+        assertEquals(
+            CompactInfoBottomContent.None,
+            resolveCompactInfoBottomContent(actionsExpanded = false, hasRelated = false),
+        )
+    }
+
+    @Test
+    fun galaxyFoldInnerPortrait_playerFillsFullWidthBeforeDetailPanes() {
+        // Galaxy Z Fold inner display: 2256 x 2504 px at density 3.0 -> 752 x 835dp.
+        val metrics = resolveLargeScreenVideoMetrics(
+            windowWidthDp = 752f,
+            windowHeightDp = 835f,
+            isVerticalVideo = false,
+        )
+        assertEquals(LargeScreenVideoLayoutMode.AlmostSquare, metrics.mode)
+        assertEquals(752f, metrics.playerWidthDp, 0f)
+        assertEquals(752f * 9f / 16f, metrics.playerHeightDp, 1f)
     }
 }
