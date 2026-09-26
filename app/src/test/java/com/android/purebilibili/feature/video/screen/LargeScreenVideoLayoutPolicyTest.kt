@@ -232,13 +232,12 @@ class LargeScreenVideoLayoutPolicyTest {
         assertFalse(shouldUseCompactVideoInfo(LargeScreenVideoLayoutMode.Landscape))
         val regular = resolveTabletVideoInfoSpacing(compact = false)
         val compact = resolveTabletVideoInfoSpacing(compact = true)
-        assertEquals(1f, regular.fontScale, 0f)
-        assertTrue(compact.fontScale < 1f)
         assertTrue(compact.topPaddingDp < regular.topPaddingDp)
         assertTrue(compact.relatedTopGapDp < regular.relatedTopGapDp)
         assertTrue(compact.relatedHeaderGapDp < regular.relatedHeaderGapDp)
         assertTrue(compact.relatedBottomGapDp < regular.relatedBottomGapDp)
-        assertTrue(compact.relatedCardWidthDp < regular.relatedCardWidthDp)
+        // Recommendations keep full-size, readable cards; only the gaps tighten.
+        assertEquals(regular.relatedCardWidthDp, compact.relatedCardWidthDp, 0f)
     }
 
     @Test
