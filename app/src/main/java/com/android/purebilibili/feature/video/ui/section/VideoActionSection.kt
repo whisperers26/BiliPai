@@ -119,6 +119,64 @@ fun ActionButtonsRow(
     showCommentAction: Boolean = true,
     modifier: Modifier = Modifier.fillMaxWidth()
 ) {
+    val actionCount = 6 + if (showCommentAction) 1 else 0 // like/coin/fav/share/watchLater/cache[+comment]
+    val itemSpacing = resolveVideoDetailActionRowItemSpacing(actionCount)
+    val buttonHorizontalPadding = resolveVideoDetailActionButtonHorizontalPadding(actionCount)
+    val actions = videoDetailActionButtons(
+        info = info,
+        isFavorited = isFavorited,
+        isLiked = isLiked,
+        coinCount = coinCount,
+        downloadProgress = downloadProgress,
+        isInWatchLater = isInWatchLater,
+        onFavoriteClick = onFavoriteClick,
+        onLikeClick = onLikeClick,
+        onCoinClick = onCoinClick,
+        onTripleClick = onTripleClick,
+        onCommentClick = onCommentClick,
+        onDownloadClick = onDownloadClick,
+        onWatchLaterClick = onWatchLaterClick,
+        onFavoriteLongClick = onFavoriteLongClick,
+        onShareClick = onShareClick,
+        showCommentAction = showCommentAction,
+        buttonHorizontalPadding = buttonHorizontalPadding,
+    )
+
+    Row(
+        modifier = modifier
+            .animateContentSize()
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(itemSpacing),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        actions.forEach { action -> action(Modifier.weight(1f)) }
+    }
+}
+
+/**
+ * The detail action buttons in display order, each drawn into the modifier its container gives it.
+ * Like, coin and favorite share one long-press triple progress, so they are built together.
+ */
+@Composable
+private fun videoDetailActionButtons(
+    info: ViewInfo,
+    isFavorited: Boolean,
+    isLiked: Boolean,
+    coinCount: Int,
+    downloadProgress: Float,
+    isInWatchLater: Boolean,
+    onFavoriteClick: () -> Unit,
+    onLikeClick: () -> Unit,
+    onCoinClick: () -> Unit,
+    onTripleClick: () -> Unit,
+    onCommentClick: () -> Unit,
+    onDownloadClick: () -> Unit,
+    onWatchLaterClick: () -> Unit,
+    onFavoriteLongClick: () -> Unit,
+    onShareClick: () -> Unit,
+    showCommentAction: Boolean,
+    buttonHorizontalPadding: Dp,
+): List<@Composable (Modifier) -> Unit> {
     val colorScheme = MaterialTheme.colorScheme
     val activeColors = remember(
         colorScheme.primary,
@@ -167,153 +225,145 @@ fun ActionButtonsRow(
     val shareIcon = rememberAppShareIcon()
     val watchLaterIcon = rememberAppWatchLaterIcon()
     val downloadIcon = rememberAppDownloadIcon()
-    val actionCount = 6 + if (showCommentAction) 1 else 0 // like/coin/fav/share/watchLater/cache[+comment]
-    val itemSpacing = resolveVideoDetailActionRowItemSpacing(actionCount)
-    val buttonHorizontalPadding = resolveVideoDetailActionButtonHorizontalPadding(actionCount)
+    val commentIcon = rememberAppCommentIcon()
 
-    Row(
-        modifier = modifier
-            .animateContentSize()
-            .padding(horizontal = 4.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(itemSpacing),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    return buildList {
         // Like - 支持长按触发三连
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 56.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            TripleProgressActionButton(
-                icon = if (isLiked) Icons.Rounded.ThumbUp else Icons.Outlined.ThumbUp,
-                text = FormatUtils.formatStat(info.stat.like.toLong()),
-                isActive = isLiked,
-                activeColor = activeColors.primaryAction,
-                progress = tripleProgress,
-                onClick = onLikeClick,
-                horizontalPadding = buttonHorizontalPadding,
-                modifier = Modifier.pointerInput(
-                    isLiked,
-                    tripleCompleted,
-                    tripleProgress
-                ) {
-                    detectTapGestures(
-                        onTap = {
-                            onLikeClick()
-                        },
-                        onLongPress = {
-                            tripleCompleted = false
-                            isTriplePressing = shouldStartTriplePress(
-                                longPressConfirmed = true
-                            )
-                        },
-                        onPress = {
-                            tryAwaitRelease()
-                            if (
-                                shouldCancelTriplePressOnRelease(
-                                    isTriplePressing = isTriplePressing,
-                                    tripleCompleted = tripleCompleted
+        add { modifier ->
+            Box(
+                modifier = modifier.heightIn(min = 56.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                TripleProgressActionButton(
+                    icon = if (isLiked) Icons.Rounded.ThumbUp else Icons.Outlined.ThumbUp,
+                    text = FormatUtils.formatStat(info.stat.like.toLong()),
+                    isActive = isLiked,
+                    activeColor = activeColors.primaryAction,
+                    progress = tripleProgress,
+                    onClick = onLikeClick,
+                    horizontalPadding = buttonHorizontalPadding,
+                    modifier = Modifier.pointerInput(
+                        isLiked,
+                        tripleCompleted,
+                        tripleProgress
+                    ) {
+                        detectTapGestures(
+                            onTap = {
+                                onLikeClick()
+                            },
+                            onLongPress = {
+                                tripleCompleted = false
+                                isTriplePressing = shouldStartTriplePress(
+                                    longPressConfirmed = true
                                 )
-                            ) {
-                                isTriplePressing = false
+                            },
+                            onPress = {
+                                tryAwaitRelease()
+                                if (
+                                    shouldCancelTriplePressOnRelease(
+                                        isTriplePressing = isTriplePressing,
+                                        tripleCompleted = tripleCompleted
+                                    )
+                                ) {
+                                    isTriplePressing = false
+                                }
                             }
-                        }
-                    )
-                },
-                disableInternalClick = true
-            )
+                        )
+                    },
+                    disableInternalClick = true
+                )
+            }
         }
 
         // Coin
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 56.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            TripleProgressActionButton(
-                icon = AppIcons.BiliCoin,
-                text = FormatUtils.formatStat(info.stat.coin.toLong()),
-                isActive = coinCount > 0,
-                activeColor = activeColors.primaryAction,
-                progress = tripleProgress,
-                onClick = onCoinClick,
-                horizontalPadding = buttonHorizontalPadding
-            )
-        }
-
-        if (showCommentAction) {
+        add { modifier ->
             Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 56.dp),
+                modifier = modifier.heightIn(min = 56.dp),
                 contentAlignment = Alignment.Center
             ) {
-                BiliActionButton(
-                    icon = rememberAppCommentIcon(),
-                    text = "评论 ${FormatUtils.formatStat(info.stat.reply.toLong())}",
-                    isActive = false,
+                TripleProgressActionButton(
+                    icon = AppIcons.BiliCoin,
+                    text = FormatUtils.formatStat(info.stat.coin.toLong()),
+                    isActive = coinCount > 0,
                     activeColor = activeColors.primaryAction,
-                    onClick = onCommentClick,
+                    progress = tripleProgress,
+                    onClick = onCoinClick,
                     horizontalPadding = buttonHorizontalPadding
                 )
             }
         }
 
+        if (showCommentAction) {
+            add { modifier ->
+                Box(
+                    modifier = modifier.heightIn(min = 56.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    BiliActionButton(
+                        icon = commentIcon,
+                        text = "评论 ${FormatUtils.formatStat(info.stat.reply.toLong())}",
+                        isActive = false,
+                        activeColor = activeColors.primaryAction,
+                        onClick = onCommentClick,
+                        horizontalPadding = buttonHorizontalPadding
+                    )
+                }
+            }
+        }
+
         // Favorite
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 56.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            TripleProgressActionButton(
-                icon = if (isFavorited) Icons.Rounded.Star else Icons.Outlined.StarBorder,
-                text = FormatUtils.formatStat(info.stat.favorite.toLong()),
-                isActive = isFavorited,
-                activeColor = activeColors.primaryAction,
-                progress = tripleProgress,
-                onClick = onFavoriteClick,
-                onLongClick = onFavoriteLongClick,
-                horizontalPadding = buttonHorizontalPadding
-            )
+        add { modifier ->
+            Box(
+                modifier = modifier.heightIn(min = 56.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                TripleProgressActionButton(
+                    icon = if (isFavorited) Icons.Rounded.Star else Icons.Outlined.StarBorder,
+                    text = FormatUtils.formatStat(info.stat.favorite.toLong()),
+                    isActive = isFavorited,
+                    activeColor = activeColors.primaryAction,
+                    progress = tripleProgress,
+                    onClick = onFavoriteClick,
+                    onLongClick = onFavoriteLongClick,
+                    horizontalPadding = buttonHorizontalPadding
+                )
+            }
         }
 
         // Share
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 56.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            BiliActionButton(
-                icon = shareIcon,
-                text = resolveVideoDetailShareActionText(info.stat.share),
-                isActive = false,
-                activeColor = activeColors.primaryAction,
-                onClick = onShareClick,
-                horizontalPadding = buttonHorizontalPadding
-            )
+        add { modifier ->
+            Box(
+                modifier = modifier.heightIn(min = 56.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                BiliActionButton(
+                    icon = shareIcon,
+                    text = resolveVideoDetailShareActionText(info.stat.share),
+                    isActive = false,
+                    activeColor = activeColors.primaryAction,
+                    onClick = onShareClick,
+                    horizontalPadding = buttonHorizontalPadding
+                )
+            }
         }
-        
+
         //  稍后再看
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 56.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            BiliActionButton(
-                icon = watchLaterIcon,
-                text = if (isInWatchLater) "已添加" else "稍后看",
-                isActive = isInWatchLater,
-                activeColor = activeColors.watchLater,
-                onClick = onWatchLaterClick,
-                horizontalPadding = buttonHorizontalPadding
-            )
+        add { modifier ->
+            Box(
+                modifier = modifier.heightIn(min = 56.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                BiliActionButton(
+                    icon = watchLaterIcon,
+                    text = if (isInWatchLater) "已添加" else "稍后看",
+                    isActive = isInWatchLater,
+                    activeColor = activeColors.watchLater,
+                    onClick = onWatchLaterClick,
+                    horizontalPadding = buttonHorizontalPadding
+                )
+            }
         }
-        
+
         //  Download
         val downloadText = when {
             downloadProgress >= 1f -> "已缓存"
@@ -322,26 +372,25 @@ fun ActionButtonsRow(
         }
         val isDownloaded = downloadProgress >= 1f
         val isDownloading = downloadProgress in 0f..0.99f
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 56.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            BiliActionButton(
-                icon = if (isDownloaded) Icons.Outlined.Check else downloadIcon,
-                text = downloadText,
-                isActive = isDownloaded || isDownloading,
-                activeColor = if (isDownloaded) {
-                    activeColors.downloaded
-                } else {
-                    activeColors.downloadInProgress
-                },
-                onClick = onDownloadClick,
-                horizontalPadding = buttonHorizontalPadding
-            )
+        add { modifier ->
+            Box(
+                modifier = modifier.heightIn(min = 56.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                BiliActionButton(
+                    icon = if (isDownloaded) Icons.Outlined.Check else downloadIcon,
+                    text = downloadText,
+                    isActive = isDownloaded || isDownloading,
+                    activeColor = if (isDownloaded) {
+                        activeColors.downloaded
+                    } else {
+                        activeColors.downloadInProgress
+                    },
+                    onClick = onDownloadClick,
+                    horizontalPadding = buttonHorizontalPadding
+                )
+            }
         }
-
     }
 }
 
