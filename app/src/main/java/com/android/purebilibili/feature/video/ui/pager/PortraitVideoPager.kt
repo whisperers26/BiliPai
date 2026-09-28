@@ -185,6 +185,7 @@ import com.android.purebilibili.feature.video.ui.overlay.PortraitSubtitleHost
 import com.android.purebilibili.feature.video.ui.overlay.VIDEO_STATUS_BAR_AMBIENT_CAPTURE_INTERVAL_MS
 import com.android.purebilibili.feature.video.ui.overlay.VIDEO_STATUS_BAR_AMBIENT_SAMPLE_HEIGHT_PX
 import com.android.purebilibili.feature.video.ui.overlay.VIDEO_STATUS_BAR_AMBIENT_SAMPLE_WIDTH_PX
+import com.android.purebilibili.feature.video.ui.overlay.SeekFeedbackText
 import com.android.purebilibili.feature.video.ui.overlay.nextFullscreenSeekFeedbackEvent
 import com.android.purebilibili.feature.video.ui.overlay.resolveFullscreenDoubleTapAction
 import com.android.purebilibili.feature.video.ui.overlay.resolvePortraitLetterboxBarHeightPx
@@ -2235,6 +2236,7 @@ private fun VideoPageItem(
     var longPressSpeedHintDismissed by remember(bvid) { mutableStateOf(false) }
     var seekFeedbackText by remember { mutableStateOf<String?>(null) }
     var seekFeedbackVisible by remember { mutableStateOf(false) }
+    var seekFeedbackForward by remember { mutableStateOf(true) }
     var seekFeedbackGeneration by remember { mutableLongStateOf(0L) }
     var scale by remember(bvid) { mutableFloatStateOf(1f) }
     var panX by remember(bvid) { mutableFloatStateOf(0f) }
@@ -2461,6 +2463,7 @@ private fun VideoPageItem(
                                 )
                                 seekFeedbackGeneration = feedback.generation
                                 seekFeedbackText = feedback.text
+                                seekFeedbackForward = feedback.forward
                                 seekFeedbackVisible = true
                             }
                             FullscreenDoubleTapAction.SeekForward -> {
@@ -2479,6 +2482,7 @@ private fun VideoPageItem(
                                 )
                                 seekFeedbackGeneration = feedback.generation
                                 seekFeedbackText = feedback.text
+                                seekFeedbackForward = feedback.forward
                                 seekFeedbackVisible = true
                             }
                             FullscreenDoubleTapAction.TogglePlayPause -> {
@@ -2888,30 +2892,11 @@ private fun VideoPageItem(
                 seekFeedbackVisible = false
             }
         }
-        AnimatedVisibility(
+        SeekFeedbackText(
             visible = seekFeedbackVisible && isCurrentPage && !isSeekGesture,
-            modifier = Modifier.align(Alignment.Center),
-            enter = fadeIn(animationSpec = tween(120)),
-            exit = fadeOut(animationSpec = tween(180))
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .background(Color.Black.copy(alpha = 0.75f), AppShapes.container(ContainerLevel.Floating)),
-                contentAlignment = Alignment.Center
-            ) {
-                AppText(
-                    text = seekFeedbackText.orEmpty(),
-                    color = if (seekFeedbackText?.startsWith("+") == true) {
-                        Color(0xFF66FF66)
-                    } else {
-                        Color(0xFFFF6666)
-                    },
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
+            text = seekFeedbackText.orEmpty(),
+            forward = seekFeedbackForward
+        )
 
         // 长按倍速提示（透明背景 + 循环箭头动画，位于视频上方）
         AnimatedVisibility(
