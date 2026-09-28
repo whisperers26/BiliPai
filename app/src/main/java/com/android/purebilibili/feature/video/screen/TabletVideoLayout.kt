@@ -628,6 +628,8 @@ internal fun TabletVideoInfoPane(
     modifier: Modifier = Modifier,
     showRelatedVideos: Boolean = true,
     layout: TabletVideoInfoLayout = TabletVideoInfoLayout.List,
+    /** [TabletVideoInfoLayout.Header] only: told whether the title's details are open. */
+    onHeaderExpandedChange: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     var confirmDeleteNote by rememberSaveable(success.info.bvid) { mutableStateOf(false) }
@@ -685,6 +687,7 @@ internal fun TabletVideoInfoPane(
         onPublicVideoNoteClick = { cvid, _ ->
             onOpenBilibiliLink?.invoke("https://www.bilibili.com/read/cv$cvid")
         },
+        onExpandedChange = onHeaderExpandedChange,
         modifier = modifier,
     ) else ScrollableVideoInfoSection(
         info = engagementSuccess.info,
@@ -1663,8 +1666,8 @@ private fun ScrollableVideoInfoSection(
 
 /**
  * The video info as a header: the title beside the owner, then the parts selector for multi-part
- * videos. Tapping the title opens the description, tags, AI summary and note under it; the host
- * caps the height, so the opened details scroll inside the header.
+ * videos. Tapping the title opens the description, tags, AI summary and note under it, and
+ * [onExpandedChange] lets the host make room for them; the header scrolls when they overflow.
  */
 @Composable
 private fun VideoInfoHeaderSection(
@@ -1697,6 +1700,7 @@ private fun VideoInfoHeaderSection(
     onDeleteVideoNoteClick: () -> Unit,
     onShareVideoNote: (VideoNoteEditorDocument) -> Unit,
     onPublicVideoNoteClick: (Long, String) -> Unit,
+    onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.verticalScroll(rememberScrollState())) {
@@ -1715,6 +1719,7 @@ private fun VideoInfoHeaderSection(
                     onBgmClick = onBgmClick,
                     onRelatedVideoClick = onRelatedVideoClick,
                     onDescriptionUrlClick = onOpenBilibiliLink,
+                    onExpandedChange = onExpandedChange,
                     expandedContent = {
                         if (shouldShowAiSummaryEntry(
                                 aiSummary = aiSummary,

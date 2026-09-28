@@ -181,8 +181,8 @@ internal const val LARGE_SCREEN_DETAIL_RAIL_WIDTH_DP = 104f
 internal const val LARGE_SCREEN_DETAIL_RAIL_ACTION_COLUMNS = 2
 
 /**
- * Most of the info page's height the video info header may take when its details are open, so the
- * recommendations under it stay in view; the open details scroll inside the header.
+ * Most of the info page's height the closed video info header may take, so a tall parts selector
+ * cannot push the recommendations out of view. Open details take the whole page instead.
  */
 internal const val LARGE_SCREEN_DETAIL_RAIL_HEADER_MAX_HEIGHT_FRACTION = 0.5f
 

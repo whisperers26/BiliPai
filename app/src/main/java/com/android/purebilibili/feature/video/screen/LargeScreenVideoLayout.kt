@@ -180,7 +180,8 @@ internal fun LargeScreenVideoLayout(
                 viewportWidthDpOverride = metrics.playerWidthDp.toInt(),
             )
         }
-        val intro: @Composable (Modifier) -> Unit = { modifier ->
+        val infoPane: @Composable (Modifier, TabletVideoInfoLayout, (Boolean) -> Unit) -> Unit = {
+                modifier, layout, onHeaderExpandedChange ->
             if (success != null) {
                 TabletVideoInfoPane(
                     success = success,
@@ -202,13 +203,13 @@ internal fun LargeScreenVideoLayout(
                     videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
                     modifier = modifier,
                     showRelatedVideos = false,
-                    layout = if (useDetailRail) {
-                        TabletVideoInfoLayout.Header
-                    } else {
-                        TabletVideoInfoLayout.List
-                    },
+                    layout = layout,
+                    onHeaderExpandedChange = onHeaderExpandedChange,
                 )
             }
+        }
+        val intro: @Composable (Modifier) -> Unit = { modifier ->
+            infoPane(modifier, TabletVideoInfoLayout.List) {}
         }
         val side: @Composable (Boolean, TabletSecondaryTab?) -> Unit = { includeIntro, fixedTab ->
             if (success != null) {
@@ -334,7 +335,9 @@ internal fun LargeScreenVideoLayout(
                             playbackActions = playbackActions,
                             engagementActions = engagementActions,
                             commentActions = commentActions,
-                            infoHeaderContent = { modifier -> intro(modifier) },
+                            infoHeaderContent = { modifier, onExpandedChange ->
+                                infoPane(modifier, TabletVideoInfoLayout.Header, onExpandedChange)
+                            },
                             relatedContent = { modifier ->
                                 Box(modifier = modifier) { side(false, TabletSecondaryTab.RELATED) }
                             },

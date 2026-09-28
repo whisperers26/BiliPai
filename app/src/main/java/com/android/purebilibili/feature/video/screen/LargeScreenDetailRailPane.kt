@@ -63,8 +63,9 @@ import kotlinx.coroutines.launch
 /**
  * The detail area under the near-square layout's player: a vertical rail on the left and one page
  * beside it. The info page puts a header of the video info over the recommendations, which take the
- * rest of the height; the comments page gives the comment list the whole area. Each page keeps its
- * scroll position across switches.
+ * rest of the height; while the header's details are open they get the whole page instead. The
+ * comments page gives the comment list the whole area. Each page keeps its scroll position across
+ * switches.
  */
 @Composable
 internal fun LargeScreenDetailRailPane(
@@ -76,7 +77,8 @@ internal fun LargeScreenDetailRailPane(
     playbackActions: VideoDetailPlaybackActions,
     engagementActions: VideoDetailEngagementActions,
     commentActions: VideoDetailCommentActions,
-    infoHeaderContent: @Composable (Modifier) -> Unit,
+    /** Draws the info header into the modifier; reports whether its details are open. */
+    infoHeaderContent: @Composable (Modifier, onExpandedChange: (Boolean) -> Unit) -> Unit,
     relatedContent: @Composable (Modifier) -> Unit,
     commentsContent: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
@@ -92,6 +94,12 @@ internal fun LargeScreenDetailRailPane(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val pageStateHolder = rememberSaveableStateHolder()
+    val relatedStateHolder = rememberSaveableStateHolder()
+    var infoExpanded by remember(bvid) { mutableStateOf(false) }
+    // The header's details close when it leaves; don't hold the page for them on the way back.
+    LaunchedEffect(page) {
+        if (page != LargeScreenDetailRailPage.INFO) infoExpanded = false
+    }
     val dividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
 
     Row(modifier = modifier) {
@@ -137,16 +145,26 @@ internal fun LargeScreenDetailRailPane(
                             maxHeight * LARGE_SCREEN_DETAIL_RAIL_HEADER_MAX_HEIGHT_FRACTION
                         Column(modifier = Modifier.fillMaxSize()) {
                             infoHeaderContent(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = headerMaxHeight),
-                            )
-                            HorizontalDivider(color = dividerColor)
-                            relatedContent(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                            )
+                                if (infoExpanded) {
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f)
+                                } else {
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = headerMaxHeight)
+                                },
+                            ) { expanded -> infoExpanded = expanded }
+                            if (!infoExpanded) {
+                                HorizontalDivider(color = dividerColor)
+                                relatedStateHolder.SaveableStateProvider("${bvid}_related") {
+                                    relatedContent(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .weight(1f),
+                                    )
+                                }
+                            }
                         }
                     }
                     LargeScreenDetailRailPage.COMMENTS -> commentsContent(Modifier.fillMaxSize())
