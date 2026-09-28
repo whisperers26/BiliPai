@@ -21,6 +21,17 @@ Use this file as the project-specific overlay on top of the global Codex/OMX gui
 - Releases are published from `mymain` only, with `scripts/publish_fork_release.sh` (bump `versionName`/`versionCode` and push first). The in-app update checker reads `whisperers26/BiliPai` releases, and release APKs are signed with the fork's own keystore configured via `bili.release.*` in `~/.gradle/gradle.properties`.
 - `origin` pushes need the `whisperers26` GitHub account (the account signed in to `gh`). If a push is denied for another account, push with `git -c credential.helper= -c "credential.helper=!gh auth git-credential" push`.
 
+## Branch and pull request workflow
+
+Every requested feature or fix reaches `mymain` through its own pull request. Never commit or push feature work directly to `mymain`.
+
+1. Branch off the latest `mymain`, one branch per feature or fix (`feature/<topic>`, `fix/<topic>`, `docs/<topic>`). When one request asks for several independent changes, give each its own branch and pull request.
+2. Commit on that branch in small, single-topic commits, and push the branch to `origin`.
+3. Open a pull request into `mymain` (`gh pr create -R whisperers26/BiliPai --base mymain`). Never target `main`.
+4. Merge it with a merge commit (`gh pr merge --merge --delete-branch`), then fast-forward the local `mymain` before starting the next branch.
+
+The only commits pushed straight to `mymain` are the `versionName`/`versionCode` bumps of the release flow above.
+
 ## Working defaults
 
 - Prefer small, targeted changes over broad rewrites.
@@ -29,7 +40,7 @@ Use this file as the project-specific overlay on top of the global Codex/OMX gui
 - Avoid adding business logic to [`MainActivity.kt`](app/src/main/java/com/android/purebilibili/MainActivity.kt) unless the behavior truly belongs to app shell, deep link routing, or top-level playback orchestration.
 - Do not add new dependencies unless the user explicitly asks for one.
 - Do not run full package, APK packaging, bundle, install, or release-smoke verification paths unless the user explicitly asks for them.
-- After each meaningful completed slice, commit and push the changes so progress is easy to roll back and resume.
+- After each meaningful completed slice, commit and push the feature branch so progress is easy to roll back and resume.
 - Do not add `Co-Authored-By: Cursor`, `Co-Authored-By: Claude`, `Co-Authored-By: Codex`, `Made-with: Cursor`, or similar AI tool attribution to commit messages or PR descriptions.
 
 ## Android and Compose conventions
