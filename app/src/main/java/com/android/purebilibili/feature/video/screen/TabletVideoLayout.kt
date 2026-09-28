@@ -627,7 +627,6 @@ internal fun TabletVideoInfoPane(
     videoNoteDefaultCollapsed: Boolean = true,
     modifier: Modifier = Modifier,
     showRelatedVideos: Boolean = true,
-    showActionButtons: Boolean = true,
     layout: TabletVideoInfoLayout = TabletVideoInfoLayout.List,
 ) {
     val context = LocalContext.current
@@ -744,7 +743,6 @@ internal fun TabletVideoInfoPane(
             onOpenBilibiliLink?.invoke("https://www.bilibili.com/read/cv$cvid")
         },
         modifier = modifier,
-        showActionButtons = showActionButtons,
     )
 
     VideoNoteEditorSheet(
@@ -1475,7 +1473,6 @@ private fun ScrollableVideoInfoSection(
     relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo> = emptyList(),
     showRelatedVideos: Boolean = true,
     modifier: Modifier = Modifier,
-    showActionButtons: Boolean = true,
     ownerTrailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val windowSizeClass = LocalWindowSizeClass.current
@@ -1553,33 +1550,31 @@ private fun ScrollableVideoInfoSection(
             }
         }
 
-        // 3. 互动按钮（侧栏模式下放在侧栏）
-        if (showActionButtons) {
-            item {
-                TabletVideoInfoStaggeredItem(
-                    visible = entranceVisible,
-                    index = 2,
-                    spec = entranceSpec,
-                ) {
-                    ActionButtonsRow(
-                        info = info,
-                        isLiked = isLiked,
-                        isFavorited = isFavorited,
-                        coinCount = coinCount,
-                        isInWatchLater = isInWatchLater,
-                        onLikeClick = onLikeClick,
-                        onCoinClick = onCoinClick,
-                        onFavoriteClick = onFavoriteClick,
-                        onFavoriteLongClick = onFavoriteLongClick,
-                        onTripleClick = onTripleClick,
-                        onDownloadClick = onDownloadClick,
-                        onWatchLaterClick = onWatchLaterClick,
-                        downloadProgress = downloadProgress ?: -1f,
-                        onCommentClick = { /* 平板模式不需要跳转评论 */ },
-                        showCommentAction = false,
-                        onShareClick = onShareClick
-                    )
-                }
+        // 3. 互动按钮
+        item {
+            TabletVideoInfoStaggeredItem(
+                visible = entranceVisible,
+                index = 2,
+                spec = entranceSpec,
+            ) {
+                ActionButtonsRow(
+                    info = info,
+                    isLiked = isLiked,
+                    isFavorited = isFavorited,
+                    coinCount = coinCount,
+                    isInWatchLater = isInWatchLater,
+                    onLikeClick = onLikeClick,
+                    onCoinClick = onCoinClick,
+                    onFavoriteClick = onFavoriteClick,
+                    onFavoriteLongClick = onFavoriteLongClick,
+                    onTripleClick = onTripleClick,
+                    onDownloadClick = onDownloadClick,
+                    onWatchLaterClick = onWatchLaterClick,
+                    downloadProgress = downloadProgress ?: -1f,
+                    onCommentClick = { /* 平板模式不需要跳转评论 */ },
+                    showCommentAction = false,
+                    onShareClick = onShareClick
+                )
             }
         }
 
