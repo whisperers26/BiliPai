@@ -75,12 +75,15 @@ internal fun resolveVideoDetailOnlineCountText(
     return if (showOnlineCount) onlineCount.trim() else ""
 }
 
-internal fun resolveVideoDetailBadges(info: ViewInfo): List<String> {
+internal fun resolveVideoDetailBadges(
+    info: ViewInfo,
+    cooperationShownBesideOwner: Boolean = false
+): List<String> {
     val badges = mutableListOf<String>()
     if (info.isUpowerExclusive) {
         badges += if (info.isUpowerPreview) "充电专属 · 可试看" else "充电专属"
     }
-    if (info.isCooperation) {
+    if (info.isCooperation && !cooperationShownBesideOwner) {
         badges += "联合投稿"
     }
     return badges

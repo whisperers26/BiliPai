@@ -1668,7 +1668,7 @@ private fun ScrollableVideoInfoSection(
 
 /**
  * The video info as a header: the title beside the owner, then the parts selector for multi-part
- * videos. Tapping the title opens the description, tags, AI summary and note across the full width
+ * videos. Tapping the title opens the creator team, description, tags, AI summary and note across the full width
  * below them, and [onExpandedChange] lets the host make room; the header scrolls when they overflow.
  */
 @Composable
@@ -1717,6 +1717,7 @@ private fun VideoInfoHeaderSection(
             onRelatedVideoClick = onRelatedVideoClick,
             onDescriptionUrlClick = onOpenBilibiliLink,
             onExpandedChange = onExpandedChange,
+            onCreatorTeamMemberClick = onUpClick,
             expandedContent = {
                 if (shouldShowAiSummaryEntry(
                         aiSummary = aiSummary,
@@ -1759,6 +1760,7 @@ private fun VideoInfoHeaderSection(
                     followerCount = ownerFollowerCount,
                     videoCount = ownerVideoCount,
                     horizontalPadding = 0.dp,
+                    showCreatorTeam = false,
                     modifier = Modifier
                         .padding(start = 12.dp)
                         .width(VIDEO_INFO_HEADER_OWNER_WIDTH_DP.dp),

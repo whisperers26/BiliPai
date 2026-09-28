@@ -331,6 +331,8 @@ fun VideoTitleWithDesc(
     onExpandedChange: ((Boolean) -> Unit)? = null,
     /** Beside the title and stats; the expanded details still run the full width below. */
     headerTrailingContent: (@Composable RowScope.() -> Unit)? = null,
+    /** Lists the creator team first in the expanded details, for callers whose owner row leaves it out. */
+    onCreatorTeamMemberClick: ((Long) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val isMaterial3 = LocalAppUiStyle.current == AppUiStyle.MATERIAL3
@@ -370,8 +372,14 @@ fun VideoTitleWithDesc(
             onlineCount = onlineCount
         )
     }
-    val videoBadges = remember(info.isUpowerExclusive, info.isUpowerPreview, info.isCooperation) {
-        resolveVideoDetailBadges(info)
+    val showCreatorTeamWhenExpanded = onCreatorTeamMemberClick != null && shouldShowCreatorTeamSection(info)
+    val videoBadges = remember(
+        info.isUpowerExclusive,
+        info.isUpowerPreview,
+        info.isCooperation,
+        showCreatorTeamWhenExpanded
+    ) {
+        resolveVideoDetailBadges(info, cooperationShownBesideOwner = showCreatorTeamWhenExpanded)
     }
     
     //  尝试获取共享元素作用域
@@ -588,6 +596,28 @@ fun VideoTitleWithDesc(
             headerTrailingContent?.invoke(this)
         }
 
+        if (showCreatorTeamWhenExpanded && onCreatorTeamMemberClick != null) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = expanded,
+                enter = if (animateLayout) {
+                    androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn()
+                } else {
+                    androidx.compose.animation.EnterTransition.None
+                },
+                exit = if (animateLayout) {
+                    androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+                } else {
+                    androidx.compose.animation.ExitTransition.None
+                }
+            ) {
+                CreatorTeamSection(
+                    staff = info.staff,
+                    onMemberClick = onCreatorTeamMemberClick,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+        }
+
         androidx.compose.animation.AnimatedVisibility(
             visible = expanded,
             enter = if (animateLayout) {
@@ -786,6 +816,8 @@ fun UpInfoSection(
     /** Placed right before the follow button, e.g. an inline like action. */
     leadingActionContent: (@Composable RowScope.() -> Unit)? = null,
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
+    /** When false, the creator team is left to the caller and only marked by 联合投稿 beside the name. */
+    showCreatorTeam: Boolean = true,
 ) {
     val playerControlVisibility by com.android.purebilibili.core.store.SettingsManager
         .getPlayerControlVisibilitySettings(LocalContext.current)
@@ -824,6 +856,7 @@ fun UpInfoSection(
         videoCount = videoCount
     )
     val showInlineOwnerIdentity = shouldShowInlineOwnerIdentity(showOwnerAvatar = showOwnerAvatar)
+    val hasCreatorTeam = shouldShowCreatorTeamSection(info)
 
     BoxWithConstraints(modifier = modifier) {
         val isCompact = maxWidth.isSpecified && shouldUseCompactUpInfoLayout(maxWidth.value.toInt())
@@ -938,7 +971,7 @@ fun UpInfoSection(
                     }
                     Spacer(Modifier.width(4.dp))
                 }
-                SelectionContainer {
+                SelectionContainer(modifier = Modifier.weight(1f, fill = false)) {
                     AppText(
                         text = info.owner.name,
                         style = MaterialTheme.typography.titleSmall,
@@ -947,6 +980,15 @@ fun UpInfoSection(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = upNameModifier
+                    )
+                }
+                if (!showCreatorTeam && hasCreatorTeam) {
+                    Spacer(Modifier.width(8.dp))
+                    AppText(
+                        text = "联合投稿",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                        maxLines = 1
                     )
                 }
             }
@@ -1096,10 +1138,11 @@ fun UpInfoSection(
                     }
                 }
             }
-            if (shouldShowCreatorTeamSection(info)) {
+            if (showCreatorTeam && hasCreatorTeam) {
                 CreatorTeamSection(
                     staff = info.staff,
-                    onMemberClick = onUpClick
+                    onMemberClick = onUpClick,
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
                 )
             }
         }
@@ -1109,13 +1152,12 @@ fun UpInfoSection(
 @Composable
 private fun CreatorTeamSection(
     staff: List<VideoStaff>,
-    onMemberClick: (Long) -> Unit
+    onMemberClick: (Long) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     if (staff.isEmpty()) return
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
+        modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

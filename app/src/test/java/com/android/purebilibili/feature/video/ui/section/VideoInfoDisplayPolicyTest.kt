@@ -148,6 +148,19 @@ class VideoInfoDisplayPolicyTest {
     }
 
     @Test
+    fun videoBadgesOmitCooperationWhenShownBesideOwner() {
+        val info = ViewInfo(
+            isUpowerExclusive = true,
+            rights = VideoDetailRights(isCooperation = 1)
+        )
+
+        assertEquals(
+            listOf("充电专属"),
+            resolveVideoDetailBadges(info, cooperationShownBesideOwner = true)
+        )
+    }
+
+    @Test
     fun creatorTeamShownOnlyWhenStaffListExists() {
         assertTrue(
             shouldShowCreatorTeamSection(
