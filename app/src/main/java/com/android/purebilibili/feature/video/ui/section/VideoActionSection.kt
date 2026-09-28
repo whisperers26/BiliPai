@@ -154,6 +154,64 @@ fun ActionButtonsRow(
 }
 
 /**
+ * The [ActionButtonsRow] buttons without the comment entry, wrapped into rows of [columns] so they
+ * fit a narrow side rail.
+ */
+@Composable
+fun ActionButtonsGrid(
+    info: ViewInfo,
+    isFavorited: Boolean = false,
+    isLiked: Boolean = false,
+    coinCount: Int = 0,
+    downloadProgress: Float = -1f,
+    isInWatchLater: Boolean = false,
+    onFavoriteClick: () -> Unit = {},
+    onLikeClick: () -> Unit = {},
+    onCoinClick: () -> Unit = {},
+    onTripleClick: () -> Unit = {},
+    onDownloadClick: () -> Unit = {},
+    onWatchLaterClick: () -> Unit = {},
+    onFavoriteLongClick: () -> Unit = {},
+    onShareClick: () -> Unit = {},
+    columns: Int = 2,
+    modifier: Modifier = Modifier,
+) {
+    val actions = videoDetailActionButtons(
+        info = info,
+        isFavorited = isFavorited,
+        isLiked = isLiked,
+        coinCount = coinCount,
+        downloadProgress = downloadProgress,
+        isInWatchLater = isInWatchLater,
+        onFavoriteClick = onFavoriteClick,
+        onLikeClick = onLikeClick,
+        onCoinClick = onCoinClick,
+        onTripleClick = onTripleClick,
+        onCommentClick = {},
+        onDownloadClick = onDownloadClick,
+        onWatchLaterClick = onWatchLaterClick,
+        onFavoriteLongClick = onFavoriteLongClick,
+        onShareClick = onShareClick,
+        showCommentAction = false,
+        buttonHorizontalPadding = 2.dp,
+    )
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        actions.chunked(columns.coerceAtLeast(1)).forEach { rowActions ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                rowActions.forEach { action -> action(Modifier.weight(1f)) }
+                repeat(columns - rowActions.size) { Spacer(modifier = Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/**
  * The detail action buttons in display order, each drawn into the modifier its container gives it.
  * Like, coin and favorite share one long-press triple progress, so they are built together.
  */
