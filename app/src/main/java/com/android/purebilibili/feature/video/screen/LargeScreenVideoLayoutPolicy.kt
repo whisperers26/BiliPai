@@ -187,6 +187,12 @@ internal const val LARGE_SCREEN_DETAIL_RAIL_ACTION_COLUMNS = 2
  */
 internal const val LARGE_SCREEN_DETAIL_RAIL_RELATED_FRACTION = 0.58f
 
+/**
+ * Width of the owner block beside the title in the header info layout: it takes the compact owner
+ * layout (name over follow and stats) and leaves the title the rest of the row.
+ */
+internal const val VIDEO_INFO_HEADER_OWNER_WIDTH_DP = 280f
+
 /** What the area beside the detail rail shows, switched by the rail's toggle. */
 internal enum class LargeScreenDetailRailPage(val label: String) {
     /** Video info beside the recommendations; the rail holds the like/coin/favorite actions. */

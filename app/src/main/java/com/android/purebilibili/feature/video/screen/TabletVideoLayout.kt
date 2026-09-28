@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -595,6 +596,18 @@ internal fun TabletVideoLayout(
     )
 }
 
+/** How [TabletVideoInfoPane] lays out the video info. */
+internal enum class TabletVideoInfoLayout {
+    /** One scrolling list: title, owner, actions, AI summary, note, parts and recommendations. */
+    List,
+
+    /**
+     * A header: the title beside the owner, over the parts selector. The description, AI summary
+     * and note open under the title; actions and recommendations are left to the host.
+     */
+    Header,
+}
+
 @Composable
 internal fun TabletVideoInfoPane(
     success: VideoPlaybackUiState.Success,
@@ -615,6 +628,7 @@ internal fun TabletVideoInfoPane(
     modifier: Modifier = Modifier,
     showRelatedVideos: Boolean = true,
     showActionButtons: Boolean = true,
+    layout: TabletVideoInfoLayout = TabletVideoInfoLayout.List,
 ) {
     val context = LocalContext.current
     var confirmDeleteNote by rememberSaveable(success.info.bvid) { mutableStateOf(false) }
@@ -640,7 +654,40 @@ internal fun TabletVideoInfoPane(
         payload = pendingVideoShare,
         onDismiss = { pendingVideoShare = null },
     )
-    ScrollableVideoInfoSection(
+    if (layout == TabletVideoInfoLayout.Header) VideoInfoHeaderSection(
+        info = engagementSuccess.info,
+        isFollowing = engagementState.isFollowing,
+        currentPageIndex = currentPageIndex,
+        videoTags = success.videoTags,
+        ownerFollowerCount = success.ownerFollowerCount,
+        ownerVideoCount = success.ownerVideoCount,
+        bgmInfo = success.bgmInfo,
+        bgmInfoList = success.bgmInfoList,
+        onBgmClick = onBgmClick,
+        onFollowClick = engagementActions.toggleFollow,
+        onPageSelect = playbackActions.switchPage,
+        onUpClick = { onOwnerUploadsClick() },
+        onRelatedVideoClick = onRelatedVideoClick,
+        onOpenBilibiliLink = onOpenBilibiliLink,
+        aiSummary = success.aiSummary,
+        aiSummaryPrompt = success.aiSummaryPrompt,
+        videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
+        onRetryAiSummary = playbackActions.retryAiSummary,
+        onCreateNoteDraftFromAiSummary = playbackActions.createVideoNoteDraftFromAiSummary,
+        onTimestampClick = { timestamp -> playbackActions.seekTo(timestamp) },
+        videoNoteState = success.videoNoteState,
+        isLoggedIn = success.isLoggedIn,
+        videoNoteEnabled = videoNoteEnabled,
+        videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
+        onOpenVideoNoteEditor = playbackActions.openVideoNoteEditor,
+        onRetryVideoNote = playbackActions.retryVideoNote,
+        onDeleteVideoNoteClick = { confirmDeleteNote = true },
+        onShareVideoNote = { document -> onShareVideoNote(document, false) },
+        onPublicVideoNoteClick = { cvid, _ ->
+            onOpenBilibiliLink?.invoke("https://www.bilibili.com/read/cv$cvid")
+        },
+        modifier = modifier,
+    ) else ScrollableVideoInfoSection(
         info = engagementSuccess.info,
         isFollowing = engagementState.isFollowing,
         isFavorited = engagementState.isFavorited,
@@ -1613,6 +1660,117 @@ private fun ScrollableVideoInfoSection(
                 TabletRelatedVideosSection(
                     relatedVideos = relatedVideos,
                     onRelatedVideoClick = onRelatedVideoClick,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The video info as a header: the title beside the owner, then the parts selector for multi-part
+ * videos. Tapping the title opens the description, tags, AI summary and note under it; the host
+ * caps the height, so the opened details scroll inside the header.
+ */
+@Composable
+private fun VideoInfoHeaderSection(
+    info: com.android.purebilibili.data.model.response.ViewInfo,
+    isFollowing: Boolean,
+    currentPageIndex: Int,
+    videoTags: List<com.android.purebilibili.data.model.response.VideoTag>,
+    ownerFollowerCount: Int?,
+    ownerVideoCount: Int?,
+    bgmInfo: BgmInfo?,
+    bgmInfoList: List<BgmInfo>,
+    onBgmClick: (BgmInfo) -> Unit,
+    onFollowClick: () -> Unit,
+    onPageSelect: (Int) -> Unit,
+    onUpClick: (Long) -> Unit,
+    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit,
+    onOpenBilibiliLink: ((String) -> Unit)?,
+    aiSummary: AiSummaryData?,
+    aiSummaryPrompt: AiSummaryPromptState?,
+    videoAiSummaryEntryEnabled: Boolean,
+    onRetryAiSummary: () -> Unit,
+    onCreateNoteDraftFromAiSummary: () -> Unit,
+    onTimestampClick: (Long) -> Unit,
+    videoNoteState: VideoNoteUiState,
+    isLoggedIn: Boolean,
+    videoNoteEnabled: Boolean,
+    videoNoteDefaultCollapsed: Boolean,
+    onOpenVideoNoteEditor: () -> Unit,
+    onRetryVideoNote: () -> Unit,
+    onDeleteVideoNoteClick: () -> Unit,
+    onShareVideoNote: (VideoNoteEditorDocument) -> Unit,
+    onPublicVideoNoteClick: (Long, String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.verticalScroll(rememberScrollState())) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                VideoTitleWithDesc(
+                    info = info,
+                    videoTags = videoTags,
+                    bgmList = resolveDisplayBgmList(
+                        bgmInfo = bgmInfo,
+                        bgmInfoList = bgmInfoList
+                    ),
+                    onBgmClick = onBgmClick,
+                    onRelatedVideoClick = onRelatedVideoClick,
+                    onDescriptionUrlClick = onOpenBilibiliLink,
+                    expandedContent = {
+                        if (shouldShowAiSummaryEntry(
+                                aiSummary = aiSummary,
+                                isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
+                            )
+                        ) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            AiSummaryCard(
+                                aiSummary = aiSummary,
+                                onTimestampClick = onTimestampClick,
+                                onCreateNoteDraftClick = onCreateNoteDraftFromAiSummary,
+                            )
+                        } else if (videoAiSummaryEntryEnabled && aiSummaryPrompt != null) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            AiSummaryPromptCard(
+                                promptState = aiSummaryPrompt,
+                                onActionClick = onRetryAiSummary,
+                            )
+                        }
+                        if (shouldShowVideoNoteCard(videoNoteEnabled)) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            VideoNoteCard(
+                                noteState = videoNoteState,
+                                isLoggedIn = isLoggedIn,
+                                onCreateOrEditClick = onOpenVideoNoteEditor,
+                                onRetryClick = onRetryVideoNote,
+                                onDeleteClick = onDeleteVideoNoteClick,
+                                onShareClick = onShareVideoNote,
+                                onPublicNoteClick = onPublicVideoNoteClick,
+                                defaultCollapsed = videoNoteDefaultCollapsed,
+                            )
+                        }
+                    },
+                )
+            }
+            UpInfoSection(
+                info = info,
+                isFollowing = isFollowing,
+                onFollowClick = onFollowClick,
+                onUpClick = onUpClick,
+                followerCount = ownerFollowerCount,
+                videoCount = ownerVideoCount,
+                modifier = Modifier.width(VIDEO_INFO_HEADER_OWNER_WIDTH_DP.dp),
+            )
+        }
+        if (info.pages.size > 1) {
+            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                PagesSelector(
+                    pages = info.pages,
+                    currentPageIndex = currentPageIndex,
+                    onPageSelect = onPageSelect
                 )
             }
         }
