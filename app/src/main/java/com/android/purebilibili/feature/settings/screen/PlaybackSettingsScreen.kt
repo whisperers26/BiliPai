@@ -1977,6 +1977,27 @@ private fun PlaybackFullscreenGestureSettingsSection(
             iconTint = iOSTeal,
         )
 
+        val videoBgmDiscoveryEnabled by SettingsManager
+            .getVideoBgmDiscoveryEnabled(context)
+            .collectAsStateWithLifecycle(initialValue = false)
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.VIDEO_BGM_DISCOVERY),
+            title = "显示发现音乐",
+            subtitle = if (videoBgmDiscoveryEnabled) {
+                "视频信息区显示背景音乐入口，可查看 BGM 详情与推荐视频"
+            } else {
+                "关闭（默认）：不加载也不显示视频的背景音乐，重新打开视频后生效"
+            },
+            checked = videoBgmDiscoveryEnabled,
+            onCheckedChange = { enabled ->
+                scope.launch {
+                    SettingsManager.setVideoBgmDiscoveryEnabled(context, enabled)
+                }
+            },
+            iconTint = iOSTeal,
+        )
+
         val pauseOnPlayerCollapseEnabled by com.android.purebilibili.core.store.SettingsManager
             .getPauseOnPlayerCollapseEnabled(context)
             .collectAsStateWithLifecycle(initialValue = true)

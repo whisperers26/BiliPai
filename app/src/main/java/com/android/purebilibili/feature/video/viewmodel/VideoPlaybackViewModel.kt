@@ -5622,8 +5622,13 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         Logger.d("PlayerVM", "📈 Failed to load PBP progress: ${e.message}")
                     }
 
-                    // 2. 处理 BGM 信息
-                    if (data.bgmInfo != null) {
+                    // 2. 处理 BGM 信息（「发现音乐」默认关闭，关闭时不请求）
+                    val bgmDiscoveryEnabled = appContext?.let {
+                        com.android.purebilibili.core.store.SettingsManager
+                            .getVideoBgmDiscoveryEnabled(it)
+                            .first()
+                    } ?: false
+                    if (bgmDiscoveryEnabled && data.bgmInfo != null) {
                         _uiState.update { current ->
                             if (current is VideoPlaybackUiState.Success) {
                                 current.copy(bgmInfo = data.bgmInfo)
@@ -5634,7 +5639,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
                     // 2b. gRPC BGM list (multi-song support)
                     val grpcAid = currentState.info.aid
-                    if (grpcAid > 0) {
+                    if (bgmDiscoveryEnabled && grpcAid > 0) {
                         ViewGrpcRepository.getBgmList(grpcAid, bvid, cid).onSuccess { bgmList ->
                             Logger.w("PlayerVM", "gRPC BGM result: ${bgmList.size} entries for aid=$grpcAid")
                             if (bgmList.isNotEmpty()) {

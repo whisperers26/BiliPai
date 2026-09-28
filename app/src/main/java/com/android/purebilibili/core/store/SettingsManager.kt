@@ -1644,6 +1644,7 @@ object SettingsManager {
     private val KEY_VIDEO_TAG_SIZE_PRESET = intPreferencesKey("video_tag_size_preset")
     private val KEY_VIDEO_DETAIL_CHROME_SCROLL_HIDE_ENABLED =
         booleanPreferencesKey("video_detail_chrome_scroll_hide_enabled")
+    private val KEY_VIDEO_BGM_DISCOVERY_ENABLED = booleanPreferencesKey("video_bgm_discovery_enabled")
     private const val VIDEO_NOTE_CACHE_PREFS = "video_note_settings"
     private const val CACHE_KEY_VIDEO_NOTE_ENABLED = "video_note_enabled"
     private const val CACHE_KEY_VIDEO_NOTE_DEFAULT_COLLAPSED = "video_note_default_collapsed"
@@ -6328,6 +6329,17 @@ object SettingsManager {
         }
     }
 
+    fun getVideoBgmDiscoveryEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { preferences ->
+            preferences[KEY_VIDEO_BGM_DISCOVERY_ENABLED] ?: false
+        }
+
+    suspend fun setVideoBgmDiscoveryEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_VIDEO_BGM_DISCOVERY_ENABLED] = enabled
+        }
+    }
+
     // ==========  底栏显示模式 ==========
     
     private val KEY_BOTTOM_BAR_VISIBILITY_MODE = intPreferencesKey("bottom_bar_visibility_mode")
@@ -7705,6 +7717,7 @@ object SettingsManager {
                 KEY_VIDEO_DETAIL_CHROME_SCROLL_HIDE_ENABLED,
                 SettingsShareSection.PLAYBACK,
             ),
+            BooleanShareablePreferenceDefinition(KEY_VIDEO_BGM_DISCOVERY_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_CLICK_TO_PLAY, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_RESUME_PLAYBACK_PROMPT_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(
