@@ -3,7 +3,6 @@ package com.android.purebilibili.feature.video.ui.section
 data class VideoPlayerUiLayoutPolicy(
     val gestureOverlaySizeDp: Int,
     val gestureIconSizeDp: Int,
-    val seekFeedbackSizeDp: Int,
     val gestureBoundaryPaddingDp: Int,
     val restoreButtonBottomOffsetDp: Int,
     val restoreButtonHorizontalPaddingDp: Int,
@@ -20,7 +19,6 @@ fun resolveVideoPlayerUiLayoutPolicy(
         widthDp < 240 -> VideoPlayerUiLayoutPolicy(
             gestureOverlaySizeDp = 96,
             gestureIconSizeDp = 36,
-            seekFeedbackSizeDp = 84,
             gestureBoundaryPaddingDp = 16,
             restoreButtonBottomOffsetDp = 72,
             restoreButtonHorizontalPaddingDp = 12,
@@ -32,7 +30,6 @@ fun resolveVideoPlayerUiLayoutPolicy(
         widthDp >= 1600 -> VideoPlayerUiLayoutPolicy(
             gestureOverlaySizeDp = 140,
             gestureIconSizeDp = 56,
-            seekFeedbackSizeDp = 112,
             gestureBoundaryPaddingDp = 28,
             restoreButtonBottomOffsetDp = 116,
             restoreButtonHorizontalPaddingDp = 20,
@@ -44,7 +41,6 @@ fun resolveVideoPlayerUiLayoutPolicy(
         widthDp >= 840 -> VideoPlayerUiLayoutPolicy(
             gestureOverlaySizeDp = 132,
             gestureIconSizeDp = 52,
-            seekFeedbackSizeDp = 108,
             gestureBoundaryPaddingDp = 26,
             restoreButtonBottomOffsetDp = 112,
             restoreButtonHorizontalPaddingDp = 18,
@@ -56,7 +52,6 @@ fun resolveVideoPlayerUiLayoutPolicy(
         else -> VideoPlayerUiLayoutPolicy(
             gestureOverlaySizeDp = 120,
             gestureIconSizeDp = 48,
-            seekFeedbackSizeDp = 100,
             gestureBoundaryPaddingDp = 24,
             restoreButtonBottomOffsetDp = 100,
             restoreButtonHorizontalPaddingDp = 16,

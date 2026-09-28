@@ -12,7 +12,6 @@ class VideoPlayerUiLayoutPolicyTest {
 
         assertEquals(120, policy.gestureOverlaySizeDp)
         assertEquals(48, policy.gestureIconSizeDp)
-        assertEquals(100, policy.seekFeedbackSizeDp)
         assertEquals(24, policy.gestureBoundaryPaddingDp)
     }
 
@@ -22,7 +21,6 @@ class VideoPlayerUiLayoutPolicyTest {
 
         assertEquals(132, policy.gestureOverlaySizeDp)
         assertEquals(52, policy.gestureIconSizeDp)
-        assertEquals(108, policy.seekFeedbackSizeDp)
         assertEquals(112, policy.restoreButtonBottomOffsetDp)
     }
 
@@ -42,7 +40,6 @@ class VideoPlayerUiLayoutPolicyTest {
 
         assertEquals(140, policy.gestureOverlaySizeDp)
         assertEquals(56, policy.gestureIconSizeDp)
-        assertEquals(112, policy.seekFeedbackSizeDp)
         assertEquals(28, policy.gestureBoundaryPaddingDp)
     }
 
@@ -52,7 +49,6 @@ class VideoPlayerUiLayoutPolicyTest {
 
         assertEquals(96, policy.gestureOverlaySizeDp)
         assertEquals(36, policy.gestureIconSizeDp)
-        assertEquals(84, policy.seekFeedbackSizeDp)
         assertEquals(16, policy.gestureBoundaryPaddingDp)
         assertEquals(72, policy.restoreButtonBottomOffsetDp)
     }
