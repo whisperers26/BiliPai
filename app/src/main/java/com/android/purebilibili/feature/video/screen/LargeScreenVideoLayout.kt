@@ -202,7 +202,11 @@ internal fun LargeScreenVideoLayout(
                     videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
                     modifier = modifier,
                     showRelatedVideos = false,
-                    showActionButtons = !useDetailRail,
+                    layout = if (useDetailRail) {
+                        TabletVideoInfoLayout.Header
+                    } else {
+                        TabletVideoInfoLayout.List
+                    },
                 )
             }
         }
@@ -330,7 +334,7 @@ internal fun LargeScreenVideoLayout(
                             playbackActions = playbackActions,
                             engagementActions = engagementActions,
                             commentActions = commentActions,
-                            infoContent = { modifier -> intro(modifier) },
+                            infoHeaderContent = { modifier -> intro(modifier) },
                             relatedContent = { modifier ->
                                 Box(modifier = modifier) { side(false, TabletSecondaryTab.RELATED) }
                             },

@@ -181,11 +181,10 @@ internal const val LARGE_SCREEN_DETAIL_RAIL_WIDTH_DP = 104f
 internal const val LARGE_SCREEN_DETAIL_RAIL_ACTION_COLUMNS = 2
 
 /**
- * Share of the info page's width the recommendations take. An even split leaves them just under
- * the width horizontal cards need on a Galaxy Z Fold inner display, and stacked cards fit only one
- * per screen in this short area; the video info reads fine a little narrower.
+ * Most of the info page's height the video info header may take when its details are open, so the
+ * recommendations under it stay in view; the open details scroll inside the header.
  */
-internal const val LARGE_SCREEN_DETAIL_RAIL_RELATED_FRACTION = 0.58f
+internal const val LARGE_SCREEN_DETAIL_RAIL_HEADER_MAX_HEIGHT_FRACTION = 0.5f
 
 /**
  * Width of the owner block beside the title in the header info layout: it takes the compact owner

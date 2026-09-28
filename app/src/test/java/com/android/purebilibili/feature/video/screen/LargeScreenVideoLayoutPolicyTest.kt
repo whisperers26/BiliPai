@@ -234,15 +234,17 @@ class LargeScreenVideoLayoutPolicyTest {
     }
 
     @Test
-    fun galaxyFoldInnerRailInfoPageLeavesRoomForHorizontalRelatedCards() {
-        // 752dp window minus the rail and its two 1dp dividers, then the list's 8dp side padding
-        // and the card row's outer padding.
-        val infoPageWidthDp = 752f - LARGE_SCREEN_DETAIL_RAIL_WIDTH_DP - 2f
-        val relatedCardWidthDp = infoPageWidthDp * LARGE_SCREEN_DETAIL_RAIL_RELATED_FRACTION - 16f - 16f
+    fun galaxyFoldInnerRailInfoPageFitsTitleOwnerRowOverHorizontalRelatedCards() {
+        // 752dp window minus the rail and its 1dp divider.
+        val infoPageWidthDp = 752f - LARGE_SCREEN_DETAIL_RAIL_WIDTH_DP - 1f
+        // The title keeps more of the header row than the owner block beside it.
+        assertTrue(infoPageWidthDp - VIDEO_INFO_HEADER_OWNER_WIDTH_DP > VIDEO_INFO_HEADER_OWNER_WIDTH_DP)
+        // Recommendations span the page, minus the list's 8dp and the card row's 6dp side padding.
         assertTrue(
-            relatedCardWidthDp >=
+            infoPageWidthDp - 16f - 12f >=
                 com.android.purebilibili.feature.video.ui.components.RELATED_VIDEO_HORIZONTAL_MIN_WIDTH_DP,
         )
+        assertTrue(LARGE_SCREEN_DETAIL_RAIL_HEADER_MAX_HEIGHT_FRACTION in 0.3f..0.6f)
     }
 
     @Test

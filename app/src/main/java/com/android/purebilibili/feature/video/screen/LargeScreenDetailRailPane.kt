@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.video.screen
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -61,8 +62,9 @@ import kotlinx.coroutines.launch
 
 /**
  * The detail area under the near-square layout's player: a vertical rail on the left and one page
- * beside it. The info page puts the video info next to the recommendations; the comments page
- * gives the comment list the whole width. Each page keeps its scroll position across switches.
+ * beside it. The info page puts a header of the video info over the recommendations, which take the
+ * rest of the height; the comments page gives the comment list the whole area. Each page keeps its
+ * scroll position across switches.
  */
 @Composable
 internal fun LargeScreenDetailRailPane(
@@ -74,7 +76,7 @@ internal fun LargeScreenDetailRailPane(
     playbackActions: VideoDetailPlaybackActions,
     engagementActions: VideoDetailEngagementActions,
     commentActions: VideoDetailCommentActions,
-    infoContent: @Composable (Modifier) -> Unit,
+    infoHeaderContent: @Composable (Modifier) -> Unit,
     relatedContent: @Composable (Modifier) -> Unit,
     commentsContent: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
@@ -130,22 +132,22 @@ internal fun LargeScreenDetailRailPane(
         ) { target ->
             pageStateHolder.SaveableStateProvider("${bvid}_${target.name}") {
                 when (target) {
-                    LargeScreenDetailRailPage.INFO -> Row(modifier = Modifier.fillMaxSize()) {
-                        infoContent(
-                            Modifier
-                                .weight(1f - LARGE_SCREEN_DETAIL_RAIL_RELATED_FRACTION)
-                                .fillMaxHeight(),
-                        )
-                        VerticalDivider(
-                            modifier = Modifier.fillMaxHeight(),
-                            color = dividerColor,
-                            thickness = 1.dp,
-                        )
-                        relatedContent(
-                            Modifier
-                                .weight(LARGE_SCREEN_DETAIL_RAIL_RELATED_FRACTION)
-                                .fillMaxHeight(),
-                        )
+                    LargeScreenDetailRailPage.INFO -> BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val headerMaxHeight =
+                            maxHeight * LARGE_SCREEN_DETAIL_RAIL_HEADER_MAX_HEIGHT_FRACTION
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            infoHeaderContent(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = headerMaxHeight),
+                            )
+                            HorizontalDivider(color = dividerColor)
+                            relatedContent(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                            )
+                        }
                     }
                     LargeScreenDetailRailPage.COMMENTS -> commentsContent(Modifier.fillMaxSize())
                 }
