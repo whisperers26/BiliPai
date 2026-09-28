@@ -33,6 +33,7 @@ import com.android.purebilibili.feature.video.ui.overlay.FullscreenDoubleTapActi
 import com.android.purebilibili.feature.video.ui.overlay.VideoPlayerOverlay
 import com.android.purebilibili.feature.video.ui.overlay.SubtitleControlCallbacks
 import com.android.purebilibili.feature.video.ui.overlay.SubtitleControlUiState
+import com.android.purebilibili.feature.video.ui.overlay.SeekFeedbackText
 import com.android.purebilibili.feature.video.ui.overlay.nextFullscreenSeekFeedbackEvent
 import com.android.purebilibili.feature.video.ui.overlay.resolveFullscreenDoubleTapAction
 import com.android.purebilibili.feature.video.ui.overlay.resolveBottomControlBarLayoutPolicy
@@ -1009,6 +1010,7 @@ private fun VideoPlayerSectionContent(
     //  [新增] 双击跳转视觉反馈状态
     var seekFeedbackText by remember { mutableStateOf<String?>(null) }
     var seekFeedbackVisible by remember { mutableStateOf(false) }
+    var seekFeedbackForward by remember { mutableStateOf(true) }
     var seekFeedbackGeneration by remember { mutableLongStateOf(0L) }
     
     //  [新增] 长按倍速设置和状态
@@ -2855,6 +2857,7 @@ private fun VideoPlayerSectionContent(
                                 )
                                 seekFeedbackGeneration = feedback.generation
                                 seekFeedbackText = feedback.text
+                                seekFeedbackForward = feedback.forward
                                 seekFeedbackVisible = true
                                 com.android.purebilibili.core.util.Logger.d("VideoPlayerSection") {
                                     "⏩ DoubleTap right: +${seekForwardSeconds}s"
@@ -2874,6 +2877,7 @@ private fun VideoPlayerSectionContent(
                                 )
                                 seekFeedbackGeneration = feedback.generation
                                 seekFeedbackText = feedback.text
+                                seekFeedbackForward = feedback.forward
                                 seekFeedbackVisible = true
                                 com.android.purebilibili.core.util.Logger.d("VideoPlayerSection") {
                                     "⏪ DoubleTap left: -${seekBackwardSeconds}s"
@@ -4713,27 +4717,11 @@ private fun VideoPlayerSectionContent(
             }
         }
         
-        AnimatedVisibility(
+        SeekFeedbackText(
             visible = seekFeedbackVisible && !isInPipMode,
-            modifier = Modifier.align(Alignment.Center),
-            enter = scaleIn(initialScale = 0.5f) + fadeIn(),
-            exit = scaleOut(targetScale = 0.8f) + fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(uiLayoutPolicy.seekFeedbackSizeDp.dp)
-                    .background(Color.Black.copy(0.75f), AppShapes.container(ContainerLevel.Floating)),
-                contentAlignment = Alignment.Center
-            ) {
-                AppText(
-                    text = seekFeedbackText ?: "",
-                    color = if (seekFeedbackText?.startsWith("+") == true) com.android.purebilibili.core.theme.iOSGreen else com.android.purebilibili.core.theme.iOSRed,
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold
-                    )
-                )
-            }
-        }
+            text = seekFeedbackText.orEmpty(),
+            forward = seekFeedbackForward
+        )
 
         TwoFingerSpeedFeedbackOverlay(
             visible = twoFingerSpeedFeedbackVisible && !isInPipMode,
