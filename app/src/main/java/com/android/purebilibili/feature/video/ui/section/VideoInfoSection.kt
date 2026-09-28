@@ -331,6 +331,8 @@ fun VideoTitleWithDesc(
     onExpandedChange: ((Boolean) -> Unit)? = null,
     /** Beside the title and stats; the expanded details still run the full width below. */
     headerTrailingContent: (@Composable RowScope.() -> Unit)? = null,
+    /** Lists the creator team first in the expanded details, for callers whose owner row leaves it out. */
+    onCreatorTeamMemberClick: ((Long) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val isMaterial3 = LocalAppUiStyle.current == AppUiStyle.MATERIAL3
@@ -370,8 +372,14 @@ fun VideoTitleWithDesc(
             onlineCount = onlineCount
         )
     }
-    val videoBadges = remember(info.isUpowerExclusive, info.isUpowerPreview, info.isCooperation) {
-        resolveVideoDetailBadges(info)
+    val showCreatorTeamWhenExpanded = onCreatorTeamMemberClick != null && shouldShowCreatorTeamSection(info)
+    val videoBadges = remember(
+        info.isUpowerExclusive,
+        info.isUpowerPreview,
+        info.isCooperation,
+        showCreatorTeamWhenExpanded
+    ) {
+        resolveVideoDetailBadges(info, cooperationShownBesideOwner = showCreatorTeamWhenExpanded)
     }
     
     //  尝试获取共享元素作用域
@@ -586,6 +594,28 @@ fun VideoTitleWithDesc(
                 }
             }
             headerTrailingContent?.invoke(this)
+        }
+
+        if (showCreatorTeamWhenExpanded && onCreatorTeamMemberClick != null) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = expanded,
+                enter = if (animateLayout) {
+                    androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn()
+                } else {
+                    androidx.compose.animation.EnterTransition.None
+                },
+                exit = if (animateLayout) {
+                    androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+                } else {
+                    androidx.compose.animation.ExitTransition.None
+                }
+            ) {
+                CreatorTeamSection(
+                    staff = info.staff,
+                    onMemberClick = onCreatorTeamMemberClick,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
         }
 
         androidx.compose.animation.AnimatedVisibility(
