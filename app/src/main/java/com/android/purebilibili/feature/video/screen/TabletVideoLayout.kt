@@ -760,6 +760,8 @@ internal fun TabletSecondaryContent(
     danmakuEnabled: Boolean = true,
     onDanmakuSendClick: () -> Unit = {},
     onDanmakuToggle: () -> Unit = {},
+    // Off when a side rail already offers comment sorting, search and composing.
+    showCommentChrome: Boolean = true,
 ) {
     val commentAppearance = rememberVideoCommentAppearance()
     var pendingVideoShare by remember { mutableStateOf<VideoSharePayload?>(null) }
@@ -1052,18 +1054,20 @@ internal fun TabletSecondaryContent(
                         val commentChromeBackdrop = rememberLayerBackdrop()
                         var showCommentSearchSheet by remember { mutableStateOf(false) }
                         Column(modifier = Modifier.fillMaxSize()) {
-                            CommentSortHeader(
-                                count = commentState.replyCount,
-                                sortMode = commentState.sortMode,
-                                onSortModeChange = { mode ->
-                                    commentActions.setSortMode(mode)
-                                    scope.launch {
-                                        com.android.purebilibili.core.store.SettingsManager
-                                            .setCommentDefaultSortMode(context, mode.apiMode)
-                                    }
-                                },
-                                onSearchClick = { showCommentSearchSheet = true },
-                            )
+                            if (showCommentChrome) {
+                                CommentSortHeader(
+                                    count = commentState.replyCount,
+                                    sortMode = commentState.sortMode,
+                                    onSortModeChange = { mode ->
+                                        commentActions.setSortMode(mode)
+                                        scope.launch {
+                                            com.android.purebilibili.core.store.SettingsManager
+                                                .setCommentDefaultSortMode(context, mode.apiMode)
+                                        }
+                                    },
+                                    onSearchClick = { showCommentSearchSheet = true },
+                                )
+                            }
                             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                             LazyColumn(
                                 state = listState,
@@ -1074,7 +1078,7 @@ internal fun TabletSecondaryContent(
                                     start = 8.dp,
                                     top = 8.dp,
                                     end = 8.dp,
-                                    bottom = 104.dp,
+                                    bottom = if (showCommentChrome) 104.dp else 16.dp,
                                 )
                             ) {
                             items(
@@ -1180,7 +1184,7 @@ internal fun TabletSecondaryContent(
                             }
                         }
 
-                        BottomInputBar(
+                        if (showCommentChrome) BottomInputBar(
                             modifier = Modifier.align(Alignment.BottomCenter),
                             isLiked = engagementState.isLiked,
                             isFavorited = engagementState.isFavorited,
