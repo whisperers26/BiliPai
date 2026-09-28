@@ -3263,6 +3263,9 @@ object NetworkModule {
             .build()
     }
     
+    // Read the Retrofit services below through NetworkModule (`private val api get() = NetworkModule.api`);
+    // never store one in an `object`, companion or top-level `val`. See RetrofitServiceFieldStructureTest.
+
     //  [新增] Guest API - 使用 guestOkHttpClient，用于风控降级
     val guestApi: BilibiliApi by lazy {
         Retrofit.Builder().baseUrl("https://api.bilibili.com/").client(guestOkHttpClient)
