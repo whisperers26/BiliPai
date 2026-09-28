@@ -1099,7 +1099,8 @@ fun UpInfoSection(
             if (shouldShowCreatorTeamSection(info)) {
                 CreatorTeamSection(
                     staff = info.staff,
-                    onMemberClick = onUpClick
+                    onMemberClick = onUpClick,
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
                 )
             }
         }
@@ -1109,13 +1110,12 @@ fun UpInfoSection(
 @Composable
 private fun CreatorTeamSection(
     staff: List<VideoStaff>,
-    onMemberClick: (Long) -> Unit
+    onMemberClick: (Long) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     if (staff.isEmpty()) return
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
+        modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
