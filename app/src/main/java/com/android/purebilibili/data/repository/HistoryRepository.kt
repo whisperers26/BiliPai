@@ -42,7 +42,7 @@ internal fun resolveHistoryCursorQuery(
 }
 
 object HistoryRepository {
-    private val api = NetworkModule.api
+    private val api get() = NetworkModule.api
 
     /**
      * 获取历史记录列表（支持游标分页）

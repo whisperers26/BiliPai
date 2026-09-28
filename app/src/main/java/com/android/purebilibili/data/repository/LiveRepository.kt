@@ -439,7 +439,7 @@ private fun JsonObject.array(name: String): JsonArray? {
  * 从 VideoRepository 拆分出来，专注于直播功能
  */
 object LiveRepository {
-    private val api = NetworkModule.api
+    private val api get() = NetworkModule.api
 
     private suspend fun resolveRealRoomId(roomId: Long): Long {
         return try {

@@ -8,7 +8,7 @@ import kotlinx.coroutines.withContext
 
 object SplashRepository {
     // 使用 NetworkModule 直接获取 API 实例 (与 VideoRepository 保持一致)
-    private val api = NetworkModule.splashApi
+    private val api get() = NetworkModule.splashApi
 
     /**
      * 获取官方壁纸列表

@@ -66,7 +66,7 @@ internal fun resolveFavoriteResourceRequestParams(
 )
 
 object FavoriteRepository {
-    private val api = NetworkModule.api
+    private val api get() = NetworkModule.api
 
     data class CollectedFavFoldersPage(
         val folders: List<FavFolder>,

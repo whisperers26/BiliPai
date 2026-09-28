@@ -23,7 +23,7 @@ data class FavoriteCategoryPage(
 )
 
 object PersonalFavoriteRepository {
-    private val api = NetworkModule.api
+    private val api get() = NetworkModule.api
 
     suspend fun getArticles(page: Int): Result<FavoriteCategoryPage> = withContext(Dispatchers.IO) {
         apiCall {

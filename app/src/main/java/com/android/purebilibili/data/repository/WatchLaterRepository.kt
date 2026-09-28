@@ -34,7 +34,7 @@ internal fun buildWatchLaterPageParams(
 
 object WatchLaterRepository {
     private const val PAGE_SIZE = 20
-    private val api = NetworkModule.api
+    private val api get() = NetworkModule.api
 
     suspend fun getPage(
         page: Int,

@@ -156,8 +156,8 @@ data class CreatorCardStats(
 )
 
 object VideoRepository {
-    private val api = NetworkModule.api
-    private val buvidApi = NetworkModule.buvidApi
+    private val api get() = NetworkModule.api
+    private val buvidApi get() = NetworkModule.buvidApi
     private val subtitleCueCache = ConcurrentHashMap<String, List<SubtitleCue>>()
     private val creatorCardStatsCache = ConcurrentHashMap<Long, CreatorCardStats>()
     private val verticalVideoCache = ConcurrentHashMap<String, Boolean>()

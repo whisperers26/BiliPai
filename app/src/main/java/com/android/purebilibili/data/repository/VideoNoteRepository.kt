@@ -36,7 +36,7 @@ sealed class VideoNoteRepositoryError(message: String) : Exception(message) {
 }
 
 object VideoNoteRepository {
-    private val api = NetworkModule.api
+    private val api get() = NetworkModule.api
 
     suspend fun getVideoNoteSnapshot(aid: Long): Result<VideoNoteSnapshot> = withContext(Dispatchers.IO) {
         runCatching {
