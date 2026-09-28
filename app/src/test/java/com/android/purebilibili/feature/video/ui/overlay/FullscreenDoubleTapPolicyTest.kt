@@ -98,10 +98,10 @@ class FullscreenDoubleTapPolicyTest {
         )
 
         assertEquals(8L, forward.generation)
-        assertEquals("+30s", forward.text)
+        assertEquals("+30", forward.text)
         assertEquals(true, forward.forward)
         assertEquals(9L, backward.generation)
-        assertEquals("-15s", backward.text)
+        assertEquals("-15", backward.text)
         assertEquals(false, backward.forward)
     }
 }
