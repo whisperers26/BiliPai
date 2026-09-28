@@ -327,6 +327,8 @@ fun VideoTitleWithDesc(
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit = { _, _ -> },
     /** Shown below the tags while the title is expanded. */
     expandedContent: (@Composable ColumnScope.() -> Unit)? = null,
+    /** Told whether the title is expanded, first when it appears and then on every change. */
+    onExpandedChange: ((Boolean) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val isMaterial3 = LocalAppUiStyle.current == AppUiStyle.MATERIAL3
@@ -342,6 +344,10 @@ fun VideoTitleWithDesc(
                 defaultExpanded = defaultExpanded
             )
         )
+    }
+    val latestOnExpandedChange by rememberUpdatedState(onExpandedChange)
+    LaunchedEffect(expanded) {
+        latestOnExpandedChange?.invoke(expanded)
     }
     val publishTimeRowText = remember(info.pubdate, info.tname, info.title) {
         resolvePublishTimeRowText(
