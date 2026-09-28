@@ -198,47 +198,6 @@ internal enum class LargeScreenDetailRailPage(val label: String) {
 
 internal val DEFAULT_LARGE_SCREEN_DETAIL_RAIL_PAGE = LargeScreenDetailRailPage.INFO
 
-/** What the compact info pane pins below the video info. */
-internal enum class CompactInfoBottomContent { Related, Actions, None }
-
-/** The owner row's more button swaps 更多推荐 for the full action buttons row. */
-internal fun resolveCompactInfoBottomContent(
-    actionsExpanded: Boolean,
-    hasRelated: Boolean,
-): CompactInfoBottomContent = when {
-    actionsExpanded -> CompactInfoBottomContent.Actions
-    hasRelated -> CompactInfoBottomContent.Related
-    else -> CompactInfoBottomContent.None
-}
-
-internal data class TabletVideoInfoSpacing(
-    val topPaddingDp: Float,
-    val relatedTopGapDp: Float,
-    val relatedHeaderGapDp: Float,
-    val relatedBottomGapDp: Float,
-    val relatedCardWidthDp: Float,
-)
-
-internal fun resolveTabletVideoInfoSpacing(compact: Boolean): TabletVideoInfoSpacing {
-    return if (compact) {
-        TabletVideoInfoSpacing(
-            topPaddingDp = 2f,
-            relatedTopGapDp = 4f,
-            relatedHeaderGapDp = 4f,
-            relatedBottomGapDp = 4f,
-            relatedCardWidthDp = 160f,
-        )
-    } else {
-        TabletVideoInfoSpacing(
-            topPaddingDp = 12f,
-            relatedTopGapDp = 24f,
-            relatedHeaderGapDp = 12f,
-            relatedBottomGapDp = 24f,
-            relatedCardWidthDp = 160f,
-        )
-    }
-}
-
 internal fun resolveIncludeRelatedTabInSecondary(mode: LargeScreenVideoLayoutMode): Boolean {
     return mode != LargeScreenVideoLayoutMode.AlmostSquare
 }

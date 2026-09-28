@@ -246,38 +246,6 @@ class LargeScreenVideoLayoutPolicyTest {
     }
 
     @Test
-    fun compactInfoTightensEverySpacing() {
-        val regular = resolveTabletVideoInfoSpacing(compact = false)
-        val compact = resolveTabletVideoInfoSpacing(compact = true)
-        assertTrue(compact.topPaddingDp < regular.topPaddingDp)
-        assertTrue(compact.relatedTopGapDp < regular.relatedTopGapDp)
-        assertTrue(compact.relatedHeaderGapDp < regular.relatedHeaderGapDp)
-        assertTrue(compact.relatedBottomGapDp < regular.relatedBottomGapDp)
-        // Recommendations keep full-size, readable cards; only the gaps tighten.
-        assertEquals(regular.relatedCardWidthDp, compact.relatedCardWidthDp, 0f)
-    }
-
-    @Test
-    fun compactInfoMoreButtonSwapsRelatedVideosForTheActionButtons() {
-        assertEquals(
-            CompactInfoBottomContent.Related,
-            resolveCompactInfoBottomContent(actionsExpanded = false, hasRelated = true),
-        )
-        assertEquals(
-            CompactInfoBottomContent.Actions,
-            resolveCompactInfoBottomContent(actionsExpanded = true, hasRelated = true),
-        )
-        assertEquals(
-            CompactInfoBottomContent.Actions,
-            resolveCompactInfoBottomContent(actionsExpanded = true, hasRelated = false),
-        )
-        assertEquals(
-            CompactInfoBottomContent.None,
-            resolveCompactInfoBottomContent(actionsExpanded = false, hasRelated = false),
-        )
-    }
-
-    @Test
     fun galaxyFoldInnerPortrait_playerFillsFullWidthBeforeDetailPanes() {
         // Galaxy Z Fold inner display: 2256 x 2504 px at density 3.0 -> 752 x 835dp.
         val metrics = resolveLargeScreenVideoMetrics(
