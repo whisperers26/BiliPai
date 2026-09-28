@@ -324,7 +324,9 @@ fun VideoTitleWithDesc(
     onDescriptionUrlClick: ((String) -> Unit)? = null,
     onBgmClick: (BgmInfo) -> Unit = {},
     onTagClick: (String) -> Unit = {},
-    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit = { _, _ -> }
+    onRelatedVideoClick: (String, android.os.Bundle?) -> Unit = { _, _ -> },
+    /** Shown below the tags while the title is expanded. */
+    expandedContent: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val isMaterial3 = LocalAppUiStyle.current == AppUiStyle.MATERIAL3
@@ -713,6 +715,24 @@ fun VideoTitleWithDesc(
                         )
                     }
                 }
+            }
+        }
+
+        if (expandedContent != null) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = expanded,
+                enter = if (animateLayout) {
+                    androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn()
+                } else {
+                    androidx.compose.animation.EnterTransition.None
+                },
+                exit = if (animateLayout) {
+                    androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+                } else {
+                    androidx.compose.animation.ExitTransition.None
+                }
+            ) {
+                Column(content = expandedContent)
             }
         }
     }
