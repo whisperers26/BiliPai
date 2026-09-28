@@ -27,8 +27,8 @@ data class MessageSessionControlInfo(
 )
 
 object MessageRepository {
-    private val api = NetworkModule.messageApi
-    private val bilibiliApi = NetworkModule.api
+    private val api get() = NetworkModule.messageApi
+    private val bilibiliApi get() = NetworkModule.api
     
     // 设备ID缓存 (用于发送私信)
     private var deviceIdCache: String? = null

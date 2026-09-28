@@ -25,8 +25,8 @@ data class ArticleDetailUiModel(
 )
 
 object ArticleRepository {
-    private val articleApi = NetworkModule.articleApi
-    private val navApi = NetworkModule.api
+    private val articleApi get() = NetworkModule.articleApi
+    private val navApi get() = NetworkModule.api
 
     suspend fun getArticleDetail(articleId: Long): Result<ArticleDetailUiModel> = withContext(Dispatchers.IO) {
         if (articleId <= 0L) {

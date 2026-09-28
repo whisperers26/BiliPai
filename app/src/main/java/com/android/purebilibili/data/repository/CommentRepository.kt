@@ -27,8 +27,8 @@ import java.util.TreeMap
  * 从 VideoRepository 拆分出来，专注于评论功能
  */
 object CommentRepository {
-    private val api = NetworkModule.api
-    private val guestApi = NetworkModule.guestApi
+    private val api get() = NetworkModule.api
+    private val guestApi get() = NetworkModule.guestApi
     private val commentJson = Json { ignoreUnknownKeys = true }
 
     // WBI Key 缓存

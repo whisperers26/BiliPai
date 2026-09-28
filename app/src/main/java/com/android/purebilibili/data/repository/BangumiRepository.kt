@@ -208,7 +208,7 @@ private fun mergeBangumiSections(
  * 处理番剧、电影、电视剧、纪录片等 PGC 内容
  */
 object BangumiRepository {
-    private val api = NetworkModule.bangumiApi
+    private val api get() = NetworkModule.bangumiApi
     
     /**
      * 获取番剧时间表

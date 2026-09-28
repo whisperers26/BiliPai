@@ -24,8 +24,8 @@ data class SearchTrendingBundle(
 }
 
 object SearchRepository {
-    private val api = NetworkModule.searchApi
-    private val navApi = NetworkModule.api
+    private val api get() = NetworkModule.searchApi
+    private val navApi get() = NetworkModule.api
 
     //  [新增] 搜索分页信息
     data class SearchPageInfo(

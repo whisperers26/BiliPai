@@ -240,7 +240,7 @@ internal fun resolveDanmakuSegmentCount(
  * 从 VideoRepository 拆分出来，专注于弹幕功能
  */
 object DanmakuRepository {
-    private val api = NetworkModule.api
+    private val api get() = NetworkModule.api
 
     // 弹幕数据缓存 - 避免横竖屏切换时重复下载
     private val danmakuCache = LinkedHashMap<Long, ByteArray>(5, 0.75f, true)

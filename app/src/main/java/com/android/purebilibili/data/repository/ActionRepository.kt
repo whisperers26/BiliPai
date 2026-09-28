@@ -98,7 +98,7 @@ data class FollowStateChange(
  * - 收藏/取消收藏视频
  */
 object ActionRepository {
-    private val api = NetworkModule.api
+    private val api get() = NetworkModule.api
     private val _followStateChanges = MutableSharedFlow<FollowStateChange>(extraBufferCapacity = 32)
     val followStateChanges = _followStateChanges.asSharedFlow()
     private const val SPECIAL_FOLLOW_TAG_ID = -10L
