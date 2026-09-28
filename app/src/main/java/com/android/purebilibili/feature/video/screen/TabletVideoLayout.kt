@@ -1666,8 +1666,8 @@ private fun ScrollableVideoInfoSection(
 
 /**
  * The video info as a header: the title beside the owner, then the parts selector for multi-part
- * videos. Tapping the title opens the description, tags, AI summary and note under it, and
- * [onExpandedChange] lets the host make room for them; the header scrolls when they overflow.
+ * videos. Tapping the title opens the description, tags, AI summary and note across the full width
+ * below them, and [onExpandedChange] lets the host make room; the header scrolls when they overflow.
  */
 @Composable
 private fun VideoInfoHeaderSection(
@@ -1704,67 +1704,65 @@ private fun VideoInfoHeaderSection(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.verticalScroll(rememberScrollState())) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Box(modifier = Modifier.weight(1f)) {
-                VideoTitleWithDesc(
+        VideoTitleWithDesc(
+            info = info,
+            videoTags = videoTags,
+            bgmList = resolveDisplayBgmList(
+                bgmInfo = bgmInfo,
+                bgmInfoList = bgmInfoList
+            ),
+            onBgmClick = onBgmClick,
+            onRelatedVideoClick = onRelatedVideoClick,
+            onDescriptionUrlClick = onOpenBilibiliLink,
+            onExpandedChange = onExpandedChange,
+            expandedContent = {
+                if (shouldShowAiSummaryEntry(
+                        aiSummary = aiSummary,
+                        isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
+                    )
+                ) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    AiSummaryCard(
+                        aiSummary = aiSummary,
+                        onTimestampClick = onTimestampClick,
+                        onCreateNoteDraftClick = onCreateNoteDraftFromAiSummary,
+                    )
+                } else if (videoAiSummaryEntryEnabled && aiSummaryPrompt != null) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    AiSummaryPromptCard(
+                        promptState = aiSummaryPrompt,
+                        onActionClick = onRetryAiSummary,
+                    )
+                }
+                if (shouldShowVideoNoteCard(videoNoteEnabled)) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    VideoNoteCard(
+                        noteState = videoNoteState,
+                        isLoggedIn = isLoggedIn,
+                        onCreateOrEditClick = onOpenVideoNoteEditor,
+                        onRetryClick = onRetryVideoNote,
+                        onDeleteClick = onDeleteVideoNoteClick,
+                        onShareClick = onShareVideoNote,
+                        onPublicNoteClick = onPublicVideoNoteClick,
+                        defaultCollapsed = videoNoteDefaultCollapsed,
+                    )
+                }
+            },
+            headerTrailingContent = {
+                UpInfoSection(
                     info = info,
-                    videoTags = videoTags,
-                    bgmList = resolveDisplayBgmList(
-                        bgmInfo = bgmInfo,
-                        bgmInfoList = bgmInfoList
-                    ),
-                    onBgmClick = onBgmClick,
-                    onRelatedVideoClick = onRelatedVideoClick,
-                    onDescriptionUrlClick = onOpenBilibiliLink,
-                    onExpandedChange = onExpandedChange,
-                    expandedContent = {
-                        if (shouldShowAiSummaryEntry(
-                                aiSummary = aiSummary,
-                                isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
-                            )
-                        ) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            AiSummaryCard(
-                                aiSummary = aiSummary,
-                                onTimestampClick = onTimestampClick,
-                                onCreateNoteDraftClick = onCreateNoteDraftFromAiSummary,
-                            )
-                        } else if (videoAiSummaryEntryEnabled && aiSummaryPrompt != null) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            AiSummaryPromptCard(
-                                promptState = aiSummaryPrompt,
-                                onActionClick = onRetryAiSummary,
-                            )
-                        }
-                        if (shouldShowVideoNoteCard(videoNoteEnabled)) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            VideoNoteCard(
-                                noteState = videoNoteState,
-                                isLoggedIn = isLoggedIn,
-                                onCreateOrEditClick = onOpenVideoNoteEditor,
-                                onRetryClick = onRetryVideoNote,
-                                onDeleteClick = onDeleteVideoNoteClick,
-                                onShareClick = onShareVideoNote,
-                                onPublicNoteClick = onPublicVideoNoteClick,
-                                defaultCollapsed = videoNoteDefaultCollapsed,
-                            )
-                        }
-                    },
+                    isFollowing = isFollowing,
+                    onFollowClick = onFollowClick,
+                    onUpClick = onUpClick,
+                    followerCount = ownerFollowerCount,
+                    videoCount = ownerVideoCount,
+                    horizontalPadding = 0.dp,
+                    modifier = Modifier
+                        .padding(start = 12.dp)
+                        .width(VIDEO_INFO_HEADER_OWNER_WIDTH_DP.dp),
                 )
-            }
-            UpInfoSection(
-                info = info,
-                isFollowing = isFollowing,
-                onFollowClick = onFollowClick,
-                onUpClick = onUpClick,
-                followerCount = ownerFollowerCount,
-                videoCount = ownerVideoCount,
-                modifier = Modifier.width(VIDEO_INFO_HEADER_OWNER_WIDTH_DP.dp),
-            )
-        }
+            },
+        )
         if (info.pages.size > 1) {
             Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                 PagesSelector(
