@@ -55,7 +55,7 @@ internal fun nextFullscreenSeekFeedbackEvent(
     val prefix = if (forward) "+" else "-"
     return FullscreenSeekFeedbackEvent(
         generation = previousGeneration + 1L,
-        text = "$prefix${abs(deltaSeconds)}s",
+        text = "$prefix${abs(deltaSeconds)}",
         forward = forward
     )
 }

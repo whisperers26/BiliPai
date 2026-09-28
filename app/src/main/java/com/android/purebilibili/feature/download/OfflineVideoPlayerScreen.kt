@@ -641,7 +641,7 @@ fun OfflineVideoPlayerScreen(
                                 val seekMs = seekForwardSeconds * 1000L
                                 val newPos = (player.currentPosition + seekMs).coerceAtMost(player.duration.coerceAtLeast(0L))
                                 seekToPosition(newPos)
-                                seekFeedbackText = "+${seekForwardSeconds}s"
+                                seekFeedbackText = "+$seekForwardSeconds"
                                 seekFeedbackForward = true
                                 seekFeedbackVisible = true
                             }
@@ -650,7 +650,7 @@ fun OfflineVideoPlayerScreen(
                                 val seekMs = seekBackwardSeconds * 1000L
                                 val newPos = (player.currentPosition - seekMs).coerceAtLeast(0L)
                                 seekToPosition(newPos)
-                                seekFeedbackText = "-${seekBackwardSeconds}s"
+                                seekFeedbackText = "-$seekBackwardSeconds"
                                 seekFeedbackForward = false
                                 seekFeedbackVisible = true
                             }
