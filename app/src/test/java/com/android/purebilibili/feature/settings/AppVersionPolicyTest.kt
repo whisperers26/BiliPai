@@ -13,8 +13,8 @@ class AppVersionPolicyTest {
             File("build.gradle.kts")
         ).first { it.exists() }.readText()
 
-        assertTrue(buildFile.contains("versionCode = 399"))
-        assertTrue(buildFile.contains("versionName = \"1.0.0\""))
+        assertTrue(buildFile.contains("versionCode = 400"))
+        assertTrue(buildFile.contains("versionName = \"1.0.1\""))
         // 语义化 X.Y.Z，不用日历日/四位年当版本号
         assertTrue(!buildFile.contains("versionName = \"26."))
         assertTrue(!buildFile.contains("versionName = \"2026."))
