@@ -329,6 +329,8 @@ fun VideoTitleWithDesc(
     expandedContent: (@Composable ColumnScope.() -> Unit)? = null,
     /** Told whether the title is expanded, first when it appears and then on every change. */
     onExpandedChange: ((Boolean) -> Unit)? = null,
+    /** Beside the title and stats; the expanded details still run the full width below. */
+    headerTrailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val isMaterial3 = LocalAppUiStyle.current == AppUiStyle.MATERIAL3
@@ -583,6 +585,7 @@ fun VideoTitleWithDesc(
                     }
                 }
             }
+            headerTrailingContent?.invoke(this)
         }
 
         androidx.compose.animation.AnimatedVisibility(
