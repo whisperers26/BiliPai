@@ -168,22 +168,35 @@ internal fun shouldReserveStatusBarAbovePlayer(mode: LargeScreenVideoLayoutMode)
     return mode == LargeScreenVideoLayoutMode.AlmostSquare
 }
 
-/** The near-square side pane is comments only; the player already offers danmaku actions. */
-internal fun resolveSecondaryFixedTab(mode: LargeScreenVideoLayoutMode): TabletSecondaryTab? {
-    return if (mode == LargeScreenVideoLayoutMode.AlmostSquare) TabletSecondaryTab.COMMENTS else null
-}
-
-internal fun shouldShowSecondaryHeader(mode: LargeScreenVideoLayoutMode): Boolean {
-    return mode != LargeScreenVideoLayoutMode.AlmostSquare
-}
-
 /**
- * The near-square info pane sits under a full-width player, so it keeps 更多推荐 pinned and fully
- * visible below the video info and tightens the gaps around it.
+ * The near-square layout leaves a short, wide area under the full-width player. A vertical rail on
+ * its left holds the page toggle and that page's buttons, and the rest shows one page at a time.
+ * The player already offers danmaku actions, so the rail leaves them out.
  */
-internal fun shouldUseCompactVideoInfo(mode: LargeScreenVideoLayoutMode): Boolean {
+internal fun shouldUseLargeScreenDetailRail(mode: LargeScreenVideoLayoutMode): Boolean {
     return mode == LargeScreenVideoLayoutMode.AlmostSquare
 }
+
+internal const val LARGE_SCREEN_DETAIL_RAIL_WIDTH_DP = 104f
+internal const val LARGE_SCREEN_DETAIL_RAIL_ACTION_COLUMNS = 2
+
+/**
+ * Share of the info page's width the recommendations take. An even split leaves them just under
+ * the width horizontal cards need on a Galaxy Z Fold inner display, and stacked cards fit only one
+ * per screen in this short area; the video info reads fine a little narrower.
+ */
+internal const val LARGE_SCREEN_DETAIL_RAIL_RELATED_FRACTION = 0.58f
+
+/** What the area beside the detail rail shows, switched by the rail's toggle. */
+internal enum class LargeScreenDetailRailPage(val label: String) {
+    /** Video info beside the recommendations; the rail holds the like/coin/favorite actions. */
+    INFO("简介"),
+
+    /** Comments across the whole area; the rail holds sort, search and compose. */
+    COMMENTS("评论"),
+}
+
+internal val DEFAULT_LARGE_SCREEN_DETAIL_RAIL_PAGE = LargeScreenDetailRailPage.INFO
 
 /** What the compact info pane pins below the video info. */
 internal enum class CompactInfoBottomContent { Related, Actions, None }
@@ -224,10 +237,6 @@ internal fun resolveTabletVideoInfoSpacing(compact: Boolean): TabletVideoInfoSpa
             relatedCardWidthDp = 160f,
         )
     }
-}
-
-internal fun resolveShowRelatedInIntro(mode: LargeScreenVideoLayoutMode): Boolean {
-    return mode == LargeScreenVideoLayoutMode.AlmostSquare
 }
 
 internal fun resolveIncludeRelatedTabInSecondary(mode: LargeScreenVideoLayoutMode): Boolean {

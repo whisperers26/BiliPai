@@ -10,8 +10,6 @@ class LargeScreenVideoLayoutPolicyTest {
 
     @Test
     fun landscapeLayoutHidesIntroRelatedAndHonorsConfiguredDefaultTab() {
-        assertFalse(resolveShowRelatedInIntro(LargeScreenVideoLayoutMode.Landscape))
-        assertTrue(resolveShowRelatedInIntro(LargeScreenVideoLayoutMode.AlmostSquare))
         assertTrue(resolveIncludeRelatedTabInSecondary(LargeScreenVideoLayoutMode.Landscape))
         assertFalse(resolveIncludeRelatedTabInSecondary(LargeScreenVideoLayoutMode.AlmostSquare))
         assertTrue(
@@ -41,7 +39,7 @@ class LargeScreenVideoLayoutPolicyTest {
         assertTrue(text.contains("includeRelatedTab = resolveIncludeRelatedTabInSecondary(metrics.mode)"))
         assertTrue(text.contains("defaultTab = secondaryDefaultTab"))
         assertTrue(text.contains("includeOwnerUploadsTab = true"))
-        assertTrue(text.contains("showRelatedVideos = showRelatedInIntro"))
+        assertTrue(text.contains("showRelatedVideos = false"))
         assertTrue(text.contains("LargeScreenVideoLayoutMode.AlmostSquare"))
         assertFalse(text.contains("fixedTab = TabletSecondaryTab.COLLECTION"))
     }
@@ -216,20 +214,39 @@ class LargeScreenVideoLayoutPolicyTest {
     }
 
     @Test
-    fun almostSquareSidePaneShowsOnlyCommentsWithoutHeaderRow() {
+    fun onlyAlmostSquareGivesTheDetailAreaARailThatOpensOnInfo() {
+        assertTrue(shouldUseLargeScreenDetailRail(LargeScreenVideoLayoutMode.AlmostSquare))
+        listOf(
+            LargeScreenVideoLayoutMode.Phone,
+            LargeScreenVideoLayoutMode.Landscape,
+            LargeScreenVideoLayoutMode.Split,
+            LargeScreenVideoLayoutMode.VerticalThreePane,
+        ).forEach { mode -> assertFalse(shouldUseLargeScreenDetailRail(mode)) }
+        assertEquals(LargeScreenDetailRailPage.INFO, DEFAULT_LARGE_SCREEN_DETAIL_RAIL_PAGE)
         assertEquals(
-            TabletSecondaryTab.COMMENTS,
-            resolveSecondaryFixedTab(LargeScreenVideoLayoutMode.AlmostSquare),
+            listOf(LargeScreenDetailRailPage.INFO, LargeScreenDetailRailPage.COMMENTS),
+            LargeScreenDetailRailPage.entries.toList(),
         )
-        assertFalse(shouldShowSecondaryHeader(LargeScreenVideoLayoutMode.AlmostSquare))
-        assertEquals(null, resolveSecondaryFixedTab(LargeScreenVideoLayoutMode.Landscape))
-        assertTrue(shouldShowSecondaryHeader(LargeScreenVideoLayoutMode.Landscape))
+        // Each rail row of action buttons keeps 48dp touch targets inside the rail's 4dp padding.
+        assertTrue(
+            LARGE_SCREEN_DETAIL_RAIL_WIDTH_DP - 8f >= 48f * LARGE_SCREEN_DETAIL_RAIL_ACTION_COLUMNS,
+        )
     }
 
     @Test
-    fun almostSquareUsesCompactInfoThatTightensEverySpacing() {
-        assertTrue(shouldUseCompactVideoInfo(LargeScreenVideoLayoutMode.AlmostSquare))
-        assertFalse(shouldUseCompactVideoInfo(LargeScreenVideoLayoutMode.Landscape))
+    fun galaxyFoldInnerRailInfoPageLeavesRoomForHorizontalRelatedCards() {
+        // 752dp window minus the rail and its two 1dp dividers, then the list's 8dp side padding
+        // and the card row's outer padding.
+        val infoPageWidthDp = 752f - LARGE_SCREEN_DETAIL_RAIL_WIDTH_DP - 2f
+        val relatedCardWidthDp = infoPageWidthDp * LARGE_SCREEN_DETAIL_RAIL_RELATED_FRACTION - 16f - 16f
+        assertTrue(
+            relatedCardWidthDp >=
+                com.android.purebilibili.feature.video.ui.components.RELATED_VIDEO_HORIZONTAL_MIN_WIDTH_DP,
+        )
+    }
+
+    @Test
+    fun compactInfoTightensEverySpacing() {
         val regular = resolveTabletVideoInfoSpacing(compact = false)
         val compact = resolveTabletVideoInfoSpacing(compact = true)
         assertTrue(compact.topPaddingDp < regular.topPaddingDp)

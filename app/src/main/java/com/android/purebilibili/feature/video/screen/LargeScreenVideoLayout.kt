@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -135,7 +136,7 @@ internal fun LargeScreenVideoLayout(
             )
         }
         val applySideStatusBarPadding = !shouldReserveStatusBarAbovePlayer(metrics.mode)
-        val showRelatedInIntro = resolveShowRelatedInIntro(metrics.mode)
+        val useDetailRail = shouldUseLargeScreenDetailRail(metrics.mode)
         val relatedTabFirst = resolveRelatedTabFirstInSecondary(
             mode = metrics.mode,
             defaultTab = secondaryDefaultTab,
@@ -200,12 +201,12 @@ internal fun LargeScreenVideoLayout(
                     videoNoteEnabled = videoNoteEnabled,
                     videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
                     modifier = modifier,
-                    showRelatedVideos = showRelatedInIntro,
-                    compact = shouldUseCompactVideoInfo(metrics.mode),
+                    showRelatedVideos = false,
+                    showActionButtons = !useDetailRail,
                 )
             }
         }
-        val side: @Composable (Boolean) -> Unit = { includeIntro ->
+        val side: @Composable (Boolean, TabletSecondaryTab?) -> Unit = { includeIntro, fixedTab ->
             if (success != null) {
                 TabletSecondaryContent(
                     success = success,
@@ -226,8 +227,8 @@ internal fun LargeScreenVideoLayout(
                     onOpenBilibiliLink = onOpenBilibiliLink,
                     requestedTabName = null,
                     onRequestedTabConsumed = {},
-                    fixedTab = resolveSecondaryFixedTab(metrics.mode),
-                    showHeader = shouldShowSecondaryHeader(metrics.mode),
+                    fixedTab = fixedTab,
+                    showHeader = !useDetailRail,
                     danmakuEnabled = danmakuChrome.enabled,
                     onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
                     onDanmakuToggle = danmakuChrome.onToggle,
@@ -240,6 +241,7 @@ internal fun LargeScreenVideoLayout(
                     includeRelatedTab = includeRelatedTab,
                     includeOwnerUploadsTab = true,
                     relatedTabFirst = relatedTabFirst,
+                    showCommentChrome = !useDetailRail,
                 )
             }
         }
@@ -275,7 +277,7 @@ internal fun LargeScreenVideoLayout(
                             .width(metrics.sidePaneWidthDp.dp)
                             .fillMaxHeight(),
                     ) {
-                        side(false)
+                        side(false, null)
                     }
                 }
             }
@@ -303,7 +305,7 @@ internal fun LargeScreenVideoLayout(
                             .width(metrics.sidePaneWidthDp.dp)
                             .fillMaxHeight(),
                     ) {
-                        side(true)
+                        side(true, null)
                     }
                 }
             }
@@ -317,30 +319,28 @@ internal fun LargeScreenVideoLayout(
                             .height(metrics.playerHeightDp.dp)
                             .background(Color.Black),
                     )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                    ) {
-                        Box(
+                    if (success != null) {
+                        LargeScreenDetailRailPane(
+                            success = success,
+                            engagementState = engagementState,
+                            commentState = commentState,
+                            subReplyVisible = subReplyState.visible,
+                            downloadProgress = downloadProgress,
+                            playbackActions = playbackActions,
+                            engagementActions = engagementActions,
+                            commentActions = commentActions,
+                            infoContent = { modifier -> intro(modifier) },
+                            relatedContent = { modifier ->
+                                Box(modifier = modifier) { side(false, TabletSecondaryTab.RELATED) }
+                            },
+                            commentsContent = { modifier ->
+                                Box(modifier = modifier) { side(false, TabletSecondaryTab.COMMENTS) }
+                            },
                             modifier = Modifier
+                                .fillMaxWidth()
                                 .weight(1f)
-                                .fillMaxHeight(),
-                        ) {
-                            intro(Modifier.fillMaxSize())
-                        }
-                        VerticalDivider(
-                            modifier = Modifier.fillMaxHeight(),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                            thickness = 1.dp,
+                                .navigationBarsPadding(),
                         )
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight(),
-                        ) {
-                            side(false)
-                        }
                     }
                 }
             }
@@ -377,7 +377,7 @@ internal fun LargeScreenVideoLayout(
                             .width(metrics.sidePaneWidthDp.dp)
                             .fillMaxHeight(),
                     ) {
-                        side(!metrics.introBelowPlayer)
+                        side(!metrics.introBelowPlayer, null)
                     }
                 }
             }
@@ -407,7 +407,7 @@ internal fun LargeScreenVideoLayout(
                             .width(metrics.sidePaneWidthDp.dp)
                             .fillMaxHeight(),
                     ) {
-                        side(!metrics.introBelowPlayer)
+                        side(!metrics.introBelowPlayer, null)
                     }
                 }
             }
