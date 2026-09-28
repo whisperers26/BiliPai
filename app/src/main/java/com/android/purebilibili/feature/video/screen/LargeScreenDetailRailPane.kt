@@ -1,8 +1,8 @@
 package com.android.purebilibili.feature.video.screen
 
-import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -41,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.AppIcon
@@ -58,14 +61,15 @@ import com.android.purebilibili.feature.video.viewmodel.CommentUiState
 import com.android.purebilibili.feature.video.viewmodel.VideoEngagementUiState
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
 import com.android.purebilibili.feature.video.viewmodel.withEngagementUiState
+import com.android.purebilibili.navigation.animatePagerSelection
 import kotlinx.coroutines.launch
 
 /**
  * The detail area under the near-square layout's player: a vertical rail on the left and one page
  * beside it. The info page puts a header of the video info over the recommendations, which take the
  * rest of the height; while the header's details are open they get the whole page instead. The
- * comments page gives the comment list the whole area. Each page keeps its scroll position across
- * switches.
+ * comments page gives the comment list the whole area. Swiping sideways switches pages, as on the
+ * phone layout, and each page keeps its scroll position across switches.
  */
 @Composable
 internal fun LargeScreenDetailRailPane(
@@ -84,16 +88,30 @@ internal fun LargeScreenDetailRailPane(
     modifier: Modifier = Modifier,
 ) {
     val bvid = success.info.bvid
-    var page by rememberSaveable(bvid) { mutableStateOf(DEFAULT_LARGE_SCREEN_DETAIL_RAIL_PAGE) }
+    val pages = LargeScreenDetailRailPage.entries
+    val pagerState = rememberPagerState(
+        initialPage = DEFAULT_LARGE_SCREEN_DETAIL_RAIL_PAGE.ordinal,
+        pageCount = { pages.size },
+    )
+    val page = pages[pagerState.currentPage]
+    // Each new video opens on the default page; the pager itself survives recreation.
+    var pagerBvid by rememberSaveable { mutableStateOf(bvid) }
+    LaunchedEffect(bvid) {
+        if (pagerBvid != bvid) {
+            pagerBvid = bvid
+            pagerState.scrollToPage(DEFAULT_LARGE_SCREEN_DETAIL_RAIL_PAGE.ordinal)
+        }
+    }
     var showCommentSearch by remember(bvid) { mutableStateOf(false) }
     var pendingVideoShare by remember { mutableStateOf<VideoSharePayload?>(null) }
-    // A reply thread only opens from the comments page, but keep it visible if it opens elsewhere.
-    LaunchedEffect(subReplyVisible) {
-        if (subReplyVisible) page = LargeScreenDetailRailPage.COMMENTS
-    }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val pageStateHolder = rememberSaveableStateHolder()
+    // A reply thread only opens from the comments page, but keep it visible if it opens elsewhere.
+    LaunchedEffect(subReplyVisible) {
+        if (subReplyVisible) {
+            animatePagerSelection(pagerState, LargeScreenDetailRailPage.COMMENTS.ordinal)
+        }
+    }
     val relatedStateHolder = rememberSaveableStateHolder()
     var infoExpanded by remember(bvid) { mutableStateOf(false) }
     // The header's details close when it leaves; don't hold the page for them on the way back.
@@ -105,7 +123,13 @@ internal fun LargeScreenDetailRailPane(
     Row(modifier = modifier) {
         LargeScreenDetailRail(
             page = page,
-            onPageChange = { page = it },
+            onPageChange = { target ->
+                scope.launch { animatePagerSelection(pagerState, target.ordinal) }
+            },
+            pagePositionProvider = {
+                pagerState.currentPage + pagerState.currentPageOffsetFraction
+            },
+            isPageScrollInProgress = { pagerState.isScrollInProgress },
             success = success,
             engagementState = engagementState,
             commentState = commentState,
@@ -131,15 +155,17 @@ internal fun LargeScreenDetailRailPane(
                 .fillMaxHeight(),
         )
         VerticalDivider(modifier = Modifier.fillMaxHeight(), color = dividerColor, thickness = 1.dp)
-        Crossfade(
-            targetState = page,
+        HorizontalPager(
+            state = pagerState,
+            key = { index -> "${bvid}_${pages[index].name}" },
+            userScrollEnabled = false,
             modifier = Modifier
                 .weight(1f)
-                .fillMaxHeight(),
-            label = "largeScreenDetailRailPage",
-        ) { target ->
-            pageStateHolder.SaveableStateProvider("${bvid}_${target.name}") {
-                when (target) {
+                .fillMaxHeight()
+                .verticalPriorityHorizontalPagerSwipe(state = pagerState, enabled = true),
+        ) { index ->
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (pages[index]) {
                     LargeScreenDetailRailPage.INFO -> BoxWithConstraints(Modifier.fillMaxSize()) {
                         val headerMaxHeight =
                             maxHeight * LARGE_SCREEN_DETAIL_RAIL_HEADER_MAX_HEIGHT_FRACTION
@@ -192,6 +218,9 @@ internal fun LargeScreenDetailRailPane(
 private fun LargeScreenDetailRail(
     page: LargeScreenDetailRailPage,
     onPageChange: (LargeScreenDetailRailPage) -> Unit,
+    /** The pager's position in pages, so the toggle follows a swipe. */
+    pagePositionProvider: () -> Float,
+    isPageScrollInProgress: () -> Boolean,
     success: VideoPlaybackUiState.Success,
     engagementState: VideoEngagementUiState,
     commentState: CommentUiState,
@@ -221,6 +250,8 @@ private fun LargeScreenDetailRail(
             compactMiuixWhenTwoOptions = true,
             dragSelectionEnabled = true,
             tapPressRefractionEnabled = false,
+            indicatorPositionProvider = pagePositionProvider,
+            isScrollInProgressProvider = isPageScrollInProgress,
         )
         Spacer(modifier = Modifier.height(8.dp))
         HorizontalDivider(
