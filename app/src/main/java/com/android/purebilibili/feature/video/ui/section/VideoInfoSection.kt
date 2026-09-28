@@ -406,174 +406,181 @@ fun VideoTitleWithDesc(
             .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = horizontalPadding, vertical = if (isMaterial3) 8.dp else 6.dp)
     ) {
-        // Title row (expandable)
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .clickable(role = Role.Button) { expanded = !expanded },
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
         ) {
-            //  共享元素过渡 - 标题
-            var titleModifier = if (animateLayout) Modifier.animateContentSize() else Modifier
+            Column(modifier = Modifier.weight(1f)) {
+                // Title row (expandable)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clickable(role = Role.Button) { expanded = !expanded },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    //  共享元素过渡 - 标题
+                    var titleModifier = if (animateLayout) Modifier.animateContentSize() else Modifier
 
-            //  注意：使用 ExperimentalSharedTransitionApi 注解需要上下文
-            if (metadataSharedEnabled) {
-                with(requireNotNull(sharedTransitionScope)) {
-                     titleModifier = titleModifier.sharedBounds(
-                        sharedContentState = rememberSharedContentState(
-                            key = com.android.purebilibili.core.ui.transition.videoTitleSharedElementKey(
-                                info.bvid,
-                                sourceRoute = sourceRouteForSharedElement
-                            )
-                        ),
-                        animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
-                        boundsTransform = { initialBounds, targetBounds ->
-                            videoMetadataSharedElementBoundsTransformSpec(
-                                motion = metadataSharedTransitionMotionSpec,
-                                initialBounds = initialBounds,
-                                targetBounds = targetBounds
+                    //  注意：使用 ExperimentalSharedTransitionApi 注解需要上下文
+                    if (metadataSharedEnabled) {
+                        with(requireNotNull(sharedTransitionScope)) {
+                             titleModifier = titleModifier.sharedBounds(
+                                sharedContentState = rememberSharedContentState(
+                                    key = com.android.purebilibili.core.ui.transition.videoTitleSharedElementKey(
+                                        info.bvid,
+                                        sourceRoute = sourceRouteForSharedElement
+                                    )
+                                ),
+                                animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
+                                boundsTransform = { initialBounds, targetBounds ->
+                                    videoMetadataSharedElementBoundsTransformSpec(
+                                        motion = metadataSharedTransitionMotionSpec,
+                                        initialBounds = initialBounds,
+                                        targetBounds = targetBounds
+                                    )
+                                }
                             )
                         }
-                    )
-                }
-            }
-
-            SelectionContainer(modifier = Modifier.weight(1f)) {
-                AppText(
-                    text = info.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = if (expanded) Int.MAX_VALUE else 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = titleModifier
-                )
-            }
-
-            val rotateAngle by animateFloatAsState(
-                targetValue = if (expanded) 180f else 0f, // 展开时旋转180度
-                animationSpec = tween(durationMillis = 300), // 设置动画时长和曲线
-                label = "IconRotation"
-            )
-            AppIcon(
-                imageVector = Icons.Outlined.KeyboardArrowDown,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier
-                    .rotate(rotateAngle)
-                    .size(20.dp)
-                    .padding(4.dp)
-            )
-        }
-        
-        Spacer(Modifier.height(if (isMaterial3) 6.dp else 4.dp))
-        
-        // Stats row
-        androidx.compose.foundation.layout.FlowRow(
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-            horizontalArrangement = Arrangement.spacedBy(if (isMaterial3) 10.dp else 8.dp),
-            itemVerticalAlignment = Alignment.CenterVertically
-        ) {
-            // Stats Row split for shared element transitions
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Views
-                var viewsModifier = Modifier.wrapContentSize()
-                if (metadataSharedEnabled) {
-                    with(requireNotNull(sharedTransitionScope)) {
-                        viewsModifier = viewsModifier.sharedBounds(
-                            sharedContentState = rememberSharedContentState(
-                                key = com.android.purebilibili.core.ui.transition.videoViewsSharedElementKey(
-                                    info.bvid,
-                                    sourceRoute = sourceRouteForSharedElement
-                                )
-                            ),
-                            animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
-                            boundsTransform = { initialBounds, targetBounds ->
-                                videoMetadataSharedElementBoundsTransformSpec(
-                                    motion = metadataSharedTransitionMotionSpec,
-                                    initialBounds = initialBounds,
-                                    targetBounds = targetBounds
-                                )
-                            }
-                        )
                     }
-                }
-                AppText(
-                    text = "${FormatUtils.formatStat(info.stat.view.toLong())}播放",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = viewsModifier
-                )
 
-                AppText(
-                    text = "  •  ",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                )
-
-                // Danmaku
-                var danmakuModifier = Modifier.wrapContentSize()
-                if (metadataSharedEnabled) {
-                    with(requireNotNull(sharedTransitionScope)) {
-                        danmakuModifier = danmakuModifier.sharedBounds(
-                            sharedContentState = rememberSharedContentState(
-                                key = com.android.purebilibili.core.ui.transition.videoDanmakuSharedElementKey(
-                                    info.bvid,
-                                    sourceRoute = sourceRouteForSharedElement
-                                )
-                            ),
-                            animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
-                            boundsTransform = { initialBounds, targetBounds ->
-                                videoMetadataSharedElementBoundsTransformSpec(
-                                    motion = metadataSharedTransitionMotionSpec,
-                                    initialBounds = initialBounds,
-                                    targetBounds = targetBounds
-                                )
-                            }
-                        )
-                    }
-                }
-                AppText(
-                    text = "${FormatUtils.formatStat(info.stat.danmaku.toLong())}弹幕",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = danmakuModifier
-                )
-
-            }
-            if (onlineCountText.isNotBlank()) {
-                AppText(
-                    text = onlineCountText,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.82f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (publishTimeRowText.isNotBlank()) {
-                if (emphasizePublishTime) {
-                    AppSurface(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f),
-                        shape = com.android.purebilibili.core.ui.AppShapes.container(
-                            com.android.purebilibili.core.ui.ContainerLevel.Field
-                        )
-                    ) {
+                    SelectionContainer(modifier = Modifier.weight(1f)) {
                         AppText(
-                            text = publishTimeRowText,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            text = info.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = if (expanded) Int.MAX_VALUE else 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = titleModifier
                         )
                     }
-                } else {
-                    AppText(
-                        text = publishTimeRowText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
+
+                    val rotateAngle by animateFloatAsState(
+                        targetValue = if (expanded) 180f else 0f, // 展开时旋转180度
+                        animationSpec = tween(durationMillis = 300), // 设置动画时长和曲线
+                        label = "IconRotation"
                     )
+                    AppIcon(
+                        imageVector = Icons.Outlined.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .rotate(rotateAngle)
+                            .size(20.dp)
+                            .padding(4.dp)
+                    )
+                }
+        
+                Spacer(Modifier.height(if (isMaterial3) 6.dp else 4.dp))
+        
+                // Stats row
+                androidx.compose.foundation.layout.FlowRow(
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(if (isMaterial3) 10.dp else 8.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Stats Row split for shared element transitions
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Views
+                        var viewsModifier = Modifier.wrapContentSize()
+                        if (metadataSharedEnabled) {
+                            with(requireNotNull(sharedTransitionScope)) {
+                                viewsModifier = viewsModifier.sharedBounds(
+                                    sharedContentState = rememberSharedContentState(
+                                        key = com.android.purebilibili.core.ui.transition.videoViewsSharedElementKey(
+                                            info.bvid,
+                                            sourceRoute = sourceRouteForSharedElement
+                                        )
+                                    ),
+                                    animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
+                                    boundsTransform = { initialBounds, targetBounds ->
+                                        videoMetadataSharedElementBoundsTransformSpec(
+                                            motion = metadataSharedTransitionMotionSpec,
+                                            initialBounds = initialBounds,
+                                            targetBounds = targetBounds
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                        AppText(
+                            text = "${FormatUtils.formatStat(info.stat.view.toLong())}播放",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = viewsModifier
+                        )
+
+                        AppText(
+                            text = "  •  ",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+
+                        // Danmaku
+                        var danmakuModifier = Modifier.wrapContentSize()
+                        if (metadataSharedEnabled) {
+                            with(requireNotNull(sharedTransitionScope)) {
+                                danmakuModifier = danmakuModifier.sharedBounds(
+                                    sharedContentState = rememberSharedContentState(
+                                        key = com.android.purebilibili.core.ui.transition.videoDanmakuSharedElementKey(
+                                            info.bvid,
+                                            sourceRoute = sourceRouteForSharedElement
+                                        )
+                                    ),
+                                    animatedVisibilityScope = requireNotNull(animatedVisibilityScope),
+                                    boundsTransform = { initialBounds, targetBounds ->
+                                        videoMetadataSharedElementBoundsTransformSpec(
+                                            motion = metadataSharedTransitionMotionSpec,
+                                            initialBounds = initialBounds,
+                                            targetBounds = targetBounds
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                        AppText(
+                            text = "${FormatUtils.formatStat(info.stat.danmaku.toLong())}弹幕",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = danmakuModifier
+                        )
+
+                    }
+                    if (onlineCountText.isNotBlank()) {
+                        AppText(
+                            text = onlineCountText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.82f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (publishTimeRowText.isNotBlank()) {
+                        if (emphasizePublishTime) {
+                            AppSurface(
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f),
+                                shape = com.android.purebilibili.core.ui.AppShapes.container(
+                                    com.android.purebilibili.core.ui.ContainerLevel.Field
+                                )
+                            ) {
+                                AppText(
+                                    text = publishTimeRowText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.92f),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        } else {
+                            AppText(
+                                text = publishTimeRowText,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+                    }
                 }
             }
         }
