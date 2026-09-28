@@ -621,6 +621,7 @@ internal fun TabletVideoInfoPane(
     modifier: Modifier = Modifier,
     showRelatedVideos: Boolean = true,
     compact: Boolean = false,
+    showActionButtons: Boolean = true,
 ) {
     val context = LocalContext.current
     var confirmDeleteNote by rememberSaveable(success.info.bvid) { mutableStateOf(false) }
@@ -704,6 +705,7 @@ internal fun TabletVideoInfoPane(
         },
         modifier = modifier,
         compact = compact,
+        showActionButtons = showActionButtons,
     )
 
     VideoNoteEditorSheet(
@@ -1433,6 +1435,7 @@ private fun ScrollableVideoInfoSection(
     showRelatedVideos: Boolean = true,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    showActionButtons: Boolean = true,
     ownerTrailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val windowSizeClass = LocalWindowSizeClass.current
@@ -1562,8 +1565,8 @@ private fun ScrollableVideoInfoSection(
                 }
             }
 
-            // 3. 互动按钮（紧凑模式下由 UP 行的更多按钮展开到底部）
-            if (!compact) {
+            // 3. 互动按钮（紧凑模式下由 UP 行的更多按钮展开到底部；侧栏模式下放在侧栏）
+            if (!compact && showActionButtons) {
                 item {
                     TabletVideoInfoStaggeredItem(
                         visible = entranceVisible,
