@@ -1027,7 +1027,9 @@ internal fun TabletSecondaryContent(
                 .weight(1f)
                 .verticalPriorityHorizontalPagerSwipe(
                     state = pagerState,
-                    enabled = shouldEnableVideoContentHorizontalPagerSwipe(
+                    // With one tab there is nowhere to swipe to; leave sideways drags to a
+                    // surrounding pager.
+                    enabled = tabs.size > 1 && shouldEnableVideoContentHorizontalPagerSwipe(
                         currentPage = pagerState.currentPage,
                         commentPageIndex = 0,
                         isPagerScrollInProgress = pagerState.isScrollInProgress,
