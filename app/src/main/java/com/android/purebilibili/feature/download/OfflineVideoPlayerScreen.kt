@@ -60,6 +60,7 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.DEFAULT_LONG_PRESS_SPEED
 import com.android.purebilibili.core.store.resolveDanmakuSettingsScope
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.feature.video.ui.overlay.SeekFeedbackText
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.danmaku.configureAsPassiveDanmakuOverlay
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
@@ -162,6 +163,7 @@ fun OfflineVideoPlayerScreen(
     // 双击跳转反馈
     var seekFeedbackText by remember { mutableStateOf<String?>(null) }
     var seekFeedbackVisible by remember { mutableStateOf(false) }
+    var seekFeedbackForward by remember { mutableStateOf(true) }
     
     // 长按倍速状态
     var isLongPressing by remember { mutableStateOf(false) }
@@ -640,6 +642,7 @@ fun OfflineVideoPlayerScreen(
                                 val newPos = (player.currentPosition + seekMs).coerceAtMost(player.duration.coerceAtLeast(0L))
                                 seekToPosition(newPos)
                                 seekFeedbackText = "+${seekForwardSeconds}s"
+                                seekFeedbackForward = true
                                 seekFeedbackVisible = true
                             }
                             // 左侧 1/3：后退
@@ -648,6 +651,7 @@ fun OfflineVideoPlayerScreen(
                                 val newPos = (player.currentPosition - seekMs).coerceAtLeast(0L)
                                 seekToPosition(newPos)
                                 seekFeedbackText = "-${seekBackwardSeconds}s"
+                                seekFeedbackForward = false
                                 seekFeedbackVisible = true
                             }
                             // 中间：暂停/播放
@@ -785,25 +789,11 @@ fun OfflineVideoPlayerScreen(
         }
         
         // 4. 双击跳转反馈
-        AnimatedVisibility(
+        SeekFeedbackText(
             visible = seekFeedbackVisible,
-            modifier = Modifier.align(Alignment.Center),
-            enter = scaleIn(initialScale = 0.5f) + fadeIn(),
-            exit = scaleOut(targetScale = 0.8f) + fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .background(Color.Black.copy(0.75f), AppShapes.container(ContainerLevel.Floating)),
-                contentAlignment = Alignment.Center
-            ) {
-                AppText(
-                    text = seekFeedbackText ?: "",
-                    color = if (seekFeedbackText?.startsWith("+") == true) Color.Green else Color.Red,
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
-                )
-            }
-        }
+            text = seekFeedbackText.orEmpty(),
+            forward = seekFeedbackForward
+        )
         
         // 5. 长按倍速提示
         AnimatedVisibility(
