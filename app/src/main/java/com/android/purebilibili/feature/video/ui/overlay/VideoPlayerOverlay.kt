@@ -42,6 +42,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.IntOffset
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import androidx.media3.common.Player
 import com.android.purebilibili.core.store.DanmakuSettingsScope
 import com.android.purebilibili.core.store.DanmakuPanelWidthMode
@@ -91,6 +93,7 @@ import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
+import com.android.purebilibili.core.ui.components.AppTabRowIndicatorPresentation
 import com.android.purebilibili.core.ui.components.AppTextButton
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -117,10 +120,12 @@ import com.android.purebilibili.feature.anime4k.Anime4KBypassReason
 import com.android.purebilibili.feature.anime4k.Anime4KPreset
 import com.android.purebilibili.feature.anime4k.DEFAULT_FSR_SHARPNESS
 
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -143,7 +148,6 @@ import com.android.purebilibili.core.plugin.CastPluginRoute
 import com.android.purebilibili.core.plugin.CastPluginPlaybackState
 import com.android.purebilibili.feature.cast.LocalProxyServer
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -463,6 +467,20 @@ private fun SkinAwareLoadingIndicator(color: Color) {
 }
 
 private const val CENTER_PLAY_BUTTON_SEEK_TRANSITION_GRACE_MS = 350L
+
+// 播放器 overlay 色层动效 token：遮罩/控制栏/锁屏按钮/加载指示共用同一节奏与曲线。
+// 曲线取全局 alpha 主曲线 Continuity（AppMotionTokens 体系），时长保持既有节奏。
+private const val OVERLAY_CHROME_FADE_DURATION_MILLIS = 300
+private const val OVERLAY_CONTROL_FADE_DURATION_MILLIS = 200
+private const val OVERLAY_CENTER_PLAY_SCALE_DURATION_MILLIS = 250
+private val OverlayChromeFadeSpec =
+    tween<Float>(OVERLAY_CHROME_FADE_DURATION_MILLIS, easing = AppMotionEasing.Continuity)
+private val OverlayControlFadeSpec =
+    tween<Float>(OVERLAY_CONTROL_FADE_DURATION_MILLIS, easing = AppMotionEasing.Continuity)
+private val OverlayCenterPlayScaleSpec =
+    tween<Float>(OVERLAY_CENTER_PLAY_SCALE_DURATION_MILLIS, easing = AppMotionEasing.Continuity)
+private val OverlayControlSlideSpec =
+    tween<IntOffset>(OVERLAY_CONTROL_FADE_DURATION_MILLIS, easing = AppMotionEasing.Continuity)
 
 @Composable
 fun VideoPlayerOverlay(
@@ -1086,9 +1104,13 @@ fun VideoPlayerOverlay(
     //  双击检测状态
     var lastTapTime by remember { mutableLongStateOf(0L) }
     var showLikeAnimation by remember { mutableStateOf(false) }
-    val overlayVisualPolicy = remember(configuration.screenWidthDp) {
+    val overlayVisualPolicy = remember(
+        configuration.screenWidthDp,
+        playerControlVisibility.compactPlayerChrome
+    ) {
         resolveVideoPlayerOverlayVisualPolicy(
-            widthDp = configuration.screenWidthDp
+            widthDp = configuration.screenWidthDp,
+            compact = playerControlVisibility.compactPlayerChrome
         )
     }
     val landscapeCommentReservedWidth = if (landscapeCommentPanelVisible) {
@@ -1344,8 +1366,8 @@ fun VideoPlayerOverlay(
         // --- 1. 顶部渐变遮罩 ---
         AnimatedVisibility(
             visible = isVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(OverlayChromeFadeSpec),
+            exit = fadeOut(OverlayChromeFadeSpec),
             //  [修复] align 必须在 AnimatedVisibility 的 modifier 上，而不是内部 Box 上
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -1380,8 +1402,8 @@ fun VideoPlayerOverlay(
         // --- 2. 底部渐变遮罩 ---
         AnimatedVisibility(
             visible = isVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(OverlayChromeFadeSpec),
+            exit = fadeOut(OverlayChromeFadeSpec),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(end = endDrawerReservedWidth)
@@ -1423,8 +1445,8 @@ fun VideoPlayerOverlay(
         val showPlayerChrome = (isVisible && !isScreenLocked) || danmakuComposerVisible
         AnimatedVisibility(
             visible = showPlayerChrome,
-            enter = fadeIn(tween(300)),
-            exit = fadeOut(tween(300)),
+            enter = fadeIn(OverlayChromeFadeSpec),
+            exit = fadeOut(OverlayChromeFadeSpec),
             //  [修复] 确保 AnimatedVisibility 填充整个父容器
             modifier = overlayContentModifier
         ) {
@@ -1477,9 +1499,13 @@ fun VideoPlayerOverlay(
                         },
                         onAudioMode = onAudioOnlyToggle,
                         isAudioOnly = isAudioOnly,
+                        onNotInterested = onDislike,
+                        sleepTimerMinutes = sleepTimerMinutes,
+                        onSleepTimerChange = onSleepTimerChange,
                         //  [新增] 投屏按钮
                         onCastClick = onCastClickAction,
                         showCastButton = playerControlVisibility.showCastButton,
+                        compactPlayerChrome = playerControlVisibility.compactPlayerChrome,
                         statusBarVisible = playerChromeStatusBarVisible,
                         modifier = Modifier.align(Alignment.TopStart)
                     )
@@ -1511,6 +1537,7 @@ fun VideoPlayerOverlay(
                     isPlaying = effectiveIsPlaying,
                     progress = displayedProgressState,
                     isFullscreen = isFullscreen,
+                    compactPlayerChrome = playerControlVisibility.compactPlayerChrome,
                     currentSpeed = currentSpeed,
                     currentRatio = currentAspectRatio,
                     onPlayPauseClick = {
@@ -1604,8 +1631,8 @@ fun VideoPlayerOverlay(
         if (isFullscreen && showFullscreenLockButton) {
             AnimatedVisibility(
                 visible = isVisible,  // 锁定后按控制栏状态自动隐藏
-                enter = fadeIn(tween(200)),
-                exit = fadeOut(tween(200)),
+                enter = fadeIn(OverlayControlFadeSpec),
+                exit = fadeOut(OverlayControlFadeSpec),
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(start = overlayVisualPolicy.lockButtonEndPaddingDp.dp)
@@ -1638,8 +1665,8 @@ fun VideoPlayerOverlay(
         if (isFullscreen && showFullscreenScreenshotButton) {
             AnimatedVisibility(
                 visible = isVisible && !isScreenLocked,
-                enter = fadeIn(tween(200)),
-                exit = fadeOut(tween(200)),
+                enter = fadeIn(OverlayControlFadeSpec),
+                exit = fadeOut(OverlayControlFadeSpec),
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = overlayVisualPolicy.lockButtonEndPaddingDp.dp)
@@ -1765,8 +1792,8 @@ fun VideoPlayerOverlay(
         if (playerDiagnosticLoggingEnabled) playbackIssueSignal?.let { signal ->
             AnimatedVisibility(
                 visible = true,
-                enter = fadeIn() + slideInVertically { -it / 2 },
-                exit = fadeOut() + slideOutVertically { -it / 2 },
+                enter = fadeIn(OverlayControlFadeSpec) + slideInVertically(OverlayControlSlideSpec) { -it / 2 },
+                exit = fadeOut(OverlayControlFadeSpec) + slideOutVertically(OverlayControlSlideSpec) { -it / 2 },
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(horizontal = 16.dp, vertical = 12.dp)
@@ -1847,8 +1874,8 @@ fun VideoPlayerOverlay(
                     hasPendingSeekResume
             ),
             modifier = Modifier.align(Alignment.Center),
-            enter = scaleIn(tween(250)) + fadeIn(tween(200)),
-            exit = scaleOut(tween(200)) + fadeOut(tween(200))
+            enter = scaleIn(OverlayCenterPlayScaleSpec) + fadeIn(OverlayControlFadeSpec),
+            exit = scaleOut(OverlayCenterPlayScaleSpec) + fadeOut(OverlayControlFadeSpec)
         ) {
             val resumeFromCenterButton = {
                 playPlayerFromUserAction(player)
@@ -1872,8 +1899,8 @@ fun VideoPlayerOverlay(
                 playWhenReady = player.playWhenReady
             ) && centerLoadingUiState == null,
             modifier = Modifier.align(Alignment.Center),
-            enter = fadeIn(tween(200)),
-            exit = fadeOut(tween(200))
+            enter = fadeIn(OverlayControlFadeSpec),
+            exit = fadeOut(OverlayControlFadeSpec)
         ) {
             SkinAwareLoadingIndicator(color = centerLoadingVisualState.indicatorColor)
         }
@@ -1881,8 +1908,8 @@ fun VideoPlayerOverlay(
         AnimatedVisibility(
             visible = centerLoadingUiState != null,
             modifier = Modifier.align(Alignment.Center),
-            enter = fadeIn(tween(200)),
-            exit = fadeOut(tween(200))
+            enter = fadeIn(OverlayControlFadeSpec),
+            exit = fadeOut(OverlayControlFadeSpec)
         ) {
             val loadingState = centerLoadingUiState ?: return@AnimatedVisibility
             AppSurface(
@@ -1922,8 +1949,8 @@ fun VideoPlayerOverlay(
         AnimatedVisibility(
             visible = isQualitySwitching && centerLoadingUiState == null,
             modifier = Modifier.align(Alignment.Center),
-            enter = fadeIn(tween(200)),
-            exit = fadeOut(tween(200))
+            enter = fadeIn(OverlayControlFadeSpec),
+            exit = fadeOut(OverlayControlFadeSpec)
         ) {
             AppSurface(
                 color = Color.Black.copy(alpha = 0.7f),
@@ -2429,7 +2456,7 @@ fun VideoPlayerOverlay(
 /**
  *  竖屏模式顶部控制栏
  * 
- * 包含返回首页按钮、设置按钮和分享按钮
+ * 包含返回首页按钮、听视频/投屏与更多菜单；经典布局另有分享按钮
  */
 @Composable
 private fun PortraitTopBar(
@@ -2440,10 +2467,15 @@ private fun PortraitTopBar(
     onShare: () -> Unit,
     onAudioMode: () -> Unit,
     isAudioOnly: Boolean,
+    onNotInterested: () -> Unit = {},
+    sleepTimerMinutes: Int? = null,
+    onSleepTimerChange: (Int?) -> Unit = {},
     viewportWidthDpOverride: Int? = null,
     // 📺 [新增] 投屏
     onCastClick: () -> Unit = {},
     showCastButton: Boolean = true,
+    /** 紧凑布局隐藏顶栏分享，并收紧按钮间距。 */
+    compactPlayerChrome: Boolean = false,
     /** 系统状态栏可见时为顶栏加 statusBarsPadding，避免与系统图标重叠。 */
     statusBarVisible: Boolean = true,
     modifier: Modifier = Modifier
@@ -2456,9 +2488,10 @@ private fun PortraitTopBar(
     }
     val moreIcon = rememberAppMoreIcon()
     val shareIcon = rememberAppShareIcon()
-    val layoutPolicy = remember(uiLayoutWidthDp) {
+    val layoutPolicy = remember(uiLayoutWidthDp, compactPlayerChrome) {
         resolvePortraitTopBarLayoutPolicy(
-            widthDp = uiLayoutWidthDp
+            widthDp = uiLayoutWidthDp,
+            compact = compactPlayerChrome
         )
     }
 
@@ -2579,13 +2612,22 @@ private fun PortraitTopBar(
                         onClick = { showMoreMenu = false; onSettings() },
                     )
                     AppDropdownMenuItem(
-                        text = { AppText(if (isAudioOnly) "退出听视频" else "听视频") },
-                        onClick = { showMoreMenu = false; onAudioMode() },
+                        text = { AppText(if (sleepTimerMinutes == null) "定时关闭" else "取消定时关闭（${sleepTimerMinutes}分钟）") },
+                        onClick = {
+                            showMoreMenu = false
+                            onSleepTimerChange(if (sleepTimerMinutes == null) 30 else null)
+                        },
                     )
                     AppDropdownMenuItem(
-                        text = { AppText("分享") },
-                        onClick = { showMoreMenu = false; onShare() },
+                        text = { AppText("不感兴趣") },
+                        onClick = { showMoreMenu = false; onNotInterested() },
                     )
+                    if (compactPlayerChrome) {
+                        AppDropdownMenuItem(
+                            text = { AppText("分享") },
+                            onClick = { showMoreMenu = false; onShare() },
+                        )
+                    }
                 }
             } else {
                 DropdownMenu(
@@ -2597,27 +2639,38 @@ private fun PortraitTopBar(
                         onClick = { showMoreMenu = false; onSettings() }
                     )
                     DropdownMenuItem(
-                        text = { Text(if (isAudioOnly) "退出听视频" else "听视频") },
-                        onClick = { showMoreMenu = false; onAudioMode() }
+                        text = { Text(if (sleepTimerMinutes == null) "定时关闭" else "取消定时关闭（${sleepTimerMinutes}分钟）") },
+                        onClick = {
+                            showMoreMenu = false
+                            onSleepTimerChange(if (sleepTimerMinutes == null) 30 else null)
+                        }
                     )
                     DropdownMenuItem(
-                        text = { Text("分享") },
-                        onClick = { showMoreMenu = false; onShare() }
+                        text = { Text("不感兴趣") },
+                        onClick = { showMoreMenu = false; onNotInterested() }
                     )
+                    if (compactPlayerChrome) {
+                        DropdownMenuItem(
+                            text = { Text("分享") },
+                            onClick = { showMoreMenu = false; onShare() }
+                        )
+                    }
                 }
             }
-            
-            // 分享按钮 - 无背景
-            AppIconButton(
-                onClick = onShare,
-                modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
-            ) {
-                AppIcon(
-                    imageVector = shareIcon,
-                    contentDescription = "分享",
-                    tint = Color.White,
-                    modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
-                )
+
+            if (!compactPlayerChrome) {
+                // 分享按钮 - 无背景
+                AppIconButton(
+                    onClick = onShare,
+                    modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp)
+                ) {
+                    AppIcon(
+                        imageVector = shareIcon,
+                        contentDescription = "分享",
+                        tint = Color.White,
+                        modifier = Modifier.size(layoutPolicy.iconSizeDp.dp)
+                    )
+                }
             }
         }
     }
@@ -2814,8 +2867,8 @@ fun LandscapeEndDrawer(
     var requestDrawerDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(),
-        exit = fadeOut(),
+        enter = fadeIn(OverlayControlFadeSpec),
+        exit = fadeOut(OverlayControlFadeSpec),
         modifier = modifier
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
@@ -2931,6 +2984,7 @@ fun LandscapeEndDrawer(
                     
                     if (hasSeason) {
                         AppThemeAdaptiveTabRow(
+indicatorPresentation = AppTabRowIndicatorPresentation.TONAL_PILL,
                             options = listOf(
                                 AppSegmentOption(0, "推荐视频"),
                                 AppSegmentOption(1, "合集列表"),
@@ -2956,8 +3010,12 @@ fun LandscapeEndDrawer(
                     // 3. 列表内容
                     Box(modifier = Modifier.weight(1f)) {
                         if (selectedTab == 0) {
-                            // 推荐视频列表
+                            // 推荐视频列表（滚动位置跨抽屉开关保留）
+                            val relatedListState = rememberSaveable(
+                                saver = LazyListState.Saver
+                            ) { LazyListState() }
                             LazyColumn(
+                                state = relatedListState,
                                 modifier = Modifier.fillMaxSize(),
                                 contentPadding = PaddingValues(layoutPolicy.listContentPaddingDp.dp),
                                 verticalArrangement = Arrangement.spacedBy(layoutPolicy.listItemSpacingDp.dp)
@@ -3108,7 +3166,7 @@ private fun TripleLikeInteractionButton(
         animationSpec = if (isLongPressing) {
             androidx.compose.animation.core.tween(durationMillis = progressDuration, easing = LinearEasing)
         } else {
-            androidx.compose.animation.core.tween(durationMillis = 200, easing = FastOutSlowInEasing)
+            androidx.compose.animation.core.tween(durationMillis = 200, easing = AppMotionEasing.Continuity)
         },
         label = "tripleLikeProgress",
         finishedListener = { progress ->

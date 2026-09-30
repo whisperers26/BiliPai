@@ -23,9 +23,10 @@ data class WallpaperPalette(
 val LocalWallpaperPalette = staticCompositionLocalOf<WallpaperPalette?> { null }
 
 /**
- * CompositionLocal 控制卡片毛玻璃与动态取色开关
+ * CompositionLocal 分别控制卡片动态取色和毛玻璃。
  */
-val LocalHomeCardDynamicTintEnabled = staticCompositionLocalOf { true }
+val LocalHomeCardDynamicTintEnabled = staticCompositionLocalOf { false }
+val LocalHomeCardFrostedGlassEnabled = staticCompositionLocalOf { false }
 
 /**
  * CompositionLocal 提供实时滚动 Tick（在 DrawPhase 中按需读取，零重组实现 120fps 极速刷新）
@@ -104,14 +105,22 @@ fun resolveVideoCardAmbientDrawSpec(
     defaultContainerColor: Color,
     defaultBorderColor: Color,
     isDataSaverActive: Boolean = false,
-    frostedGlassEnabled: Boolean = true
+    frostedGlassEnabled: Boolean = true,
+    dynamicTintEnabled: Boolean = true,
 ): VideoCardAmbientDrawSpec {
-    if (!frostedGlassEnabled || (!wallpaperTintEnabled && wallpaperPalette == null && coverTint == null)) {
+    if (!dynamicTintEnabled) {
         return VideoCardAmbientDrawSpec(
-            containerColor = defaultContainerColor,
+            containerColor = if (frostedGlassEnabled) {
+                defaultContainerColor.copy(alpha = if (isDarkTheme) 0.38f else 0.34f)
+            } else {
+                defaultContainerColor
+            },
             coverGlowAlpha = 0f,
             borderColor = defaultBorderColor
         )
+    }
+    if (!wallpaperTintEnabled && wallpaperPalette == null && coverTint == null) {
+        return VideoCardAmbientDrawSpec(defaultContainerColor, 0f, defaultBorderColor)
     }
 
     val hasValidCoverTint = shouldUseCoverTintForCard(
@@ -119,8 +128,10 @@ fun resolveVideoCardAmbientDrawSpec(
         coverTint = coverTint,
     )
 
-    // 核心质感：适度透明度以“直接透出背后的高斯模糊”，同时保留浓郁饱和色彩，杜绝发白发灰的厚重白雾
-    val glassTransparency = if (isDarkTheme) {
+    // 毛玻璃使用半透明着色；单独取色时提高不透明度，保证没有模糊层也能读清文字。
+    val glassTransparency = if (!frostedGlassEnabled) {
+        0.88f
+    } else if (isDarkTheme) {
         if (isDataSaverActive) 0.65f else 0.38f
     } else {
         if (isDataSaverActive) 0.70f else 0.34f

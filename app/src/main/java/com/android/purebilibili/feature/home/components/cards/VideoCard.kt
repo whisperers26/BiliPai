@@ -645,9 +645,11 @@ internal fun ElegantVideoCard(
     val isDarkCardTheme = AppSurfaceTokens.chromeBackground().luminance() < 0.5f
     val wallpaperPalette = LocalWallpaperPalette.current
     val homeCardDynamicTintEnabled = LocalHomeCardDynamicTintEnabled.current
+    val homeCardFrostedGlassEnabled = LocalHomeCardFrostedGlassEnabled.current
     val lowBlurBudgetForced = isLowBlurBudgetForced()
     val homeWallpaperSurfaceMode = remember(
         homeCardDynamicTintEnabled,
+        homeCardFrostedGlassEnabled,
         wallpaperTintEnabled,
         homeWallpaperIsStatic,
         homeWallpaperBackdropReady,
@@ -658,6 +660,7 @@ internal fun ElegantVideoCard(
     ) {
         resolveHomeCardWallpaperSurfaceMode(
             dynamicTintEnabled = homeCardDynamicTintEnabled,
+            frostedGlassEnabled = homeCardFrostedGlassEnabled,
             wallpaperVisible = wallpaperTintEnabled,
             wallpaperIsStatic = homeWallpaperIsStatic,
             backdropReady = homeWallpaperBackdropReady,
@@ -692,9 +695,7 @@ internal fun ElegantVideoCard(
             blurEnabled = blurEnabled
         )
     }
-    // The global card switch is authoritative. Older per-card glass settings must not
-    // re-enable frosted surfaces after the user turns the shared setting off.
-    val shouldUseFrostedGlass = homeCardDynamicTintEnabled
+    val useCardEffectSurface = homeCardDynamicTintEnabled || homeCardFrostedGlassEnabled
     val scrollLitePolicy = remember(compactStatsOnCover) {
         resolveVideoCardScrollLiteVisualPolicy(
             scrollLiteModeEnabled = false,
@@ -787,16 +788,21 @@ internal fun ElegantVideoCard(
         isDarkCardTheme,
         defaultOnSurface,
         defaultOnSurfaceVariant,
-        homeCardDynamicTintEnabled
+        homeCardDynamicTintEnabled,
+        homeCardFrostedGlassEnabled,
     ) {
         resolveVideoCardAdaptiveContentColors(
             wallpaperPalette = wallpaperPalette,
-            coverTint = if (animatedCoverTint.alpha > 0f) animatedCoverTint else null,
+            coverTint = if (homeCardDynamicTintEnabled && animatedCoverTint.alpha > 0f) {
+                animatedCoverTint
+            } else {
+                null
+            },
             wallpaperTintEnabled = wallpaperTintEnabled,
             isDarkTheme = isDarkCardTheme,
             defaultOnSurface = defaultOnSurface,
             defaultOnSurfaceVariant = defaultOnSurfaceVariant,
-            homeCardDynamicTintEnabled = homeCardDynamicTintEnabled
+            homeCardDynamicTintEnabled = useCardEffectSurface
         )
     }
     // 返回预热：组合即可见，上报 (bvid, url, cacheKey)，供详情返回时按同一 cacheKey
@@ -939,7 +945,7 @@ internal fun ElegantVideoCard(
                             publishTimeText = publishTimeRowText,
                             showStatsInInfo = scrollLitePolicy.showSecondaryStatsRow,
                             showDurationInInfo = showDurationOutside,
-                            useTintedInfoSurface = shouldUseFrostedGlass,
+                            useTintedInfoSurface = useCardEffectSurface,
                             showOverflowMenu = hasOverflowMenu,
                         ),
                     coverPresentation = VideoCardSourceCoverPresentation(
@@ -1108,7 +1114,7 @@ internal fun ElegantVideoCard(
                     enabled = effectiveTransitionEnabled,
                 ),
         ) {
-            val cardShellBaseColor = if (shouldUseFrostedGlass) {
+            val cardShellBaseColor = if (useCardEffectSurface) {
                 Color.Transparent
             } else {
                 AppSurfaceTokens.cardContainer()
@@ -1543,10 +1549,11 @@ internal fun ElegantVideoCard(
         val infoSurfaceShape = remember(cardCornerRadius) {
             AppShapes.bottomRounded(cardCornerRadius)
         }
-        val infoContainerModifier = if (shouldUseFrostedGlass) {
+        val infoContainerModifier = if (useCardEffectSurface) {
             // Wallpaper-only Haze for realtime blur (never main content HazeState).
             val hazeModifier = if (
-                infoSurfaceAppearance.useRealtimeHaze && wallpaperHazeState != null
+                homeCardFrostedGlassEnabled &&
+                    infoSurfaceAppearance.useRealtimeHaze && wallpaperHazeState != null
             ) {
                 Modifier.unifiedBlur(
                     hazeState = wallpaperHazeState,
@@ -1611,7 +1618,8 @@ internal fun ElegantVideoCard(
                             defaultContainerColor = baseContainerColor,
                             defaultBorderColor = baseBorderColor,
                             isDataSaverActive = isDataSaverActive,
-                            frostedGlassEnabled = true
+                            frostedGlassEnabled = homeCardFrostedGlassEnabled,
+                            dynamicTintEnabled = homeCardDynamicTintEnabled,
                         )
                         drawRect(color = drawSpec.containerColor)
                         if (drawSpec.coverGlowAlpha > 0f && animatedCoverTint.alpha > 0f) {
@@ -1628,11 +1636,14 @@ internal fun ElegantVideoCard(
                             )
                         }
                     } else {
+                        val neutralGlassAlpha = if (isDarkCardTheme) 0.38f else 0.34f
                         val realtimeAlpha = if (isDarkCardTheme) 0.24f else 0.16f
                         drawRect(
                             color = baseContainerColor.copy(
                                 alpha = if (useRealtimeWallpaperBackdrop) {
                                     realtimeAlpha
+                                } else if (homeCardFrostedGlassEnabled) {
+                                    neutralGlassAlpha
                                 } else {
                                     infoSurfaceAppearance.containerAlpha
                                 }
@@ -1715,7 +1726,7 @@ internal fun ElegantVideoCard(
             )
         ) {
         Column {
-        if (!shouldUseFrostedGlass) {
+        if (!useCardEffectSurface) {
             Spacer(modifier = Modifier.height(if (compactMetadata) AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro else AppSpacingTokens.Small))
         }
 

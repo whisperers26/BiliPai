@@ -57,6 +57,8 @@ dependencies {
     api("io.github.alexzhirkevich:cupertino-icons-extended:0.1.0-alpha04")
     api(libs.miuix.ui)
     implementation(libs.miuix.preference)
+    // ModalBottomSheet/Dialog 侧边预测返回：与 app 内 NavigationBackHandler 同栈。
+    implementation("androidx.navigationevent:navigationevent-compose:1.0.2")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")

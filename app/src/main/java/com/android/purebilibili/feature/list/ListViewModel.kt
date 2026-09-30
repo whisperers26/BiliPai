@@ -64,10 +64,15 @@ class LikedVideosViewModel(
     application: Application,
     private val targetMid: Long? = null,
     ownerName: String? = null,
+    private val isCoinArchive: Boolean = false,
 ) : BaseListViewModel(
     application,
-    ownerName?.takeIf { it.isNotBlank() }?.let { "$it 的点赞" }
-        ?: if (targetMid != null && targetMid > 0L) "最近点赞" else "我的点赞",
+    ownerName?.takeIf { it.isNotBlank() }?.let { "$it 的${if (isCoinArchive) "投币" else "点赞"}" }
+        ?: if (targetMid != null && targetMid > 0L) {
+            "最近${if (isCoinArchive) "投币" else "点赞"}"
+        } else {
+            "我的${if (isCoinArchive) "投币" else "点赞"}"
+        },
 ) {
     private val pageSize = 20
     private var currentPage = 1
@@ -85,12 +90,9 @@ class LikedVideosViewModel(
         val mid = targetMid?.takeIf { it > 0L } ?: NetworkModule.api.getNavInfo().data?.mid ?: 0L
         check(mid > 0L) { "请先登录" }
         resolvedMid = mid
-        val page = com.android.purebilibili.data.repository.LikedVideosRepository
-            .getLikedVideos(mid = mid, page = 1, pageSize = pageSize)
-            .getOrThrow()
+        val page = fetchInteractionPage(mid = mid, page = 1)
         currentPage = 1
-        hasMore = page.items.size >= pageSize &&
-            (page.total <= 0 || page.items.size < page.total)
+        hasMore = page.items.size >= pageSize
         _hasMoreState.value = hasMore
         return page.items
     }
@@ -103,9 +105,7 @@ class LikedVideosViewModel(
         viewModelScope.launch {
             try {
                 val nextPage = currentPage + 1
-                val page = com.android.purebilibili.data.repository.LikedVideosRepository
-                    .getLikedVideos(mid = mid, page = nextPage, pageSize = pageSize)
-                    .getOrThrow()
+                val page = fetchInteractionPage(mid = mid, page = nextPage)
                 if (page.items.isEmpty()) {
                     hasMore = false
                     _hasMoreState.value = false
@@ -120,8 +120,7 @@ class LikedVideosViewModel(
                     return@launch
                 }
                 currentPage = nextPage
-                hasMore = page.items.size >= pageSize &&
-                    (page.total <= 0 || merged.size < page.total)
+                hasMore = page.items.size >= pageSize
                 _hasMoreState.value = hasMore
                 _uiState.value = _uiState.value.copy(items = merged, error = null)
             } catch (error: Exception) {
@@ -133,6 +132,21 @@ class LikedVideosViewModel(
         }
     }
 
+    private suspend fun fetchInteractionPage(
+        mid: Long,
+        page: Int,
+    ): com.android.purebilibili.data.repository.LikedVideosRepository.Page {
+        return if (isCoinArchive) {
+            com.android.purebilibili.data.repository.LikedVideosRepository
+                .getCoinVideos(mid = mid, page = page, pageSize = pageSize)
+                .getOrThrow()
+        } else {
+            com.android.purebilibili.data.repository.LikedVideosRepository
+                .getLikedVideos(mid = mid, page = page, pageSize = pageSize)
+                .getOrThrow()
+        }
+    }
+
     init {
         loadData()
     }
@@ -140,8 +154,9 @@ class LikedVideosViewModel(
 
 class LikedVideosViewModelFactory(
     private val application: Application,
-    private val targetMid: Long,
-    private val ownerName: String,
+    private val targetMid: Long? = null,
+    private val ownerName: String? = null,
+    private val isCoinArchive: Boolean = false,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -149,6 +164,7 @@ class LikedVideosViewModelFactory(
             application = application,
             targetMid = targetMid,
             ownerName = ownerName,
+            isCoinArchive = isCoinArchive,
         ) as T
     }
 }
@@ -1043,7 +1059,47 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
                     .getOrThrow()
                 _folders.value = ownedFolders
                 allFolderIds = ownedFolders.map(::resolveFavoriteFolderMediaId)
+                loadFavoriteFolderPreviewCovers(ownedFolders)
             }
+        }
+    }
+
+    /** Match the profile page behavior: use the first resource as a preview when the API omits folder.cover. */
+    private suspend fun loadFavoriteFolderPreviewCovers(folders: List<com.android.purebilibili.data.model.response.FavFolder>) {
+        val targets = folders.asSequence()
+            .take(6)
+            .filter { it.cover.isBlank() && it.media_count > 0 }
+            .mapNotNull { folder ->
+                resolveFavoriteFolderMediaId(folder).takeIf { it > 0L }?.let { mediaId ->
+                    folder.id to mediaId
+                }
+            }
+            .toList()
+        if (targets.isEmpty()) return
+
+        val semaphore = Semaphore(2)
+        val coversByFolderId = supervisorScope {
+            targets.map { (folderId, mediaId) ->
+                async {
+                    val cover = semaphore.withPermit {
+                        com.android.purebilibili.data.repository.FavoriteRepository.getFavoriteList(
+                            mediaId = mediaId,
+                            pn = 1,
+                            ps = 1,
+                        ).getOrNull()?.medias
+                            ?.firstOrNull { it.cover.isNotBlank() }
+                            ?.cover
+                            .orEmpty()
+                    }
+                    folderId to cover
+                }
+            }.awaitAll()
+        }.filter { (_, cover) -> cover.isNotBlank() }.toMap()
+        if (coversByFolderId.isEmpty()) return
+
+        _folders.value = _folders.value.map { folder ->
+            val cover = coversByFolderId[folder.id]?.trim().orEmpty()
+            if (folder.cover.isBlank() && cover.isNotBlank()) folder.copy(cover = cover) else folder
         }
     }
 

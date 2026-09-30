@@ -26,7 +26,9 @@ internal data class PlaybackMediaCacheStats(
     val ignoredCount: Int
 )
 
-internal fun resolvePlaybackMediaCacheMaxBytes(): Long = 512L * 1024L * 1024L
+// 128MB：跨会话分片缓存只服务「回看刚看过的片段」，不需要装下整个视频；
+// 512MB 上限曾让 cache 目录轻松涨到 500MB+（用户反馈缓存过大、跳看流量浪费）。
+internal fun resolvePlaybackMediaCacheMaxBytes(): Long = 128L * 1024L * 1024L
 
 internal fun shouldUsePlaybackMediaCache(uri: Uri): Boolean {
     return shouldUsePlaybackMediaCache(uri.toString())

@@ -78,6 +78,15 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
+    fun separateCardEffectsSearchIntoHomeSettings() {
+        val glass = resolveSettingsSearchResults("卡片毛玻璃")
+        val tint = resolveSettingsSearchResults("卡片动态取色")
+
+        assertEquals(SettingsSearchTarget.HOME_FEED, glass.firstOrNull()?.target)
+        assertEquals(SettingsSearchTarget.HOME_FEED, tint.firstOrNull()?.target)
+    }
+
+    @Test
     fun queryByUpBadgeKeyword_hitsHomeEntry() {
         val results = resolveSettingsSearchResults("UP主标识")
 

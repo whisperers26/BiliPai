@@ -62,10 +62,10 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.feature.audio.player.MusicQueueItemUi
 import com.android.purebilibili.feature.home.components.LiquidGlassTuning
-import com.android.purebilibili.feature.home.components.biliPaiFloatingDockShell
 import com.android.purebilibili.feature.home.components.resolveLiquidGlassTuning
 import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
 import kotlinx.coroutines.launch
@@ -156,9 +156,12 @@ internal fun Music3DCoverFlow(
                     modifier = Modifier
                         .weight(1f, fill = false)
                         .fillMaxWidth()
-                        .heightIn(max = (cardSizeDp + 36).dp),
+                        .heightIn(max = (cardSizeDp + 36 + (cardSizeDp * 0.30f).toInt()).dp),
                 ) {
-                    val fittedCardSizeDp = minOf(cardSizeDp, (maxHeight.value - 36).toInt().coerceAtLeast(0))
+                    val fittedCardSizeDp = minOf(
+                        cardSizeDp,
+                        (maxHeight.value - 36 - cardSizeDp * 0.30f).toInt().coerceAtLeast(0)
+                    )
                     val horizontalPadding = ((maxWidth - fittedCardSizeDp.dp) / 2).coerceAtLeast(0.dp)
                     if (fittedCardSizeDp > 0) {
                         HorizontalPager(
@@ -167,7 +170,7 @@ internal fun Music3DCoverFlow(
                             beyondViewportPageCount = if (queue.size > 2) 2 else if (queue.size > 1) 1 else 0,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height((fittedCardSizeDp + 36).dp)
+                                .height((fittedCardSizeDp + 36 + fittedCardSizeDp * 0.30f).dp)
                         ) { page ->
                             val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
                             if (abs(pageOffset) >= 3f) return@HorizontalPager
@@ -322,10 +325,10 @@ internal fun Music3DCoverFlow(
                                             )
                                     )
 
-                                    // 地面镜面微弱倒影消隐（Floor Mirror Reflection）
+                                    // 地面镜面倒影：真实封面镜像，随距离渐隐（Floor Mirror Reflection）
                                     Box(
                                         modifier = Modifier
-                                            .size(width = fittedCardSizeDp.dp, height = 22.dp)
+                                            .size(width = fittedCardSizeDp.dp, height = (fittedCardSizeDp * 0.30f).dp)
                                             .graphicsLayer {
                                                 scaleY = -1f // 倒影垂直反转
                                                 alpha = resolveMusicCoverFlowShadowEntranceProgress(entranceProgress.value)
@@ -336,8 +339,9 @@ internal fun Music3DCoverFlow(
                                                 drawContent()
                                                 drawRect(
                                                     brush = Brush.verticalGradient(
-                                                        0f to Color.Transparent,
-                                                        1f to reflectionMaskColor.copy(alpha = 0.42f),
+                                                        0f to reflectionMaskColor.copy(alpha = 0.92f),
+                                                        0.55f to reflectionMaskColor.copy(alpha = 0.34f),
+                                                        1f to reflectionMaskColor.copy(alpha = 0.02f),
                                                     ),
                                                     blendMode = BlendMode.DstIn,
                                                 )
@@ -349,7 +353,7 @@ internal fun Music3DCoverFlow(
                                             modifier = Modifier
                                                 .size(fittedCardSizeDp.dp),
                                             contentScale = ContentScale.Crop,
-                                            alpha = 0.10f
+                                            alpha = 0.34f
                                         )
                                     }
                                 }
@@ -381,20 +385,20 @@ internal fun Music3DCoverFlow(
 
             Spacer(Modifier.height(12.dp))
 
-            // 底部悬浮胶囊控制条（药丸毛玻璃容器 + 歌名 - 歌手 + 心形/上一首/播放/下一首）
+            // 底部悬浮胶囊控制条（主题色容器 + 歌名 - 歌手 + 心形/上一首/播放/下一首）
             val playingItem = queue[validCurrentIndex]
-            val pillContainerColor = resolveMusicGlassContainerColor(glassTintColor, isDarkEnvironment)
-            val pillBorderColor = resolveMusicGlassBorderColor(glassTintColor, isDarkEnvironment)
-            val pillContentColor = MusicContentColor
+            val pillContainerColor = AppSurfaceTokens.surfaceContainer()
+            val pillBorderColor = MaterialTheme.colorScheme.outlineVariant
+            val pillContentColor = MaterialTheme.colorScheme.onSurface
 
             AppSurface(
                 shape = CircleShape,
-                color = if (miuixBackdrop != null) Color.Transparent else pillContainerColor,
+                color = pillContainerColor,
                 border = BorderStroke(
                     width = 0.8.dp,
                     color = pillBorderColor
                 ),
-                shadowElevation = if (miuixBackdrop != null) 0.dp else 6.dp,
+                shadowElevation = 6.dp,
                 modifier = Modifier
                     .widthIn(max = controlsWidthDp.dp)
                     .fillMaxWidth()
@@ -407,15 +411,6 @@ internal fun Music3DCoverFlow(
                         alpha = chromeEntrance
                         translationY = if (reduceMotion) 0f else (1f - chromeEntrance) * 12.dp.toPx()
                     }
-                    .biliPaiFloatingDockShell(
-                        backdrop = miuixBackdrop,
-                        containerColor = pillContainerColor,
-                        pressProgress = 0f,
-                        shape = CircleShape,
-                        enabled = glassEnabled && miuixBackdrop != null,
-                        blurEnabled = !glassEnabled,
-                        liquidGlassTuning = liquidGlassTuning
-                    )
             ) {
                 Row(
                     modifier = Modifier

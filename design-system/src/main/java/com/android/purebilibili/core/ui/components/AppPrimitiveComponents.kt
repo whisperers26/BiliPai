@@ -2,6 +2,7 @@ package com.android.purebilibili.core.ui.components
 
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.core.ui.resolveAppButtonContentPadding
 import com.android.purebilibili.core.ui.resolveFilledButtonContainerColor
 import com.android.purebilibili.core.ui.resolveFilledButtonContentColor
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
@@ -523,7 +524,11 @@ fun AppButton(
                 pressedElevation = pressedElevation,
             ),
             border = border,
-            contentPadding = contentPadding,
+            contentPadding = resolveAppButtonContentPadding(
+                uiStyle = LocalAppUiStyle.current,
+                requested = contentPadding,
+                defaultPadding = ButtonDefaults.ContentPadding,
+            ),
             interactionSource = resolvedInteractionSource,
             content = content,
         )
@@ -577,7 +582,11 @@ fun AppButton(
             ),
             elevation = elevation,
             border = border,
-            contentPadding = contentPadding,
+            contentPadding = resolveAppButtonContentPadding(
+                uiStyle = LocalAppUiStyle.current,
+                requested = contentPadding,
+                defaultPadding = ButtonDefaults.ContentPadding,
+            ),
             interactionSource = resolvedInteractionSource,
             content = content,
         )

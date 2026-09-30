@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.video.ui.components
 
 import com.android.purebilibili.core.ui.resolveFilledButtonContainerColor
+import com.android.purebilibili.core.ui.motion.folmeExpandEnterTransition
+import com.android.purebilibili.core.ui.motion.folmeExpandExitTransition
 import com.android.purebilibili.core.ui.resolveFilledButtonContentColor
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -95,6 +97,7 @@ fun LandscapeDanmakuComposer(
     var selectedMode by remember { mutableIntStateOf(initialMode) }
     var selectedFontSize by remember { mutableIntStateOf(initialFontSize) }
     var attentionCommandChecked by remember { mutableStateOf(initialAttentionCommand) }
+    val useMiuixSpring = com.android.purebilibili.core.theme.LocalAppUiStyle.current == com.android.purebilibili.core.theme.AppUiStyle.MIUIX
     var showStylePanel by remember { mutableStateOf(false) }
     var showAdvancedOptions by remember { mutableStateOf(false) }
 
@@ -161,8 +164,8 @@ fun LandscapeDanmakuComposer(
             ) {
                 AnimatedVisibility(
                     visible = showStylePanel,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
+                    enter = folmeExpandEnterTransition(useMiuixSpring),
+                    exit = folmeExpandExitTransition(useMiuixSpring)
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(

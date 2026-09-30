@@ -64,11 +64,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import coil3.compose.AsyncImage
 import coil3.imageLoader
 import coil3.request.ImageRequest
@@ -151,6 +153,8 @@ private data class ImagePreviewOverlayRequest(
     val livePhotoVideos: Map<String, String>,
     val initialIndex: Int,
     val sourceRect: androidx.compose.ui.geometry.Rect?,
+    val sourceRects: Map<Int, androidx.compose.ui.geometry.Rect>,
+    val activeSourceRect: androidx.compose.ui.geometry.Rect? = sourceRect,
     val sourceCornerRadiusDp: Float,
     val textContent: ImagePreviewTextContent?,
     val defaultTextVisible: Boolean,
@@ -158,12 +162,32 @@ private data class ImagePreviewOverlayRequest(
     val onDismiss: () -> Unit
 )
 
+/**
+ * 源缩略图在图片预览打开期间应隐藏，否则飞出的图片会与原位卡片重影；
+ * overlay request 在回位动画结束后才清空，因此卡片等「飞回落地」才恢复。
+ * 匹配规则：捕获的 bounds 中心落在当前页来源矩形外扩 8px 范围内。
+ */
+@Composable
+fun isImagePreviewSourceHidden(bounds: androidx.compose.ui.geometry.Rect?): Boolean {
+    if (bounds == null) return false
+    val request by ImagePreviewOverlayController.request.collectAsStateWithLifecycle()
+    val sourceRect = request?.activeSourceRect ?: return false
+    return sourceRect.inflate(8f).contains(bounds.center)
+}
+
 private object ImagePreviewOverlayController {
     private val _request = MutableStateFlow<ImagePreviewOverlayRequest?>(null)
     val request = _request.asStateFlow()
 
     fun show(request: ImagePreviewOverlayRequest) {
         _request.value = request
+    }
+
+    fun updateActiveSourceRect(token: Long, sourceRect: androidx.compose.ui.geometry.Rect?) {
+        val current = _request.value ?: return
+        if (current.token == token && current.activeSourceRect != sourceRect) {
+            _request.value = current.copy(activeSourceRect = sourceRect)
+        }
     }
 
     fun dismiss(token: Long? = null) {
@@ -180,6 +204,7 @@ fun ImagePreviewDialog(
     initialIndex: Int,
     livePhotoVideos: Map<String, String> = emptyMap(),
     sourceRect: androidx.compose.ui.geometry.Rect? = null,
+    sourceRects: Map<Int, androidx.compose.ui.geometry.Rect> = emptyMap(),
     sourceCornerRadiusDp: Float = resolveDrawGridCornerRadiusDp().toFloat(),
     textContent: ImagePreviewTextContent? = null,
     defaultTextVisible: Boolean = true,
@@ -187,7 +212,7 @@ fun ImagePreviewDialog(
     onDismiss: () -> Unit
 ) {
     val latestOnDismiss by rememberUpdatedState(onDismiss)
-    val requestToken = remember(images, initialIndex, sourceRect, sourceCornerRadiusDp, livePhotoVideos) { System.nanoTime() }
+    val requestToken = remember(images, initialIndex, sourceRect, sourceRects, sourceCornerRadiusDp, livePhotoVideos) { System.nanoTime() }
 
     LaunchedEffect(requestToken) {
         ImagePreviewOverlayController.show(
@@ -197,6 +222,7 @@ fun ImagePreviewDialog(
                 livePhotoVideos = livePhotoVideos,
                 initialIndex = initialIndex,
                 sourceRect = sourceRect,
+                sourceRects = sourceRects,
                 sourceCornerRadiusDp = sourceCornerRadiusDp,
                 textContent = textContent,
                 defaultTextVisible = defaultTextVisible,
@@ -219,25 +245,35 @@ fun ImagePreviewOverlayHost(
 ) {
     val activeRequest by ImagePreviewOverlayController.request.collectAsStateWithLifecycle()
     activeRequest?.let { request ->
+        var dismissRequestCount by remember(request.token) { mutableIntStateOf(0) }
         Dialog(
             onDismissRequest = {
-                ImagePreviewOverlayController.dismiss(request.token)
-                request.onDismiss()
+                dismissRequestCount++
             },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
                 decorFitsSystemWindows = false
             )
         ) {
+            val dialogView = LocalView.current
+            SideEffect {
+                // The image itself already performs the return morph. The platform Dialog
+                // window animation would scale it a second time when the window is removed.
+                ((dialogView.parent as? DialogWindowProvider) ?: (dialogView as? DialogWindowProvider))
+                    ?.window?.setWindowAnimations(0)
+            }
             ImagePreviewOverlayContent(
                 images = request.images,
                 livePhotoVideos = request.livePhotoVideos,
                 initialIndex = request.initialIndex,
                 sourceRect = request.sourceRect,
+                sourceRects = request.sourceRects,
+                requestToken = request.token,
                 sourceCornerRadiusDp = request.sourceCornerRadiusDp,
                 textContent = request.textContent,
                 defaultTextVisible = request.defaultTextVisible,
                 onImageLongPress = request.onImageLongPress,
+                dismissRequestCount = dismissRequestCount,
                 onDismiss = {
                     ImagePreviewOverlayController.dismiss(request.token)
                     request.onDismiss()
@@ -256,10 +292,13 @@ private fun ImagePreviewOverlayContent(
     initialIndex: Int,
     livePhotoVideos: Map<String, String> = emptyMap(),
     sourceRect: androidx.compose.ui.geometry.Rect? = null,
+    sourceRects: Map<Int, androidx.compose.ui.geometry.Rect> = emptyMap(),
+    requestToken: Long,
     sourceCornerRadiusDp: Float = resolveDrawGridCornerRadiusDp().toFloat(),
     textContent: ImagePreviewTextContent? = null,
     defaultTextVisible: Boolean = true,
     onImageLongPress: ((String) -> Unit)? = null,
+    dismissRequestCount: Int = 0,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -320,6 +359,7 @@ private fun ImagePreviewOverlayContent(
         0f
     }
     var isDismissing by remember { mutableStateOf(false) }
+    var dismissBackdropStartAlpha by remember { mutableFloatStateOf(1f) }
     var currentImageDisplayRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var dismissImageDisplayRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var activeZoomScale by remember { mutableFloatStateOf(1f) }
@@ -365,6 +405,16 @@ private fun ImagePreviewOverlayContent(
         initialPage = initialIndex,
         pageCount = { images.size }
     )
+
+    fun sourceRectForPage(page: Int): androidx.compose.ui.geometry.Rect? =
+        sourceRect.takeIf { page == initialIndex } ?: sourceRects[page]
+
+    LaunchedEffect(pagerState.currentPage, sourceRects, sourceRect, initialIndex, requestToken) {
+        ImagePreviewOverlayController.updateActiveSourceRect(
+            token = requestToken,
+            sourceRect = sourceRectForPage(pagerState.currentPage)
+        )
+    }
 
     // 已通过「查看原图」切换为全分辨率加载的页（按页索引记录）。
     var originalQualityPages by remember { mutableStateOf(setOf<Int>()) }
@@ -497,10 +547,21 @@ private fun ImagePreviewOverlayContent(
                 (AppSpacingTokens.Large + AppSpacingTokens.Micro).toPx()
             }
             
-            val rawProgress = if (!isDismissing && backProgress > 0f) {
-                1f - backProgress
-            } else {
-                animateTrigger.value
+            // 手势 scrub 期间画面由 backProgress 驱动；transitionState 离开 InProgress 的
+            // 瞬间 backProgress 归零而 animateTrigger 仍为 1f，若直接回落会让画面先跳回
+            // 全屏再重新飞出（双重回弹）。记住最后一帧 scrub 值，在此过渡窗口内保持。
+            var lastScrubRawProgress by remember { mutableFloatStateOf(1f) }
+            var backRecovering by remember { mutableStateOf(false) }
+            SideEffect {
+                if (backProgress > 0f) {
+                    lastScrubRawProgress = 1f - backProgress
+                }
+            }
+            val rawProgress = when {
+                isDismissing || backRecovering -> animateTrigger.value
+                backProgress > 0f -> 1f - backProgress
+                lastScrubRawProgress < 1f -> lastScrubRawProgress
+                else -> animateTrigger.value
             }
             val verticalDragFrame = resolveImagePreviewVerticalDragFrame(
                 dragOffsetYPx = verticalDismissOffsetYPx,
@@ -508,9 +569,9 @@ private fun ImagePreviewOverlayContent(
             )
             
             //  计算容器位置和大小
-            // 如果切走了或者没有源矩形，则全屏显示（仅淡入淡出）
-            // 有缩略图源矩形时始终做尺寸落位，保证返回大小匹配预览格。
-            val shouldUseRectAnim = sourceRect != null
+            // 按当前页查找同一画廊中的缩略图。没有可见来源，或仍在翻页时则淡出回退。
+            val currentSourceRect = sourceRectForPage(pagerState.currentPage)
+            val shouldUseRectAnim = currentSourceRect != null && !pagerState.isScrollInProgress
             val transitionFrame = resolveImagePreviewTransitionFrame(
                 rawProgress = rawProgress,
                 hasSourceRect = shouldUseRectAnim,
@@ -526,18 +587,20 @@ private fun ImagePreviewOverlayContent(
                 visualProgress = transitionFrame.visualProgress,
                 transitionEnabled = true,
                 maxBlurRadiusPx = maxBlurRadiusPx,
-                // Returning should stay optically sharp while the image morphs back
-                // into its source rect. Blur made the source image look unfocused.
-                blurEnabled = !isDismissing && backProgress <= 0f,
+                // Keep the image crisp for both the thumbnail-to-viewer flight and return.
+                blurEnabled = false,
             )
             val backdropAlpha = if (isDismissing) {
-                resolveImagePreviewDismissBackdropAlpha(transitionFrame.visualProgress)
+                resolveImagePreviewDismissBackdropAlpha(
+                    visualProgress = transitionFrame.visualProgress,
+                    startAlpha = dismissBackdropStartAlpha,
+                )
             } else {
                 visualFrame.backdropAlpha * verticalDragFrame.backdropAlphaMultiplier
             }
             val dismissRectFrame = resolveImagePreviewDismissRectFrame(
                 transitionProgress = transitionFrame.layoutProgress,
-                sourceRect = if (shouldUseRectAnim && isDismissing) sourceRect else null,
+                sourceRect = if (shouldUseRectAnim && isDismissing) currentSourceRect else null,
                 displayedImageRect = if (shouldUseRectAnim && isDismissing) dismissImageDisplayRect else null
             )
             
@@ -570,10 +633,12 @@ private fun ImagePreviewOverlayContent(
                     displayedImageRect = currentImageDisplayRect,
                     // 从真实显示图区域飞回缩略图，黑边不参与 morph，观感更干净。
                     preferPreviewSurface = false
-                )
+                ),
+                backdropStartAlpha: Float = 1f,
             ) {
                 if (isDismissing) return
                 dismissImageDisplayRect = startRect
+                dismissBackdropStartAlpha = backdropStartAlpha.coerceIn(0f, 1f)
                 isVerticalDismissDragging = false
                 isDismissing = true
                 scope.launch {
@@ -591,31 +656,42 @@ private fun ImagePreviewOverlayContent(
                 }
             }
 
+            LaunchedEffect(dismissRequestCount) {
+                if (dismissRequestCount > 0) triggerDismiss()
+            }
+
             NavigationBackHandler(
                 state = backEventState,
                 isBackEnabled = !isDismissing,
                 onBackCancelled = {
-                    scope.launch {
-                        val dismissMotion = imagePreviewDismissMotion()
-                        animateTrigger.snapTo(rawProgress)
-                        animateTrigger.animateTo(
-                            targetValue = 1f,
-                            animationSpec = emphasizedEnterTween(
-                                durationMillis = dismissMotion.cancelRecoverDurationMillis
-                            ),
-                        )
+                    if (!isDismissing) {
+                        scope.launch {
+                            if (isDismissing) return@launch
+                            backRecovering = true
+                            val dismissMotion = imagePreviewDismissMotion()
+                            animateTrigger.snapTo(lastScrubRawProgress)
+                            animateTrigger.animateTo(
+                                targetValue = 1f,
+                                animationSpec = emphasizedEnterTween(
+                                    durationMillis = dismissMotion.cancelRecoverDurationMillis
+                                ),
+                            )
+                            lastScrubRawProgress = 1f
+                            backRecovering = false
+                        }
                     }
                 },
                 onBackCompleted = {
                     scope.launch {
-                        animateTrigger.snapTo(rawProgress)
+                        if (isDismissing) return@launch
+                        animateTrigger.snapTo(lastScrubRawProgress)
                         triggerDismiss()
                     }
                 },
             )
             
             val (currentLeft, currentTop, currentWidth, currentHeight) = if (shouldUseRectAnim) {
-                val source = sourceRect
+                val source = currentSourceRect!!
                 val sourceLeft = with(density) { source.left.toDp() }
                 val sourceTop = with(density) { source.top.toDp() }
                 val sourceWidth = with(density) { source.width.toDp() }
@@ -655,8 +731,9 @@ private fun ImagePreviewOverlayContent(
                         width = with(density) { dismissRectFrame.rect.width.toDp() },
                         height = with(density) { dismissRectFrame.rect.height.toDp() }
                     )
-                    .clip(RoundedCornerShape(presentedCornerRadiusDp.dp))
                     .graphicsLayer {
+                        shape = RoundedCornerShape(presentedCornerRadiusDp.dp)
+                        clip = true
                         alpha = visualFrame.contentAlpha
                         renderEffect = blurEffectCache.resolve(visualFrame.blurRadiusPx)
                     }
@@ -664,8 +741,9 @@ private fun ImagePreviewOverlayContent(
                 Modifier
                     .offset(x = currentLeft, y = currentTop)
                     .size(width = currentWidth, height = currentHeight)
-                    .clip(RoundedCornerShape(presentedCornerRadiusDp.dp))
                     .graphicsLayer {
+                        shape = RoundedCornerShape(presentedCornerRadiusDp.dp)
+                        clip = true
                         alpha = visualFrame.contentAlpha
                         renderEffect = blurEffectCache.resolve(visualFrame.blurRadiusPx)
                         if (!shouldUseRectAnim) {
@@ -740,6 +818,20 @@ private fun ImagePreviewOverlayContent(
                         val imageUrl = remember(images.getOrNull(page)) {
                             normalizeImageUrl(images.getOrNull(page) ?: "")
                         }
+                        // 缩略图与预览图的 URL 不同（预览剥离 @尺寸后缀），内存缓存键对不上，
+                        // 原图下载前内容层只剩黑底。把网格已加载的缩略图 URL 设为
+                        // placeholderMemoryCacheKey，morph 期间立即垫图，杜绝「先黑后图」。
+                        val placeholderCacheKey = remember(images.getOrNull(page)) {
+                            images.getOrNull(page)?.trim()?.let { raw ->
+                                when {
+                                    raw.startsWith("https://") -> raw
+                                    raw.startsWith("http://") -> raw.replace("http://", "https://")
+                                    raw.startsWith("//") -> "https:$raw"
+                                    raw.isNotEmpty() -> "https://$raw"
+                                    else -> ""
+                                }
+                            }.orEmpty().takeIf { it.isNotEmpty() }
+                        }
                         val decodeSize = remember(page, imageUrl, page in originalQualityPages) {
                             resolveImageDecodeSize(
                                 if (page in originalQualityPages) {
@@ -749,12 +841,13 @@ private fun ImagePreviewOverlayContent(
                                 }
                             )
                         }
-                        
+
                         ZoomableImage(
                             model = ImageRequest.Builder(context)
                                 .data(imageUrl)
                                 // 预览必须采样解码，避免超大原图超过 Canvas 单位图绘制上限。
                                 .size(decodeSize.widthPx, decodeSize.heightPx)
+                                .placeholderMemoryCacheKey(placeholderCacheKey)
                                 .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
                                 // 退出 morph 时关闭 crossfade，避免尺寸变化触发二次淡入发黏。
                                 .crossfade(!isDismissing)
@@ -795,7 +888,10 @@ private fun ImagePreviewOverlayContent(
                                             containerHeightPx = fullHeightPx
                                         )
                                     ) {
-                                        ImagePreviewVerticalDismissDecision.DISMISS -> triggerDismiss(draggedRect)
+                                        ImagePreviewVerticalDismissDecision.DISMISS -> triggerDismiss(
+                                            startRect = draggedRect,
+                                            backdropStartAlpha = verticalDragFrame.backdropAlphaMultiplier,
+                                        )
                                         ImagePreviewVerticalDismissDecision.SNAP_BACK -> {
                                             scope.launch {
                                                 verticalDismissSnapAnim.snapTo(verticalDismissOffsetYPx)
@@ -1955,11 +2051,18 @@ suspend fun saveImageToGallery(context: android.content.Context, imageUrl: Strin
                     return@withContext false
                 }
                 
-                val inputStream = connection.inputStream
-                val bytes = inputStream.readBytes()
-                inputStream.close()
+                // 先把下载流落到临时文件，再分发给保存目标，避免整块字节驻留 Java 堆。
+                val tempFile = File.createTempFile("bilipai_save_", ".bin", context.cacheDir)
+                try {
+                    connection.inputStream.use { input ->
+                        tempFile.outputStream().use { output -> input.copyTo(output, 64 * 1024) }
+                    }
+                } catch (e: Exception) {
+                    tempFile.delete()
+                    throw e
+                }
                 connection.disconnect()
-                
+
                 // 生成文件名
                 val extension = when {
                     isGif -> "gif"
@@ -1973,11 +2076,15 @@ suspend fun saveImageToGallery(context: android.content.Context, imageUrl: Strin
                 }
                 val fileName = "BiliPai_${System.currentTimeMillis()}.$extension"
 
-                if (saveBytesToCustomImageSaveDirectory(context, bytes, fileName, mimeType)) {
+                val savedToCustomDirectory = tempFile.inputStream().use { input ->
+                    saveStreamToCustomImageSaveDirectory(context, input, fileName, mimeType)
+                }
+                if (savedToCustomDirectory) {
+                    tempFile.delete()
                     Log.d("ImagePreview", "Image saved to custom directory: $fileName")
                     return@withContext true
                 }
-                
+
                 // 使用 MediaStore 保存
                 val contentValues = ContentValues().apply {
                     put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
@@ -1987,15 +2094,20 @@ suspend fun saveImageToGallery(context: android.content.Context, imageUrl: Strin
                         put(MediaStore.Images.Media.IS_PENDING, 1)
                     }
                 }
-                
+
                 val uri = context.contentResolver.insert(
                     MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                     contentValues
-                ) ?: return@withContext false
-                
-                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                    outputStream.write(bytes)
+                )
+                if (uri == null) {
+                    tempFile.delete()
+                    return@withContext false
                 }
+
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    tempFile.inputStream().use { input -> input.copyTo(outputStream, 64 * 1024) }
+                }
+                tempFile.delete()
                 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     contentValues.clear()
@@ -2124,7 +2236,7 @@ suspend fun saveMotionPhotoToGallery(
 ): Boolean {
     return withContext(Dispatchers.IO) {
         try {
-            // 1. 下载实况视频 MP4 数据
+            // 1. 下载实况视频 MP4 数据——直接落盘临时文件，避免把上百 MB 视频整体读进 Java 堆
             val videoConn = java.net.URL(videoUrl).openConnection() as java.net.HttpURLConnection
             videoConn.setRequestProperty("Referer", "https://www.bilibili.com/")
             videoConn.setRequestProperty("User-Agent", BROWSER_USER_AGENT)
@@ -2133,8 +2245,24 @@ suspend fun saveMotionPhotoToGallery(
                 Log.e("ImagePreview", "Failed to download live video: ${videoConn.responseCode}")
                 return@withContext false
             }
-            val videoBytes = videoConn.inputStream.use { it.readBytes() }
-            videoConn.disconnect()
+            val tempVideoFile = File.createTempFile("motion_photo_video_", ".mp4", context.cacheDir)
+            var videoSize = 0L
+            try {
+                videoConn.inputStream.use { input ->
+                    tempVideoFile.outputStream().use { output -> input.copyTo(output, 64 * 1024) }
+                }
+                videoSize = tempVideoFile.length()
+                if (videoSize <= 0L) {
+                    tempVideoFile.delete()
+                    Log.e("ImagePreview", "Live video download produced an empty file")
+                    return@withContext false
+                }
+            } catch (e: Exception) {
+                tempVideoFile.delete()
+                throw e
+            } finally {
+                videoConn.disconnect()
+            }
 
             // 2. 下载并转码静态图片为标准 JPEG
             val imageConn = java.net.URL(normalizeImageUrl(imageUrl)).openConnection() as java.net.HttpURLConnection
@@ -2142,12 +2270,17 @@ suspend fun saveMotionPhotoToGallery(
             imageConn.setRequestProperty("User-Agent", BROWSER_USER_AGENT)
             imageConn.connect()
             if (imageConn.responseCode !in 200..299) {
+                imageConn.disconnect()
+                tempVideoFile.delete()
                 Log.e("ImagePreview", "Failed to download image: ${imageConn.responseCode}")
                 return@withContext false
             }
             val bitmap = imageConn.inputStream.use { android.graphics.BitmapFactory.decodeStream(it) }
             imageConn.disconnect()
-            if (bitmap == null) return@withContext false
+            if (bitmap == null) {
+                tempVideoFile.delete()
+                return@withContext false
+            }
 
             val rawJpegStream = java.io.ByteArrayOutputStream()
             bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, rawJpegStream)
@@ -2175,7 +2308,7 @@ suspend fun saveMotionPhotoToGallery(
             }
 
             // 4. 构建 Google / Android 官方 Motion Photo 1.0 标准 XMP 元数据（兼容 MicroVideo、小米 MiCamera 与新版 Container 规范）
-            val videoSize = videoBytes.size
+            // videoSize 已在下载落盘时确定（XMP 的 MicroVideoOffset / Container Length 用）
             val xmpString = """
 <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 5.1.0-jc003">
   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
@@ -2269,19 +2402,31 @@ suspend fun saveMotionPhotoToGallery(
                 offset += 2 + segLen
             }
 
-            // 7. 组装 Motion Photo：JPEG头部 + APP1 XMP + JPEG剩余数据与EOI + MP4视频数据
-            val motionPhotoStream = java.io.ByteArrayOutputStream(jpegWithExif.size + app1Segment.size + videoBytes.size)
-            motionPhotoStream.write(jpegWithExif, 0, insertPos)
-            motionPhotoStream.write(app1Segment)
-            motionPhotoStream.write(jpegWithExif, insertPos, jpegWithExif.size - insertPos)
-            motionPhotoStream.write(videoBytes)
-            val finalBytes = motionPhotoStream.toByteArray()
+            // 7. 组装 Motion Photo：JPEG头部 + APP1 XMP + JPEG剩余数据与EOI；
+            //    MP4 视频数据不再进堆，写输出时从临时文件流式追加。
+            val jpegSegmentBytes = java.io.ByteArrayOutputStream(jpegWithExif.size + app1Segment.size).apply {
+                write(jpegWithExif, 0, insertPos)
+                write(app1Segment)
+                write(jpegWithExif, insertPos, jpegWithExif.size - insertPos)
+            }.toByteArray()
 
             // 8. 保存到相册
             val fileName = "BiliPai_Live_${System.currentTimeMillis()}.jpg"
 
-            // 8.1 优先检查是否配置了自定义 SAF 保存目录
-            if (saveBytesToCustomImageSaveDirectory(context, finalBytes, fileName, "image/jpeg")) {
+            // 8.1 优先检查是否配置了自定义 SAF 保存目录（JPEG 段 + 视频流顺序拼接，不进堆）
+            val motionPhotoCombinedStream = java.io.SequenceInputStream(
+                java.util.Collections.enumeration(
+                    listOf(
+                        jpegSegmentBytes.inputStream(),
+                        tempVideoFile.inputStream()
+                    )
+                )
+            )
+            val savedToCustomDirectory = motionPhotoCombinedStream.use { input ->
+                saveStreamToCustomImageSaveDirectory(context, input, fileName, "image/jpeg")
+            }
+            if (savedToCustomDirectory) {
+                tempVideoFile.delete()
                 Log.d("ImagePreview", "Motion photo saved to custom directory: $fileName")
                 return@withContext true
             }
@@ -2344,17 +2489,24 @@ suspend fun saveMotionPhotoToGallery(
                 }
             }
 
-            val uri = insertedUri ?: return@withContext false
+            val uri = insertedUri ?: run {
+                tempVideoFile.delete()
+                return@withContext false
+            }
 
             val writeSuccess = runCatching {
                 context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                    outputStream.write(finalBytes)
+                    outputStream.write(jpegSegmentBytes)
+                    tempVideoFile.inputStream().use { videoInput ->
+                        videoInput.copyTo(outputStream, 64 * 1024)
+                    }
                     outputStream.flush()
                 }
                 true
             }.getOrDefault(false)
 
             if (!writeSuccess) {
+                tempVideoFile.delete()
                 try { context.contentResolver.delete(uri, null, null) } catch (_: Exception) {}
                 return@withContext false
             }
@@ -2396,7 +2548,8 @@ suspend fun saveMotionPhotoToGallery(
                 Log.w("ImagePreview", "MediaScanner scanFile failed", e)
             }
 
-            Log.d("ImagePreview", "Motion photo saved successfully: $fileName, size: ${finalBytes.size}")
+            tempVideoFile.delete()
+            Log.d("ImagePreview", "Motion photo saved successfully: $fileName, size: ${jpegSegmentBytes.size + videoSize}")
             true
         } catch (e: Exception) {
             Log.e("ImagePreview", "Error saving motion photo", e)
@@ -2425,11 +2578,6 @@ suspend fun saveLivePhotoVideoToGallery(context: android.content.Context, videoU
                 return@withContext false
             }
 
-            val inputStream = connection.inputStream
-            val bytes = inputStream.readBytes()
-            inputStream.close()
-            connection.disconnect()
-
             val fileName = "BiliPai_Live_${System.currentTimeMillis()}.mp4"
             val mimeType = "video/mp4"
 
@@ -2445,11 +2593,19 @@ suspend fun saveLivePhotoVideoToGallery(context: android.content.Context, videoU
             val uri = context.contentResolver.insert(
                 MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
                 contentValues
-            ) ?: return@withContext false
-
-            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                outputStream.write(bytes)
+            ) ?: run {
+                connection.inputStream.close()
+                connection.disconnect()
+                return@withContext false
             }
+
+            // 视频直接从下载流写入 MediaStore，避免把整段 MP4 读进 Java 堆。
+            connection.inputStream.use { input ->
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    input.copyTo(outputStream, 64 * 1024)
+                }
+            }
+            connection.disconnect()
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 contentValues.clear()
@@ -2517,4 +2673,3 @@ private fun LivePhotoOffIcon(
         )
     }
 }
-

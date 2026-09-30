@@ -1,14 +1,16 @@
 # 冬日云朵皮肤包示例
 
-这是一个数据型 `.bpskin` 示例包，用来验证 BiliPai 首页底栏和顶部氛围的资源皮肤链路。皮肤只提供资源和颜色 token，不包含 Kotlin、Dex、Compose 代码，也不能替换底栏组件本体。
+数据型 `.bpskin` 示例，提供首页顶部氛围、底栏饰面和导航图标，不执行代码。
 
-当前宿主会在用户主动导入并启用后读取：
+| Manifest 字段 | 范围 |
+|---|---|
+| `bottomBarTrim` | 底栏背景饰面 |
+| `topAtmosphere` | 首页顶部氛围背景 |
+| `searchCapsuleBackground` | 可导入并保存，当前未接入首页搜索框图片渲染 |
+| `bottomBarIcons` | 常态导航图标；本例未提供选中态图片 |
+| `colors` | 底栏与顶部颜色数据 |
 
-- `bottomBarTrim`：底栏云朵饰边资源。
-- `topAtmosphere`：顶部柔和氛围资源，预留给首页顶部装饰。
-- `searchCapsuleBackground`：搜索框背景资源，预留给搜索胶囊装饰。
-- `bottomBarIcons`：底栏图标贴纸候选，预留给后续受控图标资源消费。
-- `colors`：底栏和顶部氛围的轻量颜色 token。
+字段、图标键名、回退行为和校验限制见 [BPSkin 开发规范](../../../docs/BPSKIN_DEVELOPMENT.md)。
 
 ## 构建
 
@@ -16,7 +18,7 @@
 
 ```bash
 cd plugins/samples/winter-cloud-skin
-../../../gradlew -p . packageBpSkin --no-daemon
+../../../gradlew -p . packageBpSkin
 ```
 
 输出文件：
@@ -36,4 +38,4 @@ unzip -l build/distributions/winter-cloud.bpskin
 - `skin-manifest.json`
 - `assets/`
 
-导入宿主后，皮肤默认不执行任何代码；宿主只保存授权记录、资源文件和用户选择状态。
+在插件中心选择生成的包，预览后点击“保存并启用”。

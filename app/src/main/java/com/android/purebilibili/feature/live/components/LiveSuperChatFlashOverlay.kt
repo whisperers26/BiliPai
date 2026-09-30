@@ -68,6 +68,8 @@ fun LiveSuperChatFlashOverlay(
     flashFlow: SharedFlow<LiveDanmakuItem>,
     modifier: Modifier = Modifier,
     onUserClick: (Long) -> Unit = {},
+    persistUntilDismiss: Boolean = false,
+    maxWidthDp: Int = 360,
 ) {
     var current by remember { mutableStateOf<LiveDanmakuItem?>(null) }
     var remainingSec by remember { mutableIntStateOf(0) }
@@ -79,8 +81,12 @@ fun LiveSuperChatFlashOverlay(
     }
 
     // 倒计时与自动消失
-    LaunchedEffect(current) {
+    LaunchedEffect(current, persistUntilDismiss) {
         val item = current ?: return@LaunchedEffect
+        if (persistUntilDismiss) {
+            remainingSec = 0
+            return@LaunchedEffect
+        }
         val totalSec = resolveLiveSuperChatDurationSec(item.superChatDuration)
             .coerceAtMost(SUPER_CHAT_FLASH_MAX_DURATION_SEC.toInt())
         remainingSec = totalSec
@@ -103,7 +109,7 @@ fun LiveSuperChatFlashOverlay(
             exit = fadeOut() + slideOutVertically { it / 2 },
             modifier = Modifier
                 .padding(start = 20.dp, bottom = 72.dp)
-                .widthIn(min = 260.dp, max = 320.dp)
+                .widthIn(min = 260.dp, max = maxWidthDp.coerceIn(260, 640).dp)
         ) {
             val item = current ?: return@AnimatedVisibility
             val accent = resolveLiveSuperChatColor(item.superChatBackgroundColor)
@@ -170,7 +176,7 @@ fun LiveSuperChatFlashOverlay(
                             horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall)
                         ) {
                             AppText(
-                                text = formatLiveSuperChatCountdown(remainingSec),
+                                text = if (persistUntilDismiss) "常驻" else formatLiveSuperChatCountdown(remainingSec),
                                 color = Color.White.copy(alpha = 0.80f),
                                 style = MaterialTheme.typography.labelSmall
                             )

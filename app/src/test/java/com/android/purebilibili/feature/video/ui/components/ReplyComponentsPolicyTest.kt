@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.video.ui.components
 
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.getLinkAnnotations
+androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.data.model.response.ReplyMember
 import com.android.purebilibili.data.model.response.ReplyCardLabel
@@ -29,6 +31,13 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ReplyComponentsPolicyTest {
+
+    private fun AnnotatedString.firstCommentLinkTag(prefix: String): String? =
+        getLinkAnnotations(0, length)
+            .mapNotNull { (it.item as? LinkAnnotation.Clickable)?.tag }
+            .firstOrNull { it.startsWith(prefix) }
+            ?.removePrefix(prefix)
+
     @Test
     fun `author history action is present only when the host can navigate to a valid author`() {
         val withoutEntry = buildReplyActionSheetActions(
@@ -432,20 +441,8 @@ class ReplyComponentsPolicyTest {
             topics = setOf("动画")
         )
 
-        assertEquals(
-            "42",
-            annotated
-                .getStringAnnotations(COMMENT_USER_TAG, 3, 8)
-                .firstOrNull()
-                ?.item
-        )
-        assertEquals(
-            "动画",
-            annotated
-                .getStringAnnotations(COMMENT_TOPIC_TAG, 11, 15)
-                .firstOrNull()
-                ?.item
-        )
+        assertEquals("42", annotated.firstCommentLinkTag(RICH_COMMENT_LINK_USER_PREFIX))
+        assertEquals("动画", annotated.firstCommentLinkTag(RICH_COMMENT_LINK_TOPIC_PREFIX))
     }
 
     @Test
@@ -463,10 +460,7 @@ class ReplyComponentsPolicyTest {
         assertEquals("看看 视频标题", annotated.text)
         assertEquals(
             "bilibili://video/BV1testtest",
-            annotated
-                .getStringAnnotations(COMMENT_URL_TAG, 3, annotated.length)
-                .firstOrNull()
-                ?.item
+            annotated.firstCommentLinkTag(RICH_COMMENT_LINK_URL_PREFIX)
         )
     }
 
@@ -503,10 +497,7 @@ class ReplyComponentsPolicyTest {
         assertTrue(annotated.text.contains("视频标题"))
         assertEquals(
             "bilibili://video/BV1testtest",
-            annotated
-                .getStringAnnotations(COMMENT_URL_TAG, 3, annotated.length)
-                .firstOrNull()
-                ?.item
+            annotated.firstCommentLinkTag(RICH_COMMENT_LINK_URL_PREFIX)
         )
     }
 
@@ -535,13 +526,7 @@ class ReplyComponentsPolicyTest {
         )
 
         assertEquals("参加 投票: 投票标题", annotated.text)
-        assertEquals(
-            "987",
-            annotated
-                .getStringAnnotations(COMMENT_VOTE_TAG, 3, annotated.length)
-                .firstOrNull()
-                ?.item
-        )
+        assertEquals("987", annotated.firstCommentLinkTag(RICH_COMMENT_LINK_VOTE_PREFIX))
     }
 
     @Test
@@ -551,14 +536,13 @@ class ReplyComponentsPolicyTest {
             maxTimestampSeconds = 120
         )
 
+        val timestampTags = annotated.getLinkAnnotations(0, annotated.length)
+            .mapNotNull { (it.item as? LinkAnnotation.Clickable)?.tag }
+            .filter { it.startsWith(RICH_COMMENT_LINK_TS_PREFIX) }
         assertTrue(
-            annotated.getStringAnnotations(COMMENT_TIMESTAMP_TAG, 0, annotated.length)
-                .none { it.item == (99 * 60L + 59L).toString() }
+            timestampTags.none { it == RICH_COMMENT_LINK_TS_PREFIX + (99 * 60L + 59L).toString() }
         )
-        assertTrue(
-            annotated.getStringAnnotations(COMMENT_TIMESTAMP_TAG, 0, annotated.length)
-                .any { it.item == "60" }
-        )
+        assertTrue(timestampTags.any { it == RICH_COMMENT_LINK_TS_PREFIX + "60" })
     }
 
     @Test
@@ -621,13 +605,9 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
-    fun `shouldEnableRichCommentSelection enables in-place selection mode`() {
-        assertTrue(
-            shouldEnableRichCommentSelection(
-                hasRenderableEmotes = true,
-                hasInteractiveAnnotations = true
-            )
-        )
+    fun `shouldEnableRichCommentSelection skips selection container when links need taps`() {
+        // SelectionContainer 在存在选区时会消费点击清除选区，吞掉 @/链接点击；
+        // 有交互注解时必须关闭划选容器，复制走长按操作面板。
         assertTrue(
             shouldEnableRichCommentSelection(
                 hasRenderableEmotes = true,
@@ -637,13 +617,19 @@ class ReplyComponentsPolicyTest {
         assertTrue(
             shouldEnableRichCommentSelection(
                 hasRenderableEmotes = false,
+                hasInteractiveAnnotations = false
+            )
+        )
+        assertTrue(
+            !shouldEnableRichCommentSelection(
+                hasRenderableEmotes = true,
                 hasInteractiveAnnotations = true
             )
         )
         assertTrue(
-            shouldEnableRichCommentSelection(
+            !shouldEnableRichCommentSelection(
                 hasRenderableEmotes = false,
-                hasInteractiveAnnotations = false
+                hasInteractiveAnnotations = true
             )
         )
     }
@@ -1051,17 +1037,11 @@ class ReplyComponentsPolicyTest {
             urlColor = Color.Red
         )
 
-        val start = text.indexOf("BV1ecNuzGEPB")
-        val annotations = annotated.getStringAnnotations(
-            tag = "URL",
-            start = start,
-            end = start + "BV1ecNuzGEPB".length
-        )
-
-        assertEquals(1, annotations.size)
+        val link = annotated.getLinkAnnotations(0, annotated.length).singleOrNull()
         assertEquals(
             "https://www.bilibili.com/video/BV1ecNuzGEPB",
-            annotations.single().item
+            link?.let { (it.item as? LinkAnnotation.Clickable)?.tag }
+                ?.removePrefix(RICH_COMMENT_LINK_URL_PREFIX)
         )
     }
 
@@ -1076,13 +1056,7 @@ class ReplyComponentsPolicyTest {
             urlColor = Color.Red
         )
 
-        val annotations = annotated.getStringAnnotations(
-            tag = "URL",
-            start = 0,
-            end = text.length
-        )
-
-        assertTrue(annotations.isEmpty())
+        assertTrue(annotated.getLinkAnnotations(0, annotated.length).isEmpty())
     }
 
     @Test

@@ -284,6 +284,8 @@ fun FavoriteCategoryRoute(
     onTopicClick: (Long) -> Unit,
     onWebClick: (String, String) -> Unit,
     onCheeseClick: ((Long) -> Unit)? = null,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState =
+        androidx.compose.foundation.lazy.grid.rememberLazyGridState(),
     viewModel: FavoriteCategoryViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -292,6 +294,7 @@ fun FavoriteCategoryRoute(
         state = state,
         query = query,
         contentPadding = contentPadding,
+        gridState = gridState,
         onPgcStatusSelected = viewModel::selectPgcStatus,
         onPublishedNotesSelected = viewModel::selectPublishedNotes,
         onRetry = viewModel::retry,
@@ -315,6 +318,7 @@ private fun FavoriteCategoryContent(
     state: FavoriteCategoryUiState,
     query: String,
     contentPadding: androidx.compose.foundation.layout.PaddingValues,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     onPgcStatusSelected: (FavoritePgcStatus) -> Unit,
     onPublishedNotesSelected: (Boolean) -> Unit,
     onRetry: () -> Unit,
@@ -369,6 +373,7 @@ private fun FavoriteCategoryContent(
             }
             else -> FavoriteCategoryGrid(
                 state = state.copy(items = visibleItems),
+                gridState = gridState,
                 topPadding = stickyChromeReserve,
                 bottomPadding = contentPadding.calculateBottomPadding(),
                 onLoadMore = onLoadMore,
@@ -468,6 +473,7 @@ private fun FavoriteCategoryFilterRow(
 @Composable
 private fun FavoriteCategoryGrid(
     state: FavoriteCategoryUiState,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     topPadding: androidx.compose.ui.unit.Dp,
     bottomPadding: androidx.compose.ui.unit.Dp,
     onLoadMore: () -> Unit,
@@ -483,6 +489,7 @@ private fun FavoriteCategoryGrid(
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val columns = resolveFavoriteCategoryColumnCount(state.section, maxWidth.value)
         LazyVerticalGrid(
+            state = gridState,
             columns = GridCells.Fixed(columns),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                 start = AppSpacingTokens.Medium,

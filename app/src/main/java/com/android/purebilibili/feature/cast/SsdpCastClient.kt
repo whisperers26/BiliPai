@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.cast
 
+import com.android.purebilibili.core.lifecycle.BackgroundManager
 import com.android.purebilibili.core.plugin.CastPluginPlaybackState
 import com.android.purebilibili.core.util.Logger
 import kotlinx.coroutines.CoroutineScope
@@ -26,12 +27,21 @@ import java.net.URI
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
+ * 投屏状态轮询间隔：前台 1 秒保证进度条/播放态精度；后台降到 5 秒，
+ * 避免挂着的投屏会话整夜每秒唤醒无线电。
+ */
+private const val FOREGROUND_CAST_POLL_INTERVAL_MS = 1_000L
+private const val BACKGROUND_CAST_POLL_INTERVAL_MS = 5_000L
+
+internal fun resolveCastPlaybackPollIntervalMs(isInBackground: Boolean): Long =
+    if (isInBackground) BACKGROUND_CAST_POLL_INTERVAL_MS else FOREGROUND_CAST_POLL_INTERVAL_MS
+
+/**
  * SSDP/DLNA caster.
  * 通过 SOAP 调 AVTransport。
  */
 object SsdpCastClient {
     private const val TAG = "SsdpCastClient"
-    private const val POLL_INTERVAL_MS = 1_000L
     private val soapContentType = "text/xml; charset=utf-8".toMediaType()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -354,7 +364,9 @@ object SsdpCastClient {
         pollJob = scope.launch {
             while (isActive && activeEndpoint == endpoint) {
                 refreshPlaybackState(endpoint)
-                delay(POLL_INTERVAL_MS)
+                // 投屏会话可能整夜挂着：后台时把每秒一次的 SOAP 轮询降到 5 秒，
+                // 减少无线电唤醒；回前台立即恢复 1 秒精度。
+                delay(resolveCastPlaybackPollIntervalMs(isInBackground = BackgroundManager.isInBackground))
             }
         }
     }

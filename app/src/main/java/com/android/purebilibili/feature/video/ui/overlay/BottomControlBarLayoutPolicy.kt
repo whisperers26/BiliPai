@@ -59,13 +59,14 @@ internal fun resolveVideoDetailProgressPlacement(
 }
 
 fun resolveBottomControlBarLayoutPolicy(
-    widthDp: Int
+    widthDp: Int,
+    compact: Boolean = false
 ): BottomControlBarLayoutPolicy {
     if (widthDp >= 1600) {
         return BottomControlBarLayoutPolicy(
             bottomPaddingDp = 18,
-            progressSpacingDp = 12,
-            horizontalPaddingDp = 32,
+            progressSpacingDp = if (compact) 5 else 12,
+            horizontalPaddingDp = if (compact) 14 else 32,
             playButtonSizeDp = 48,
             playIconSizeDp = 36,
             afterPlaySpacingDp = 12,
@@ -93,8 +94,8 @@ fun resolveBottomControlBarLayoutPolicy(
     if (widthDp >= 840) {
         return BottomControlBarLayoutPolicy(
             bottomPaddingDp = 14,
-            progressSpacingDp = 10,
-            horizontalPaddingDp = 24,
+            progressSpacingDp = if (compact) 4 else 10,
+            horizontalPaddingDp = if (compact) 10 else 24,
             playButtonSizeDp = 40,
             playIconSizeDp = 32,
             afterPlaySpacingDp = 10,
@@ -122,8 +123,8 @@ fun resolveBottomControlBarLayoutPolicy(
     if (widthDp >= 600) {
         return BottomControlBarLayoutPolicy(
             bottomPaddingDp = 13,
-            progressSpacingDp = 9,
-            horizontalPaddingDp = 20,
+            progressSpacingDp = if (compact) 3 else 9,
+            horizontalPaddingDp = if (compact) 8 else 20,
             playButtonSizeDp = 36,
             playIconSizeDp = 30,
             afterPlaySpacingDp = 9,
@@ -150,8 +151,8 @@ fun resolveBottomControlBarLayoutPolicy(
 
     return BottomControlBarLayoutPolicy(
         bottomPaddingDp = 12,
-        progressSpacingDp = 8,
-        horizontalPaddingDp = 12,
+        progressSpacingDp = if (compact) 3 else 8,
+        horizontalPaddingDp = if (compact) 5 else 12,
         playButtonSizeDp = 32,
         playIconSizeDp = 28,
         afterPlaySpacingDp = 8,

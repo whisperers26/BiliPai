@@ -412,6 +412,8 @@ internal suspend fun prefetchPortraitPlaybackHead(
     context: Context,
     streamUrls: PortraitPlaybackStreamUrls
 ) {
+    // 头部预取是纯加速项：蜂窝网络下跳过，滑动多页累积的流量不小。
+    if (!com.android.purebilibili.core.util.NetworkUtils.isWifi(context)) return
     coroutineScope {
         val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
             .setDefaultRequestProperties(buildPortraitPlaybackHttpHeaders())

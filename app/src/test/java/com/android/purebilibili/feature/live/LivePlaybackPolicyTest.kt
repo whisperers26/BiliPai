@@ -10,6 +10,7 @@ import com.android.purebilibili.data.model.response.Playurl
 import com.android.purebilibili.data.model.response.PlayurlInfo
 import com.android.purebilibili.data.model.response.StreamInfo
 import com.android.purebilibili.data.model.response.UrlInfo
+import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import java.net.URI
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -19,6 +20,35 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class LivePlaybackPolicyTest {
+
+    @Test
+    fun `default video quality preference maps to a live quality tier`() {
+        assertEquals(400, resolveLiveDefaultQualityQn(116))
+        assertEquals(400, resolveLiveDefaultQualityQn(80))
+        assertEquals(250, resolveLiveDefaultQualityQn(64))
+        assertEquals(150, resolveLiveDefaultQualityQn(32))
+        assertEquals(80, resolveLiveDefaultQualityQn(16))
+    }
+
+    @Test
+    fun `portrait expand fills only portrait live player viewport`() {
+        assertEquals(
+            VideoAspectRatio.FILL,
+            resolveLiveViewportAspectRatio(
+                selected = VideoAspectRatio.FIT,
+                usePortraitControls = true,
+                portraitExpandEnabled = true,
+            ),
+        )
+        assertEquals(
+            VideoAspectRatio.RATIO_16_9,
+            resolveLiveViewportAspectRatio(
+                selected = VideoAspectRatio.RATIO_16_9,
+                usePortraitControls = false,
+                portraitExpandEnabled = true,
+            ),
+        )
+    }
 
     @Test
     fun `behind live window should seek to current live edge`() {

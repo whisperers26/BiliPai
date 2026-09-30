@@ -28,3 +28,11 @@ internal fun shouldRequestDanmakuWindow(
     if (activeSegments.toSet() == requestedSegments) return false
     return !requestInFlight || pendingSegments.toSet() != requestedSegments
 }
+
+/** A return to the displayed window must also invalidate a different pending window. */
+internal fun shouldCancelPendingDanmakuWindow(
+    pendingSegments: Collection<Int>,
+    positionMs: Long,
+    totalSegments: Int
+): Boolean = pendingSegments.isNotEmpty() &&
+    pendingSegments.toSet() != segmentWindowForPosition(positionMs, totalSegments).toSet()

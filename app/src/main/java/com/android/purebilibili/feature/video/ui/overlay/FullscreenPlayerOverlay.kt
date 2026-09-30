@@ -7,6 +7,7 @@ import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
 import com.android.purebilibili.feature.video.danmaku.configureAsPassiveDanmakuOverlay
 import com.android.purebilibili.feature.video.playback.policy.shouldHoldPlaybackTransitionPosition
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
+import com.android.purebilibili.feature.video.ui.section.isInSeekCancelEscapeZone
 import com.android.purebilibili.feature.video.ui.section.resolveHorizontalSeekDeltaMs
 import com.android.purebilibili.feature.video.ui.section.rebindPlayerSurfaceIfNeeded
 import com.android.purebilibili.feature.video.ui.section.shouldCommitGestureSeek
@@ -139,7 +140,10 @@ private const val VISIBLE_TOP_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP = 96
 private const val VISIBLE_BOTTOM_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP = 90
 
 // Keep for backward compatibility, maps to new GestureMode
-enum class FullscreenGestureMode { None, Brightness, Volume, Seek }
+enum class FullscreenGestureMode { None, Brightness, Volume, Seek, SwipeToExit }
+
+/** 中间区域竖直滑动退出全屏的触发阈值（占屏高比例）。 */
+private const val FULLSCREEN_SWIPE_EXIT_THRESHOLD_FRACTION = 0.12f
 
 internal fun resolveFullscreenVisibleBottomControlsGestureExclusionHeightDp(): Int {
     return VISIBLE_BOTTOM_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP
@@ -325,6 +329,9 @@ fun FullscreenPlayerOverlay(
     var seekPreviewPosition by remember { mutableLongStateOf(0L) }
     var gestureSeekStartPosition by remember { mutableLongStateOf(0L) }
     var lastSeekHapticTargetMs by remember { mutableLongStateOf(0L) }
+    // 拖动 seek 时手指进入顶部角落逃生口时置真，松手即取消本次 seek
+    var seekCancelPending by remember { mutableStateOf(false) }
+    var swipeExitAccumulatedY by remember { mutableFloatStateOf(0f) }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     // Default to 15s so seek UI/haptics work immediately before prefs load (null blocked delta).
     val fullscreenSwipeSeekSeconds by produceState(initialValue = 15, context) {
@@ -789,7 +796,9 @@ fun FullscreenPlayerOverlay(
                         lastInteractionTime = System.currentTimeMillis()
                         dragDelta = 0f
                         dragVerticalDelta = 0f
-                        
+                        swipeExitAccumulatedY = 0f
+                        seekCancelPending = false
+
                         // 根据起始位置决定手势类型
                         gestureMode = when {
                             offset.x < screenWidth * 0.3f -> {
@@ -810,8 +819,17 @@ fun FullscreenPlayerOverlay(
                     },
                     onDragEnd = {
                         if (
+                            gestureMode == FullscreenGestureMode.SwipeToExit &&
+                            swipeExitAccumulatedY > screenHeight * FULLSCREEN_SWIPE_EXIT_THRESHOLD_FRACTION
+                        ) {
+                            haptic.performHapticFeedback(
+                                androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
+                            )
+                            onDismiss()
+                        } else if (
                             dragGestureActive &&
                             gestureMode == FullscreenGestureMode.Seek &&
+                            !seekCancelPending &&
                             shouldCommitGestureSeek(
                                 currentPositionMs = gestureSeekStartPosition,
                                 targetPositionMs = seekPreviewPosition
@@ -825,6 +843,7 @@ fun FullscreenPlayerOverlay(
                         }
                         dragGestureActive = false
                         gestureMode = FullscreenGestureMode.None
+                        seekCancelPending = false
                     },
                     onDragCancel = {
                         dragGestureActive = false
@@ -836,15 +855,23 @@ fun FullscreenPlayerOverlay(
                         if (gestureMode == FullscreenGestureMode.None) {
                             dragDelta += dragAmount.x
                             dragVerticalDelta += dragAmount.y
-                            if (!shouldEngageHorizontalPlayerSeek(dragDelta, dragVerticalDelta)) {
-                                return@detectDragGestures
+                            if (shouldEngageHorizontalPlayerSeek(dragDelta, dragVerticalDelta)) {
+                                gestureMode = FullscreenGestureMode.Seek
+                                haptic.performHapticFeedback(
+                                    androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
+                                )
+                            } else if (
+                                abs(dragVerticalDelta) >= 1f &&
+                                abs(dragVerticalDelta) > abs(dragDelta) * 1.2f
+                            ) {
+                                // 中央区域竖直滑动：下滑退出全屏（上滑不响应，避免与系统手势冲突）
+                                gestureMode = FullscreenGestureMode.SwipeToExit
+                                swipeExitAccumulatedY = dragVerticalDelta
                             }
-                            gestureMode = FullscreenGestureMode.Seek
-                            haptic.performHapticFeedback(
-                                androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
-                            )
                         } else if (gestureMode == FullscreenGestureMode.Seek) {
                             dragDelta += dragAmount.x
+                        } else if (gestureMode == FullscreenGestureMode.SwipeToExit) {
+                            swipeExitAccumulatedY += dragAmount.y
                         }
                         when (gestureMode) {
                             FullscreenGestureMode.Brightness -> {
@@ -876,6 +903,12 @@ fun FullscreenPlayerOverlay(
                                 )
                                 if (seekDelta != null) {
                                     seekPreviewPosition = (gestureSeekStartPosition + seekDelta).coerceIn(0L, duration)
+                                    seekCancelPending = isInSeekCancelEscapeZone(
+                                        positionX = change.position.x,
+                                        positionY = change.position.y,
+                                        containerWidthPx = screenWidth,
+                                        containerHeightPx = screenHeight
+                                    )
                                     currentProgress = if (duration > 0L) {
                                         (seekPreviewPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
                                     } else {
@@ -1077,8 +1110,10 @@ fun FullscreenPlayerOverlay(
             }
         }
 
-        // 手势指示器
-        if (gestureMode != FullscreenGestureMode.None) {
+        // 手势指示器（SwipeToExit 无需指示器）
+        if (gestureMode != FullscreenGestureMode.None &&
+            gestureMode != FullscreenGestureMode.SwipeToExit
+        ) {
             GestureIndicator(
                 mode = gestureMode,
                 value = when (gestureMode) {
@@ -1099,6 +1134,29 @@ fun FullscreenPlayerOverlay(
             )
         }
         
+        //  Seek 逃生口提示：拖动进度时手指进入顶部角落，松手取消进退
+        AnimatedVisibility(
+            visible = gestureMode == FullscreenGestureMode.Seek && seekCancelPending,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(top = 96.dp),
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(300))
+        ) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                shadowElevation = 4.dp
+            ) {
+                AppText(
+                    text = "松开手指，取消进退",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
+
         // 控制层
         AnimatedVisibility(
             visible = showControls && gestureMode == FullscreenGestureMode.None,
@@ -1238,11 +1296,14 @@ fun FullscreenPlayerOverlay(
                                     currentProgress = newProgress
                                 },
                                 onSeekStart = {
-                                    danmakuManager.clear()
+                                    danmakuManager.prepareForSeekScrub()
                                     isDragging = true
                                     lastInteractionTime = System.currentTimeMillis()
                                 },
-                                onSeekDragCancel = { isDragging = false },
+                                onSeekDragCancel = {
+                                    isDragging = false
+                                    danmakuManager.cancelSeekScrub()
+                                },
                                 duration = duration,
                                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                             )

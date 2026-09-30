@@ -393,6 +393,7 @@ class SponsorBlockPlugin : PlayerPluginApi {
     }
 
     fun getProgressMarkers(): List<SponsorProgressMarker> = progressMarkers
+    fun getSegments(): List<SponsorSegment> = segments
     fun getActiveSegment(): SponsorSegment? = activeSegment
     fun isCommunityContributionEnabled(): Boolean = config.communityContributionEnabled
     fun getCommunityServerBaseUrl(): String = config.serverBaseUrl

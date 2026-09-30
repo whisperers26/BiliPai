@@ -28,6 +28,15 @@ data class AppSegmentOption<T>(
     val label: String,
 )
 
+/**
+ * MD3 非玻璃 Tab 行的指示器形态:下划线(PiliPlus 首页/视频详情)或
+ * tonal 胶囊(PiliPlus 搜索页)。MIUIX 与液态玻璃分支不消费该参数。
+ */
+enum class AppTabRowIndicatorPresentation {
+    UNDERLINE,
+    TONAL_PILL,
+}
+
 enum class AppSegmentedChrome {
     LIQUID,
     NATIVE,
@@ -345,6 +354,7 @@ fun <T> AppNativeTabRow(
     height: Dp? = null,
     allowLabelOverflow: Boolean = false,
     forceMaterial3: Boolean = false,
+    indicatorPresentation: AppTabRowIndicatorPresentation = AppTabRowIndicatorPresentation.UNDERLINE,
     indicatorPositionProvider: (() -> Float)? = null,
     miuixNonGlassItemWidthMode: MiuixNonGlassTabItemWidthMode =
         MiuixNonGlassTabItemWidthMode.CONTENT,
@@ -421,6 +431,7 @@ fun <T> AppNativeTabRow(
             // Miuix keeps the touch/content floor above.
             minTabWidth = resolvePiliPlusScrollableUnderlineMinWidth(),
             allowLabelOverflow = allowLabelOverflow,
+            indicatorPresentation = indicatorPresentation,
             indicatorPositionProvider = indicatorPositionProvider,
             modifier = viewportBoundedModifier,
             onSelectionChange = onSelectionChange,

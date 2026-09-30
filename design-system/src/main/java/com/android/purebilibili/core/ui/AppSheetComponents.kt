@@ -28,6 +28,7 @@ import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,8 +38,14 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
+import androidx.navigationevent.findViewTreeNavigationEventDispatcherOwner
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.theme.resolveAndroidNativeChromeTokens
@@ -181,6 +188,37 @@ internal fun bottomSheetContentExitTransition(
 }
 
 /**
+ * 把返回事件绑到弹层所在 Dialog 窗口，而不是下层路由。
+ *
+ * 系统侧边/预测返回落在 Dialog 自己的 NavigationEventDispatcher 上；若不重绑，
+ * handler 会挂在底层 Activity/路由 dispatcher，侧滑无法关闭弹层（点 scrim 仍可关）。
+ */
+@Composable
+private fun ModalSheetNavigationHost(
+    dismissOnBackPress: Boolean,
+    onDismissRequest: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val owner = LocalView.current.findViewTreeNavigationEventDispatcherOwner()
+    val host: @Composable () -> Unit = {
+        val backState = rememberNavigationEventState(NavigationEventInfo.None)
+        NavigationBackHandler(
+            state = backState,
+            isBackEnabled = dismissOnBackPress,
+            onBackCompleted = onDismissRequest,
+        )
+        content()
+    }
+    if (owner == null) {
+        host()
+    } else {
+        CompositionLocalProvider(LocalNavigationEventDispatcherOwner provides owner) {
+            host()
+        }
+    }
+}
+
+/**
  * App 通用模态弹层 facade。紧凑窗口使用底部弹层，Medium 及以上使用限宽居中弹层。
  *
  * 使用 Material3 ModalBottomSheet 作为中性宿主：即使宿主契约
@@ -189,6 +227,10 @@ internal fun bottomSheetContentExitTransition(
  * （仅 AdaptiveScaffold 的 MIUIX 模式挂载），而本 facade 的调用点无法保证处于该
  * 宿主之下。需要 Miuix overlay 宿主的场景由宿主感知 facade 消费
  * [resolveBottomSheetHost]。两值风格在此仅做视觉区分（容器色、圆角、拖拽条、动效）。
+ *
+ * 返回：由 [ModalSheetNavigationHost] 在 Dialog 窗口处理侧边/预测返回与 back；
+ * Dialog 默认 dismissOnBackPress 关闭以避免双触发。调用方仍可传
+ * `dismissOnBackPress = false` 自行接管（如评论楼中楼）。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -243,35 +285,42 @@ fun AppModalBottomSheet(
     }.let { color ->
         color.copy(alpha = color.alpha * progressVisual.surfaceAlphaMultiplier)
     }
+    // 返回统一走 ModalSheetNavigationHost（Dialog 窗口 NavigationBackHandler），
+    // 关闭 Dialog 默认 dismissOnBackPress，避免侧边返回与 back 双触发。
     if (layoutSpec.presentation == AppModalPresentation.CenteredDialog) {
         Dialog(
             onDismissRequest = onDismissRequest,
             properties = DialogProperties(
-                dismissOnBackPress = dismissOnBackPress,
+                dismissOnBackPress = false,
                 usePlatformDefaultWidth = false,
                 decorFitsSystemWindows = false,
             ),
         ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
+            ModalSheetNavigationHost(
+                dismissOnBackPress = dismissOnBackPress,
+                onDismissRequest = onDismissRequest,
             ) {
-                AppPopupSurface(
-                    type = AppPopupSurfaceType.SHEET,
-                    modifier = Modifier
-                        .widthIn(max = layoutSpec.maxWidthDp.dp)
-                        .heightIn(
-                            max = (configuration.screenHeightDp *
-                                layoutSpec.maxHeightFraction).dp
-                        )
-                        .then(modifier)
-                        .fillMaxWidth(),
-                    shape = centeredSheetShape,
-                    containerColor = resolvedContainerColor,
-                    contentColor = contentColor,
-                    tonalElevation = tonalElevation,
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Column(content = content)
+                    AppPopupSurface(
+                        type = AppPopupSurfaceType.DIALOG,
+                        modifier = Modifier
+                            .widthIn(max = layoutSpec.maxWidthDp.dp)
+                            .heightIn(
+                                max = (configuration.screenHeightDp *
+                                    layoutSpec.maxHeightFraction).dp
+                            )
+                            .then(modifier)
+                            .fillMaxWidth(),
+                        shape = centeredSheetShape,
+                        containerColor = resolvedContainerColor,
+                        contentColor = contentColor,
+                        tonalElevation = tonalElevation,
+                    ) {
+                        Column(content = content)
+                    }
                 }
             }
         }
@@ -281,7 +330,7 @@ fun AppModalBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
         sheetState = sheetState,
-        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = dismissOnBackPress),
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false),
         shape = sheetShape,
         containerColor = Color.Transparent,
         contentColor = contentColor,
@@ -290,24 +339,29 @@ fun AppModalBottomSheet(
         dragHandle = null,
         contentWindowInsets = { windowInsets },
         content = {
-            AppPopupSurface(
-                type = AppPopupSurfaceType.SHEET,
-                modifier = Modifier.fillMaxWidth(),
-                shape = sheetShape,
-                containerColor = resolvedContainerColor,
-                contentColor = contentColor,
-                tonalElevation = tonalElevation,
+            ModalSheetNavigationHost(
+                dismissOnBackPress = dismissOnBackPress,
+                onDismissRequest = onDismissRequest,
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    if (dragHandle != null) {
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            dragHandle()
+                AppPopupSurface(
+                    type = AppPopupSurfaceType.SHEET,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = sheetShape,
+                    containerColor = resolvedContainerColor,
+                    contentColor = contentColor,
+                    tonalElevation = tonalElevation,
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        if (dragHandle != null) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                dragHandle()
+                            }
                         }
+                        content()
                     }
-                    content()
                 }
             }
         }

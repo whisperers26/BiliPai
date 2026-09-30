@@ -57,10 +57,12 @@ data class BottomBarUiSkinDecoration(
     @Suppress("UNUSED_PARAMETER")
     fun iconPathFor(item: BottomNavItem, selected: Boolean = false): String? {
         val paths = bottomBarIconPaths[item] ?: return null
-        // Keep each destination visually stable. Some archived skins use a completely
-        // different illustration for the selected asset, which reads as a random icon swap
-        // in BiliPai where the moving indicator already communicates selection.
+        // Compact navigation keeps a stable icon while the host indicator moves.
         return paths.unselected
+    }
+
+    fun illustratedIconPathFor(item: BottomNavItem, selected: Boolean): String? {
+        return bottomBarIconPaths[item]?.pathFor(selected)
     }
 }
 
@@ -144,6 +146,22 @@ data class HomeUiSkinDecoration(
         return topTabPartitionSkinIconPaths?.pathFor(selected)
     }
 }
+
+internal fun shouldUseIllustratedSkinBottomBar(
+    hasBackground: Boolean,
+    hasIcons: Boolean,
+    isTablet: Boolean,
+): Boolean = hasBackground && hasIcons && !isTablet
+
+internal fun BottomBarUiSkinDecoration?.usesIllustratedNavigation(isTablet: Boolean): Boolean =
+    shouldUseIllustratedSkinBottomBar(
+        hasBackground = !this?.bottomTrimImagePath.isNullOrBlank(),
+        hasIcons = this?.bottomBarIconPaths?.isNotEmpty() == true,
+        isTablet = isTablet,
+    )
+
+internal fun resolveIllustratedSkinIconSize(slotWidth: Dp): Dp =
+    (slotWidth - 8.dp).coerceIn(24.dp, 52.dp)
 
 internal fun resolveBottomBarSkinDockIconSize(): Dp = AppSpacingTokens.DoubleExtraLarge
 

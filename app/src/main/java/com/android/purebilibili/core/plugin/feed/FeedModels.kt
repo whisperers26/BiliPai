@@ -55,4 +55,5 @@ sealed interface FeedBlock {
 data class FeedLoadSnapshot(
     val items: List<ParsedFeedItem>,
     val errors: List<String>,
+    val validators: Map<String, FeedConditionalValidators> = emptyMap(),
 )

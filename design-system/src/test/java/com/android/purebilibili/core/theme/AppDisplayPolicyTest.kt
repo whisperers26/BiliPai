@@ -13,9 +13,28 @@ class AppDisplayPolicyTest {
 
     @Test
     fun `font preset resolves expected multiplier`() {
+        assertEquals(0.85f, AppFontSizePreset.SMALLEST.multiplier)
         assertEquals(0.92f, AppFontSizePreset.SMALLER.multiplier)
         assertEquals(1.00f, AppFontSizePreset.DEFAULT.multiplier)
         assertEquals(1.08f, AppFontSizePreset.LARGER.multiplier)
+        assertEquals(1.15f, AppFontSizePreset.EXTRA_LARGE.multiplier)
+        assertEquals(1.25f, AppFontSizePreset.EXTRA_EXTRA_LARGE.multiplier)
+    }
+
+    @Test
+    fun `font preset values stay stable for persisted preferences`() {
+        // 旧档 value 0-4 不能漂移,存量偏好按 value 匹配。
+        assertEquals(0, AppFontSizePreset.SMALLER.value)
+        assertEquals(1, AppFontSizePreset.SMALL.value)
+        assertEquals(2, AppFontSizePreset.DEFAULT.value)
+        assertEquals(3, AppFontSizePreset.LARGE.value)
+        assertEquals(4, AppFontSizePreset.LARGER.value)
+        assertEquals(5, AppFontSizePreset.SMALLEST.value)
+        assertEquals(6, AppFontSizePreset.EXTRA_LARGE.value)
+        assertEquals(7, AppFontSizePreset.EXTRA_EXTRA_LARGE.value)
+        // 枚举声明顺序决定设置页段控件顺序,必须按倍率单调排列。
+        val multipliers = AppFontSizePreset.entries.map { it.multiplier }
+        assertEquals(multipliers, multipliers.sorted())
     }
 
     @Test
@@ -105,5 +124,9 @@ class AppDisplayPolicyTest {
         assertEquals(Md3Typography.bodySmall, textStyles.body2)
         assertEquals(Md3Typography.labelLarge, textStyles.button)
         assertEquals(Md3Typography.titleMedium, textStyles.headline1)
+        assertEquals(Md3Typography.displayLarge, textStyles.title1)
+        assertEquals(Md3Typography.headlineLarge, textStyles.title2)
+        assertEquals(Md3Typography.headlineMedium, textStyles.title3)
+        assertEquals(Md3Typography.headlineSmall, textStyles.title4)
     }
 }

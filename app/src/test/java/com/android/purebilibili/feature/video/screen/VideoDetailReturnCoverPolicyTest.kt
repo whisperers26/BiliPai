@@ -61,9 +61,10 @@ class VideoDetailReturnCoverPolicyTest {
     }
 
     @Test
-    fun nowPlayingBarRevealsItsChromeDuringReturnWithoutChangingOpening() {
+    fun nowPlayingBarChromeFollowsStandardWindowWithoutChangingOpening() {
+        // 返回中段（壳仍接近详情尺寸）小横条 chrome 不显现，避免巨字穿帮。
         assertEquals(
-            1f,
+            0f,
             resolveVideoDetailFlyingSourceChromeAlpha(
                 morphDepthProgress = 0.7f,
                 phase = VideoCardTransitionBackgroundPhase.RETURNING,
@@ -73,17 +74,33 @@ class VideoDetailReturnCoverPolicyTest {
             ),
             0.001f,
         )
+        // 落位窗口（settle 0.9）chrome 交接一半，与源卡 chrome 同步。
         assertEquals(
-            0f,
+            0.5f,
             resolveVideoDetailFlyingSourceChromeAlpha(
-                morphDepthProgress = 0.7f,
-                phase = VideoCardTransitionBackgroundPhase.OPENING,
+                morphDepthProgress = 0.1f,
+                phase = VideoCardTransitionBackgroundPhase.RETURNING,
                 isReturnGestureInProgress = false,
                 sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
                 isNowPlayingBar = true,
             ),
             0.001f,
         )
+        // Opening 行为与普通卡片一致（不做特殊化）。
+        val openingBar = resolveVideoDetailFlyingSourceChromeAlpha(
+            morphDepthProgress = 0.7f,
+            phase = VideoCardTransitionBackgroundPhase.OPENING,
+            isReturnGestureInProgress = false,
+            sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+            isNowPlayingBar = true,
+        )
+        val openingCard = resolveVideoDetailFlyingSourceChromeAlpha(
+            morphDepthProgress = 0.7f,
+            phase = VideoCardTransitionBackgroundPhase.OPENING,
+            isReturnGestureInProgress = false,
+            sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+        )
+        assertEquals(openingCard, openingBar, 0.0001f)
     }
 
     @Test

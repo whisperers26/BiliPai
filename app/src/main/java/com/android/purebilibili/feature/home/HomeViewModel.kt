@@ -353,6 +353,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var livePage = 1     //  直播分页
     private var hasMoreLiveData = true  //  是否还有更多直播数据
     private var incrementalTimelineRefreshEnabled = false
+
+    // 「上次刷新提示」开启时推荐流刷新也保留旧内容（独立于增量时间线开关）。
+    private var homeRefreshTipVisible = true
     
     //  [新增] 刷新撤销快照
     private var _undoSnapshot: HomeRefreshUndoSnapshot? = null
@@ -384,6 +387,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             SettingsManager.getIncrementalTimelineRefresh(getApplication()).collect { enabled ->
                 incrementalTimelineRefreshEnabled = enabled
+            }
+        }
+        viewModelScope.launch {
+            SettingsManager.getHomeRefreshTipVisible(getApplication()).collect { visible ->
+                homeRefreshTipVisible = visible
             }
         }
         // Monitor blocked list
@@ -1226,14 +1234,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 refreshingCategory = refreshingCategory,
                 snapshot = _undoSnapshot
             )
+            val stateRefreshKey = System.currentTimeMillis()
             _uiState.value = _uiState.value.copy(
-                refreshKey = System.currentTimeMillis(),
+                refreshKey = stateRefreshKey,
                 refreshMessage = refreshMessage,
                 refreshNewItemsCount = newItemsCount,
-                refreshNewItemsKey = if (newItemsCount != null) System.currentTimeMillis() else _uiState.value.refreshNewItemsKey,
+                refreshNewItemsKey = if (newItemsCount != null) stateRefreshKey else _uiState.value.refreshNewItemsKey,
                 recommendOldContentAnchorBvid = newAnchor,
                 recommendOldContentStartIndex = newBoundary,
-                recommendOldContentRevealKey = if (refreshingCategory == HomeCategory.RECOMMEND) 0L else _uiState.value.recommendOldContentRevealKey,
+                // 对齐 PiliPlus：刷新完成横幅即在列表中就位（它本身位于新旧内容分界，
+                // 只有滑到那里才可见），不再依赖下滑触发的 reveal 检测。
+                recommendOldContentRevealKey = if (
+                    refreshingCategory == HomeCategory.RECOMMEND && newAnchor != null && (newItemsCount ?: 0) > 0
+                ) {
+                    stateRefreshKey
+                } else if (refreshingCategory == HomeCategory.RECOMMEND) {
+                    0L
+                } else {
+                    _uiState.value.recommendOldContentRevealKey
+                },
                 //  刷新成功且是推荐分类时标记可撤销
                 undoAvailable = undoAvailable
             )
@@ -1491,7 +1510,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             
             val useIncrementalRecommendRefresh = !isLoadMore &&
                 currentCategory == HomeCategory.RECOMMEND &&
-                incrementalTimelineRefreshEnabled
+                (incrementalTimelineRefreshEnabled || homeRefreshTipVisible)
 
             val incomingVideos = selectHomeFeedIncomingVideos(
                 responseVideos = filteredVideos,
@@ -1508,7 +1527,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         useIncrementalRecommendRefresh -> {
                             val merged = prependDistinctByKey(oldState.videos, incomingVideos, ::videoItemKey)
                             addedCount = (merged.size - oldState.videos.size).coerceAtLeast(0)
-                            merged.toImmutableList()
+                            val keptOldCount = resolveHomeRefreshKeptOldItemCount(oldState.videos.size)
+                            if (keptOldCount < oldState.videos.size) {
+                                merged.take(addedCount + keptOldCount).toImmutableList()
+                            } else {
+                                merged.toImmutableList()
+                            }
                         }
                         else -> incomingVideos.toImmutableList()
                     }

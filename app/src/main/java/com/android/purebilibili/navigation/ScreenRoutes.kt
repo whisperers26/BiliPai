@@ -30,9 +30,14 @@ sealed class ScreenRoutes(val route: String) {
     object History : ScreenRoutes("history")
     object Favorite : ScreenRoutes("favorite")
     object LikedVideos : ScreenRoutes("liked_videos") {
-        fun createRoute(mid: Long = 0L, ownerName: String = ""): String {
+        fun createRoute(
+            mid: Long = 0L,
+            ownerName: String = "",
+            isCoinArchive: Boolean = false,
+        ): String {
             return if (mid > 0L) {
-                "liked_videos?mid=$mid&ownerName=${encodeUrlComponentCompat(ownerName)}"
+                val archiveType = if (isCoinArchive) "&type=coin" else ""
+                "liked_videos?mid=$mid&ownerName=${encodeUrlComponentCompat(ownerName)}$archiveType"
             } else {
                 "liked_videos"
             }

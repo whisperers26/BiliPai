@@ -90,7 +90,7 @@ internal fun resolveSelectedCacheSizeSummary(
     breakdown: CacheUtils.CacheBreakdown?,
     selectedTargets: Set<CacheClearTarget> = resolveDefaultCacheClearTargets()
 ): String {
-    if (breakdown == null) return "已选缓存：计算中..."
+    if (breakdown == null) return "已选缓存：计算中…"
     val selectedBytes = resolveSelectedCacheBytes(
         breakdown = breakdown,
         selectedTargets = selectedTargets

@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -55,8 +56,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
@@ -163,16 +167,23 @@ internal fun HomeHeroCarousel(
         }
         val carouselWidth = carouselLayout.widthDp.dp
         val aspectRatio = carouselLayout.aspectRatio
+        val carouselHeight = carouselWidth / aspectRatio
+        // 封面流布局：pager 占满整行，用 contentPadding 让两侧邻卡露边折向中心。
+        val horizontalPeekPadding = ((maxWidth - carouselWidth) / 2).coerceAtLeast(0.dp)
+        // 卡片下方镜面倒影高度（真实封面镜像，随距离渐隐）。
+        val reflectionHeight = carouselHeight * 0.10f
         HorizontalPager(
             state = pagerState,
             key = { page ->
                 resolveHomeHeroCarouselItemKey(videos, page, VideoItem::bvid)
             },
+            pageSpacing = 10.dp,
             userScrollEnabled = false,
             beyondViewportPageCount = 1,
+            contentPadding = PaddingValues(horizontal = horizontalPeekPadding),
             modifier = Modifier
-                .width(carouselWidth)
-                .aspectRatio(aspectRatio)
+                .fillMaxWidth()
+                .height(carouselHeight + reflectionHeight)
                 .align(Alignment.Center)
                 .verticalPriorityHorizontalPagerSwipe(
                     state = pagerState,
@@ -198,14 +209,50 @@ internal fun HomeHeroCarousel(
             val activeForPlayback = autoplayEnabled &&
                 pagerState.currentPage == page &&
                 pageOffset.absoluteValue < 0.12f
-            HomeHeroCarouselCard(
-                video = video,
-                transform = transform,
-                activeForPlayback = activeForPlayback,
-                aspectRatio = aspectRatio,
-                onVideoClick = { onVideoClick(video) },
-                onGetPreviewUrl = onGetPreviewUrl
-            )
+            Column {
+                HomeHeroCarouselCard(
+                    video = video,
+                    transform = transform,
+                    activeForPlayback = activeForPlayback,
+                    aspectRatio = aspectRatio,
+                    onVideoClick = { onVideoClick(video) },
+                    onGetPreviewUrl = onGetPreviewUrl
+                )
+                // 地面镜面倒影：镜像封面，向下渐隐（视频预览不参与，保持轻量）。
+                val normalizedReflectionUrl = remember(video.pic) { FormatUtils.fixImageUrl(video.pic) }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(reflectionHeight)
+                        .graphicsLayer {
+                            scaleY = -1f
+                            alpha = (1f - pageOffset.absoluteValue * 0.5f).coerceIn(0f, 1f) * 0.9f
+                            compositingStrategy = CompositingStrategy.Offscreen
+                        }
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    0f to Color.White.copy(alpha = 0.9f),
+                                    0.55f to Color.White.copy(alpha = 0.30f),
+                                    1f to Color.White.copy(alpha = 0.02f),
+                                ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        }
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(normalizedReflectionUrl)
+                            .crossfade(false)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxWidth(),
+                        alpha = 0.30f,
+                    )
+                }
+            }
         }
 
         if (videos.size > 1) {
@@ -421,7 +468,9 @@ private fun HomeHeroCarouselCard(
             .then(nativeCardSnapshot.modifier)
             .graphicsLayer {
                 transformOrigin = TransformOrigin(transform.pivotFractionX, 0.5f)
+                cameraDistance = transform.cameraDistanceMultiplier * density.density
                 translationX = transform.translationXFraction * size.width
+                rotationY = transform.rotationY
                 val pressMultiplier = 1f - pressProgress * 0.02f
                 scaleX = transform.scale * pressMultiplier
                 scaleY = transform.scale * pressMultiplier

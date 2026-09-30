@@ -1444,18 +1444,23 @@ private fun getMessageTypeName(msgType: Int): String {
     }
 }
 
+// 会话列表组合期热路径：共享 formatter，避免每行每帧新建 SimpleDateFormat。
+// 仅主线程（Compose 组合）调用，不涉及 SimpleDateFormat 的线程安全问题。
+private val chatTimeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
+private val chatDateTimeFormatter = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+
 /**
  * 格式化消息时间
  */
 private fun formatMessageTime(timestamp: Long): String {
     if (timestamp == 0L) return ""
-    
+
     val now = Calendar.getInstance()
     val msgTime = Calendar.getInstance().apply { timeInMillis = timestamp * 1000 }
-    
+
     val sameDay = now.get(Calendar.YEAR) == msgTime.get(Calendar.YEAR) &&
             now.get(Calendar.DAY_OF_YEAR) == msgTime.get(Calendar.DAY_OF_YEAR)
-    
-    val pattern = if (sameDay) "HH:mm" else "MM-dd HH:mm"
-    return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(timestamp * 1000))
+
+    val formatter = if (sameDay) chatTimeFormatter else chatDateTimeFormatter
+    return formatter.format(Date(timestamp * 1000))
 }

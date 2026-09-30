@@ -139,7 +139,7 @@ internal fun resolveHomeTopPresetStyle(
                 presentation = chromePolicy.tabPresentation,
                 indicatorStyle = TopTabIndicatorStyle.CAPSULE,
                 search = HomeTopSearchStyle(
-                    barHeight = 48.dp,
+                    barHeight = compactChrome.primaryHeightDp.dp,
                     revealDeadZone = 8.dp,
                     rowHorizontalPadding = 14.dp,
                     pillHeight = compactChrome.primaryHeightDp.dp,
@@ -200,7 +200,7 @@ internal fun resolveHomeTopPresetStyle(
                 presentation = AppTopTabPresentation.MATERIAL_UNDERLINE,
                 indicatorStyle = TopTabIndicatorStyle.MATERIAL,
                 search = HomeTopSearchStyle(
-                    barHeight = 48.dp,
+                    barHeight = compactChrome.primaryHeightDp.dp,
                     revealDeadZone = 0.dp,
                     rowHorizontalPadding = 14.dp,
                     pillHeight = compactChrome.primaryHeightDp.dp,
@@ -259,7 +259,7 @@ internal fun resolveHomeTopPresetStyle(
                 presentation = chromePolicy.tabPresentation,
                 indicatorStyle = TopTabIndicatorStyle.MATERIAL,
                 search = HomeTopSearchStyle(
-                    barHeight = 48.dp,
+                    barHeight = compactChrome.primaryHeightDp.dp,
                     revealDeadZone = 0.dp,
                     rowHorizontalPadding = 16.dp,
                     pillHeight = compactChrome.primaryHeightDp.dp,

@@ -79,7 +79,7 @@ internal fun BiliPaiNavKey.toLegacyRoute(): String {
         is BiliPaiNavKey.FavoriteSearch ->
             "favorite_search?query=${encodeRouteValue(query)}&scope=${scope.name}"
         is BiliPaiNavKey.LikedVideos -> if (mid > 0L) {
-            ScreenRoutes.LikedVideos.createRoute(mid, ownerName)
+            ScreenRoutes.LikedVideos.createRoute(mid, ownerName, isCoinArchive)
         } else {
             ScreenRoutes.LikedVideos.route
         }
@@ -88,6 +88,10 @@ internal fun BiliPaiNavKey.toLegacyRoute(): String {
         is BiliPaiNavKey.WatchLaterSearch -> "watch_later_search?query=${encodeRouteValue(query)}"
         BiliPaiNavKey.Onboarding -> ScreenRoutes.Onboarding.route
         is BiliPaiNavKey.Following -> ScreenRoutes.Following.createRoute(mid)
+        is BiliPaiNavKey.UpowerRank -> "upower_rank?mid=${mid}&name=${encodeRouteValue(name)}&count=$count"
+        BiliPaiNavKey.UpowerRank -> "upower_rank"
+        is BiliPaiNavKey.MemberGuard -> "member_guard?mid=${mid}&name=${encodeRouteValue(name)}&count=$count"
+        BiliPaiNavKey.MemberGuard -> "member_guard"
         BiliPaiNavKey.DownloadList -> ScreenRoutes.DownloadList.route
         is BiliPaiNavKey.OfflineVideoPlayer -> ScreenRoutes.OfflineVideoPlayer.createRoute(taskId)
         BiliPaiNavKey.LiveList -> ScreenRoutes.LiveList.route
@@ -225,8 +229,13 @@ internal fun legacyRouteToBiliPaiNavKey(route: String?): BiliPaiNavKey {
         routeBase == ScreenRoutes.LikedVideos.route || normalized == ScreenRoutes.LikedVideos.route -> {
             val mid = query["mid"]?.toLongOrNull() ?: 0L
             val ownerName = query["ownerName"].orEmpty()
+            val isCoinArchive = query["type"].equals("coin", ignoreCase = true)
             if (mid > 0L) {
-                BiliPaiNavKey.LikedVideos(mid = mid, ownerName = ownerName)
+                BiliPaiNavKey.LikedVideos(
+                    mid = mid,
+                    ownerName = ownerName,
+                    isCoinArchive = isCoinArchive,
+                )
             } else {
                 BiliPaiNavKey.LikedVideos
             }
@@ -237,6 +246,16 @@ internal fun legacyRouteToBiliPaiNavKey(route: String?): BiliPaiNavKey {
         segments.firstOrNull() == "following" && segments.size >= 2 -> {
             BiliPaiNavKey.Following(mid = segments[1].toLongOrNull() ?: 0L)
         }
+        routeBase == "upower_rank" -> BiliPaiNavKey.UpowerRank(
+            mid = query["mid"]?.toLongOrNull() ?: 0L,
+            name = query["name"].orEmpty(),
+            count = query["count"]?.toLongOrNull() ?: 0L,
+        )
+        routeBase == "member_guard" -> BiliPaiNavKey.MemberGuard(
+            mid = query["mid"]?.toLongOrNull() ?: 0L,
+            name = query["name"].orEmpty(),
+            count = query["count"]?.toLongOrNull() ?: 0L,
+        )
         normalized == ScreenRoutes.DownloadList.route -> BiliPaiNavKey.DownloadList
         segments.firstOrNull() == "offline_video" && segments.size >= 2 -> {
             BiliPaiNavKey.OfflineVideoPlayer(taskId = decodeRouteValue(segments[1]))

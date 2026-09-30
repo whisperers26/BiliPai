@@ -8,6 +8,7 @@ import com.android.purebilibili.core.util.Logger
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.calculateZoom
@@ -83,7 +84,13 @@ fun MiniPlayerOverlay(
     miniPlayerManager: MiniPlayerManager,
     onExpandClick: () -> Unit,
     onPictureInPictureClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * 系统 PIP 期间保持本 overlay 挂载但渲染空占位：视频 surface 让位给专用
+     * PIP 渲染面，同时 AnimatedVisibility 不经历 exit/enter，退出 PIP 时
+     * 迷你播放器不再重放飞入动画。
+     */
+    suppressContentForPip: Boolean = false,
 ) {
     val clearIcon = rememberAppClearIcon()
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -328,6 +335,12 @@ fun MiniPlayerOverlay(
         offsetY = clamped.y
     }
 
+    // X 轴速度注入状态：声明须先于 snapMiniPlayerToNearestHorizontalEdge
+    // 等局部函数，Kotlin 局部函数不能前向引用局部 val。
+    val offsetXAnimatable = remember { Animatable(targetOffsetX) }
+    var pendingSnapVelocityX by remember { mutableFloatStateOf(0f) }
+    val dragVelocityTracker = remember { VelocityTracker() }
+
     fun snapMiniPlayerToNearestHorizontalEdge() {
         offsetX = if (offsetX < screenWidthPx / 2 - miniPlayerWidthPx / 2) {
             paddingPx
@@ -335,6 +348,12 @@ fun MiniPlayerOverlay(
             screenWidthPx - miniPlayerWidthPx - paddingPx
         }
         clampCurrentOffset()
+    }
+
+    /** 读取累积的手势速度并转交给 X 轴贴边动画，随后清空累积。 */
+    fun handOffDragVelocityToSnapAnimation() {
+        pendingSnapVelocityX = dragVelocityTracker.calculateVelocity().x
+        dragVelocityTracker.resetTracking()
     }
 
     LaunchedEffect(
@@ -346,15 +365,27 @@ fun MiniPlayerOverlay(
         clampCurrentOffset()
     }
 
-    val animatedOffsetX by animateFloatAsState(
-        targetValue = targetOffsetX,
-        animationSpec = if (isDraggingPosition || isResizing || reduceMotion) {
-            snap()
+    LaunchedEffect(
+        targetOffsetX,
+        isDraggingPosition,
+        isResizing,
+        isStashed,
+        reduceMotion
+    ) {
+        if (isDraggingPosition || isResizing || reduceMotion) {
+            offsetXAnimatable.snapTo(targetOffsetX)
+            pendingSnapVelocityX = 0f
         } else {
-            spring(dampingRatio = 1f, stiffness = Spring.StiffnessMedium)
-        },
-        label = "offsetX"
-    )
+            val initialVelocity = pendingSnapVelocityX
+            pendingSnapVelocityX = 0f
+            offsetXAnimatable.animateTo(
+                targetValue = targetOffsetX,
+                animationSpec = spring(dampingRatio = 1f, stiffness = Spring.StiffnessMedium),
+                initialVelocity = initialVelocity,
+            )
+        }
+    }
+    val animatedOffsetX = offsetXAnimatable.value
     val animatedOffsetY by animateFloatAsState(
         targetValue = targetOffsetY,
         animationSpec = if (isDraggingPosition || isResizing || reduceMotion) {
@@ -364,6 +395,26 @@ fun MiniPlayerOverlay(
         },
         label = "offsetY"
     )
+
+    // 回报小窗屏幕边界，供 PIP sourceRectHint 做无缝过渡。
+    LaunchedEffect(
+        animatedOffsetX,
+        animatedOffsetY,
+        miniPlayerWidthPx,
+        miniPlayerHeightPx,
+        suppressContentForPip
+    ) {
+        miniPlayerManager.miniPlayerSourceBoundsPx = if (suppressContentForPip) {
+            null
+        } else {
+            android.graphics.Rect(
+                animatedOffsetX.roundToInt(),
+                animatedOffsetY.roundToInt(),
+                (animatedOffsetX + miniPlayerWidthPx).roundToInt(),
+                (animatedOffsetY + miniPlayerHeightPx).roundToInt(),
+            )
+        }
+    }
 
     val visibilitySlideSpec: FiniteAnimationSpec<IntOffset> =
         iosMorphTween(MINI_PLAYER_VISIBILITY_DURATION_MILLIS)
@@ -402,7 +453,7 @@ fun MiniPlayerOverlay(
         exit = exitTransition,
             modifier = modifier.zIndex(100f)
     ) {
-        if (isStashed) {
+        if (isStashed && !suppressContentForPip) {
             // [新增] 贴边隐藏的小胶囊视图
             StashedMiniPlayerView(
                 modifier = Modifier
@@ -431,6 +482,9 @@ fun MiniPlayerOverlay(
                     )
                 }
             )
+        } else if (suppressContentForPip) {
+            // PIP 占位：保持组合与可见状态，不渲染视频 surface 和控件。
+            Box(modifier = Modifier.fillMaxSize())
         } else {
             // 正常播放器视图
             val miniPlayerCornerRadius = shellVisual.cardCornerRadiusDp.dp
@@ -511,6 +565,7 @@ fun MiniPlayerOverlay(
                                         dragProgressStartPosition = currentPosition.coerceAtLeast(0L)
                                         showControls = true
                                         lastInteractionTime = System.currentTimeMillis()
+                                        dragVelocityTracker.resetTracking()
                                     },
                                     onDragEnd = {
                                         when (contentDragIntent) {
@@ -527,10 +582,12 @@ fun MiniPlayerOverlay(
                                                 isDraggingProgress = false
                                                 dragProgressDelta = 0f
                                                 dragProgressStartPosition = 0L
+                                                dragVelocityTracker.resetTracking()
                                                 lastInteractionTime = System.currentTimeMillis()
                                             }
                                             MiniPlayerContentDragIntent.MOVE -> {
                                                 isDraggingPosition = false
+                                                handOffDragVelocityToSnapAnimation()
                                                 snapMiniPlayerToNearestHorizontalEdge()
                                                 lastInteractionTime = System.currentTimeMillis()
                                             }
@@ -545,6 +602,7 @@ fun MiniPlayerOverlay(
                                         isDraggingPosition = false
                                         dragProgressDelta = 0f
                                         dragProgressStartPosition = 0L
+                                        dragVelocityTracker.resetTracking()
                                         lastInteractionTime = System.currentTimeMillis()
                                         contentDragIntent = MiniPlayerContentDragIntent.UNDECIDED
                                         contentDragTotalX = 0f
@@ -552,6 +610,7 @@ fun MiniPlayerOverlay(
                                     },
                                     onDrag = { change, dragAmount ->
                                         change.consume()
+                                        dragVelocityTracker.addPosition(change.uptimeMillis, change.position)
                                         contentDragTotalX += dragAmount.x
                                         contentDragTotalY += dragAmount.y
                                         if (contentDragIntent == MiniPlayerContentDragIntent.UNDECIDED) {
@@ -616,18 +675,22 @@ fun MiniPlayerOverlay(
                                     isDraggingPosition = true
                                     showControls = true
                                     lastInteractionTime = System.currentTimeMillis()
+                                    dragVelocityTracker.resetTracking()
                                 },
                                 onDragEnd = {
                                     isDraggingPosition = false
+                                    handOffDragVelocityToSnapAnimation()
                                     snapMiniPlayerToNearestHorizontalEdge()
                                     lastInteractionTime = System.currentTimeMillis()
                                 },
                                 onDragCancel = {
                                     isDraggingPosition = false
+                                    dragVelocityTracker.resetTracking()
                                     lastInteractionTime = System.currentTimeMillis()
                                 },
                                 onDrag = { change, dragAmount ->
                                     change.consume()
+                                    dragVelocityTracker.addPosition(change.uptimeMillis, change.position)
                                     moveMiniPlayerBy(dragAmount.x, dragAmount.y)
                                 }
                             )

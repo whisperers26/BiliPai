@@ -23,6 +23,7 @@ import com.android.purebilibili.core.store.resolveLegacyLiquidGlassMode
 import com.android.purebilibili.core.store.normalizeAppIconKey
 import com.android.purebilibili.core.store.resolveAppIconLauncherAlias
 import com.android.purebilibili.core.store.supportsAppIconAppearance
+import com.android.purebilibili.core.theme.AppFontWeightPreset
 import com.android.purebilibili.core.theme.AppFontSizePreset
 import com.android.purebilibili.core.theme.AppUiScalePreset
 import com.android.purebilibili.core.theme.AppUiStyle
@@ -72,8 +73,9 @@ data class SettingsUiState(
     val md3ColorSource: Md3ColorSource = Md3ColorSource.FOLLOW_WALLPAPER,
     val md3CustomColorHex: String = "#007AFF",
     val colorStyle: PaletteStyle = PaletteStyle.TonalSpot,
-    val colorSpec: ColorSpec.SpecVersion = ColorSpec.SpecVersion.SPEC_2021,
+    val colorSpec: ColorSpec.SpecVersion = ColorSpec.SpecVersion.SPEC_2025,
     val appFontSizePreset: AppFontSizePreset = AppFontSizePreset.DEFAULT,
+    val appFontWeightPreset: AppFontWeightPreset = AppFontWeightPreset.FOLLOW_THEME,
     val appFontFileName: String = "",
     val appFontDisplayName: String = "",
     val appUiScalePreset: AppUiScalePreset = AppUiScalePreset.STANDARD,
@@ -98,7 +100,7 @@ data class SettingsUiState(
     val videoSharedTransitionCustomDurationMillis: Int =
         VIDEO_SHARED_TRANSITION_CUSTOM_DEFAULT_MILLIS,
     val smartVisualGuardEnabled: Boolean = false, // [Retired] 智能流畅优先已下线
-    val cacheSize: String = "计算中...",
+    val cacheSize: String = "计算中…",
     val cacheBreakdown: CacheUtils.CacheBreakdown? = null,  //  详细缓存统计
     val installedApkSha256: String? = null,
     val currentReleaseEvidence: AppUpdateCheckResult? = null,
@@ -160,6 +162,7 @@ data class ExtraSettings(
     val appIconStyle: AppIconStyle,
     val appListItemStyle: AppListItemStyle,
     val appFontSizePreset: AppFontSizePreset,
+    val appFontWeightPreset: AppFontWeightPreset,
     val appFontFileName: String,
     val appFontDisplayName: String,
     val appUiScalePreset: AppUiScalePreset,
@@ -229,6 +232,7 @@ private data class BaseSettings(
     val colorStyle: PaletteStyle,
     val colorSpec: ColorSpec.SpecVersion,
     val appFontSizePreset: AppFontSizePreset,
+    val appFontWeightPreset: AppFontWeightPreset,
     val appFontFileName: String,
     val appFontDisplayName: String,
     val appUiScalePreset: AppUiScalePreset,
@@ -311,6 +315,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val appIconStyle: AppIconStyle,
         val appListItemStyle: AppListItemStyle,
         val appFontSizePreset: AppFontSizePreset,
+        val appFontWeightPreset: AppFontWeightPreset,
         val appFontFileName: String,
         val appFontDisplayName: String,
         val appUiScalePreset: AppUiScalePreset,
@@ -318,7 +323,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     )
 
     // 本地状态流：缓存大小
-    private val _cacheSize = MutableStateFlow("计算中...")
+    private val _cacheSize = MutableStateFlow("计算中…")
     private val _cacheBreakdown = MutableStateFlow<CacheUtils.CacheBreakdown?>(null)
     private val _diagnosticsState = MutableStateFlow(DiagnosticsState())
     private var diagnosticsLoadJob: Job? = null
@@ -363,6 +368,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         SettingsManager.getAppIconStyle(context).asAnyFlow(),
         SettingsManager.getAppListItemStyle(context).asAnyFlow(),
         SettingsManager.getAppFontSizePreset(context).asAnyFlow(),
+        SettingsManager.getAppFontWeightPreset(context).asAnyFlow(),
         SettingsManager.getAppFontFileName(context).asAnyFlow(),
         SettingsManager.getAppFontDisplayName(context).asAnyFlow(),
         SettingsManager.getAppUiScalePreset(context).asAnyFlow(),
@@ -375,10 +381,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             appIconStyle = values[3] as AppIconStyle,
             appListItemStyle = values[4] as AppListItemStyle,
             appFontSizePreset = values[5] as AppFontSizePreset,
-            appFontFileName = values[6] as String,
-            appFontDisplayName = values[7] as String,
-            appUiScalePreset = values[8] as AppUiScalePreset,
-            appDpiOverridePercent = values[9] as Int
+            appFontWeightPreset = values[6] as AppFontWeightPreset,
+            appFontFileName = values[7] as String,
+            appFontDisplayName = values[8] as String,
+            appUiScalePreset = values[9] as AppUiScalePreset,
+            appDpiOverridePercent = values[10] as Int
         )
     }
     
@@ -497,6 +504,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             appIconStyle = ui1.appIconStyle,
             appListItemStyle = ui1.appListItemStyle,
             appFontSizePreset = ui1.appFontSizePreset,
+            appFontWeightPreset = ui1.appFontWeightPreset,
             appFontFileName = ui1.appFontFileName,
             appFontDisplayName = ui1.appFontDisplayName,
             appUiScalePreset = ui1.appUiScalePreset,
@@ -588,6 +596,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             colorStyle = core.colorStyle,
             colorSpec = core.colorSpec,
             appFontSizePreset = extra.appFontSizePreset,
+            appFontWeightPreset = extra.appFontWeightPreset,
             appFontFileName = extra.appFontFileName,
             appFontDisplayName = extra.appFontDisplayName,
             appUiScalePreset = extra.appUiScalePreset,
@@ -655,6 +664,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             colorStyle = settings.colorStyle,
             colorSpec = settings.colorSpec,
             appFontSizePreset = settings.appFontSizePreset,
+            appFontWeightPreset = settings.appFontWeightPreset,
             appFontFileName = settings.appFontFileName,
             appFontDisplayName = settings.appFontDisplayName,
             appUiScalePreset = settings.appUiScalePreset,
@@ -851,6 +861,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
     fun setAppFontSizePreset(preset: AppFontSizePreset) {
         viewModelScope.launch { SettingsManager.setAppFontSizePreset(context, preset) }
+    }
+    fun setAppFontWeightPreset(preset: AppFontWeightPreset) {
+        viewModelScope.launch { SettingsManager.setAppFontWeightPreset(context, preset) }
     }
     fun setAppFontFile(fileName: String, displayName: String) {
         viewModelScope.launch { SettingsManager.setAppFontFile(context, fileName, displayName) }

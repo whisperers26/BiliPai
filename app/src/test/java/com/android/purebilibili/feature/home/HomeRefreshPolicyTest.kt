@@ -510,4 +510,37 @@ class HomeRefreshPolicyTest {
             )
         )
     }
+
+    @Test
+    fun shouldShowRecommendOldContentDivider_respectsRefreshTipVisibleToggle() {
+        assertFalse(
+            shouldShowRecommendOldContentDivider(
+                currentCategory = HomeCategory.RECOMMEND,
+                refreshNewItemsKey = 12L,
+                revealedRefreshKey = 12L,
+                anchorBvid = "BV1",
+                oldContentStartIndex = 3,
+                refreshTipVisible = false
+            )
+        )
+        assertTrue(
+            shouldShowRecommendOldContentDivider(
+                currentCategory = HomeCategory.RECOMMEND,
+                refreshNewItemsKey = 12L,
+                revealedRefreshKey = 12L,
+                anchorBvid = "BV1",
+                oldContentStartIndex = 3,
+                refreshTipVisible = true
+            )
+        )
+    }
+
+    @Test
+    fun resolveHomeRefreshKeptOldItemCount_capsLongOldContent() {
+        assertEquals(30, resolveHomeRefreshKeptOldItemCount(30))
+        assertEquals(200, resolveHomeRefreshKeptOldItemCount(200))
+        assertEquals(50, resolveHomeRefreshKeptOldItemCount(201))
+        assertEquals(50, resolveHomeRefreshKeptOldItemCount(500))
+        assertEquals(80, resolveHomeRefreshKeptOldItemCount(500, threshold = 200, keepCount = 80))
+    }
 }

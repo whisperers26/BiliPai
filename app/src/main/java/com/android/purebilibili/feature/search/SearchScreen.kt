@@ -1,6 +1,8 @@
 // 文件路径: feature/search/SearchScreen.kt
 package com.android.purebilibili.feature.search
 
+import com.android.purebilibili.core.util.HtmlEntityUtils
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.components.resolveVideoListColumns
 import com.android.purebilibili.core.ui.components.rememberVideoListLayoutControl
 import com.android.purebilibili.core.ui.components.videoListItemModifier
@@ -122,6 +124,9 @@ import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.ui.components.AppSegmentOption
+import com.android.purebilibili.core.ui.renderer.material3.AppTonalPillTabRow
 import com.android.purebilibili.core.theme.resolveAccessibleContainerColors
 import com.android.purebilibili.core.theme.resolveFilledSelectionAccentColors
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
@@ -609,11 +614,7 @@ internal fun resolveSearchHighlightedTextSegments(rawTitle: String): List<Search
 }
 
 private fun decodeSearchHighlightedText(raw: String): String {
-    return raw.replace(Regex("<.*?>"), "")
-        .replace("&quot;", "\"")
-        .replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
+    return HtmlEntityUtils.unescape(raw.replace(Regex("<.*?>"), ""))
 }
 
 internal data class SearchTypeTabLayoutSpec(
@@ -1267,7 +1268,10 @@ fun SearchScreen(
                                                     viewModel.search(it)
                                                     dismissSearchKeyboardAndFocus()
                                                 },
-                                                onClearQuery = { viewModel.onQueryChange("") },
+                                                onClearQuery = {
+                                                    viewModel.onQueryChange("")
+                                                    viewModel.exitResultsToLanding()
+                                                },
                                                 onFocusChanged = { focused ->
                                                     searchFieldFocused = focused
                                                     if (focused) {
@@ -1327,6 +1331,7 @@ fun SearchScreen(
                                     SearchResultTypeTabRow(
                                         tabs = searchTabs,
                                         pagerState = searchPagerState,
+                                        counts = state.searchTypeCounts,
                                         miuixBackdrop = searchChromeBackdrop,
                                         onTabClick = { page, type ->
                                             if (searchPagerState.currentPage == page && state.searchType == type) {
@@ -2373,7 +2378,10 @@ fun SearchScreen(
                     viewModel.search(it)
                     dismissSearchKeyboardAndFocus()
                 },
-                onClearQuery = { viewModel.onQueryChange("") },
+                onClearQuery = {
+                    viewModel.onQueryChange("")
+                    viewModel.exitResultsToLanding()
+                },
                 onFocusChanged = { focused ->
                     searchFieldFocused = focused
                     if (focused) {
@@ -3117,10 +3125,17 @@ fun SearchHotSection(
  * floating capsule follows [PagerState.currentPage] + [PagerState.currentPageOffsetFraction]
  * and can be interrupted mid-swipe / mid-animate.
  */
+/** PiliPlus 同款分类计数标签:未加载(-1/null)只显示名称,超过 99 显示 99+。 */
+internal fun resolveSearchTypeTabLabel(displayName: String, count: Int?): String {
+    if (count == null || count < 0) return displayName
+    return "$displayName ${if (count > 99) "99+" else count}"
+}
+
 @Composable
 private fun SearchResultTypeTabRow(
     tabs: List<SearchType>,
     pagerState: PagerState,
+    counts: Map<SearchType, Int>,
     onTabClick: (Int, SearchType) -> Unit,
     miuixBackdrop: MiuixBackdrop? = null,
 ) {
@@ -3128,6 +3143,9 @@ private fun SearchResultTypeTabRow(
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
     val selectedIndex = pagerState.currentPage.coerceIn(0, tabs.lastIndex)
+    val tabLabels = tabs.map { type ->
+        resolveSearchTypeTabLabel(type.displayName, counts[type])
+    }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -3150,6 +3168,28 @@ private fun SearchResultTypeTabRow(
         val containerHorizontalPaddingPx = with(density) { AppSpacingTokens.ExtraSmall.toPx() }
         val dragFollowEdgePaddingPx = with(density) { 12.dp.toPx() }
 
+        if (LocalAppUiStyle.current == AppUiStyle.MATERIAL3 && !LocalAppThemeConfig.current.liquidGlassEnabled) {
+            // MD3 非玻璃:PiliPlus 搜索页同款 tonal 胶囊分类行(标签自适应宽度 + Pager 跟随)。
+            // 液态玻璃开启时保持玻璃胶囊指示器,不进入本分支。
+            AppTonalPillTabRow(
+                options = tabs.mapIndexed { index, type ->
+                    AppSegmentOption(value = type, label = tabLabels[index])
+                },
+                selectedValue = tabs.getOrElse(selectedIndex) { tabs.first() },
+                onSelectionChange = { type ->
+                    tabs.indexOf(type).takeIf { it >= 0 }?.let { index ->
+                        onTabClick(index, type)
+                    }
+                },
+                scrollable = true,
+                labelFontSize = 13.5.sp,
+                indicatorPositionProvider = {
+                    pagerState.currentPage + pagerState.currentPageOffsetFraction
+                },
+            )
+            return@BoxWithConstraints
+        }
+
         KeepScrollableTabSelectionVisible(
             scrollState = scrollState,
             selectedIndex = if (useScrollableRail) selectedIndex else 0,
@@ -3168,7 +3208,7 @@ private fun SearchResultTypeTabRow(
         )
 
         BottomBarLiquidSegmentedControl(
-            items = tabs.map { it.displayName },
+            items = tabLabels,
             selectedIndex = selectedIndex,
             onSelected = { index ->
                 tabs.getOrNull(index)?.let { onTabClick(index, it) }

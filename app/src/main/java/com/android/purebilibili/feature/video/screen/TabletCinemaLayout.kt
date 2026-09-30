@@ -108,11 +108,11 @@ import com.android.purebilibili.data.model.response.BgmInfo
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.common.resolveIndexedVideoLazyKey
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewSourceAnchor
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.feature.video.state.VideoPlayerState
 import com.android.purebilibili.feature.video.note.VideoNoteEditorDocument
 import com.android.purebilibili.feature.video.note.buildVideoNoteShareText
-import com.android.purebilibili.feature.video.note.shouldShowVideoNoteCard
 import com.android.purebilibili.feature.video.progress.PbpProgressData
 import com.android.purebilibili.feature.video.ui.components.CommentSortHeader
 import com.android.purebilibili.feature.video.ui.components.CommentSearchSheet
@@ -137,12 +137,11 @@ import com.android.purebilibili.feature.video.ui.section.VideoTitleWithDesc
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSectionActions
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSectionState
-import com.android.purebilibili.feature.video.ui.section.AiSummaryCard
-import com.android.purebilibili.feature.video.ui.section.AiSummaryPromptCard
-import com.android.purebilibili.feature.video.ui.section.VideoNoteCard
+import com.android.purebilibili.feature.video.ui.section.AiSummarySheet
+import com.android.purebilibili.feature.video.ui.section.VideoNoteListSheet
+import com.android.purebilibili.feature.video.ui.section.VideoSupplementStatsActions
 import com.android.purebilibili.feature.video.ui.section.VideoNoteDeleteConfirmDialog
 import com.android.purebilibili.feature.video.ui.section.VideoNoteEditorSheet
-import com.android.purebilibili.feature.video.ui.section.shouldShowAiSummaryEntry
 import com.android.purebilibili.feature.video.viewmodel.CommentUiState
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
 import com.android.purebilibili.feature.video.viewmodel.SponsorContributionUiState
@@ -358,6 +357,7 @@ internal fun TabletCinemaLayout(
                         onFavoriteClick = { engagementActions.onFavoriteAction(false) },
                         onFavoriteLongClick = { engagementActions.onFavoriteAction(true) },
                         onLikeClick = engagementActions.toggleLike,
+                        onDislikeClick = engagementActions.toggleDislike,
                         onCoinClick = engagementActions.openCoinDialog,
                         onTripleClick = engagementActions.doTripleAction,
                         onDownloadClick = playbackActions.openDownloadDialog,
@@ -633,6 +633,7 @@ private fun CinemaMetaPanel(
     onFavoriteClick: () -> Unit,
     onFavoriteLongClick: () -> Unit = {},
     onLikeClick: () -> Unit,
+    onDislikeClick: () -> Unit = {},
     onCoinClick: () -> Unit,
     onTripleClick: () -> Unit,
     onDownloadClick: () -> Unit,
@@ -759,6 +760,7 @@ private fun CinemaMetaPanel(
                                                 onFavoriteClick = onFavoriteClick,
                                                 onFavoriteLongClick = onFavoriteLongClick,
                                                 onLikeClick = onLikeClick,
+                                                onDislikeClick = onDislikeClick,
                                                 onCoinClick = onCoinClick,
                                                 onTripleClick = onTripleClick,
                                                 onDownloadClick = onDownloadClick,
@@ -789,6 +791,7 @@ private fun CinemaMetaPanel(
                                                 onFavoriteClick = onFavoriteClick,
                                                 onFavoriteLongClick = onFavoriteLongClick,
                                                 onLikeClick = onLikeClick,
+                                                onDislikeClick = onDislikeClick,
                                                 onCoinClick = onCoinClick,
                                                 onTripleClick = onTripleClick,
                                                 onDownloadClick = onDownloadClick,
@@ -809,6 +812,7 @@ private fun CinemaMetaPanel(
                                 context = context,
                                 onFavoriteClick = onFavoriteClick,
                                 onLikeClick = onLikeClick,
+                                onDislikeClick = onDislikeClick,
                                 onCoinClick = onCoinClick,
                                 onTripleClick = onTripleClick,
                                 onDownloadClick = onDownloadClick,
@@ -895,6 +899,7 @@ private fun CinemaMetaActions(
     onFavoriteClick: () -> Unit,
     onFavoriteLongClick: () -> Unit = {},
     onLikeClick: () -> Unit,
+    onDislikeClick: () -> Unit = {},
     onCoinClick: () -> Unit,
     onTripleClick: () -> Unit,
     onDownloadClick: () -> Unit,
@@ -907,12 +912,14 @@ private fun CinemaMetaActions(
         info = success.info,
         isFavorited = engagement.isFavorited,
         isLiked = engagement.isLiked,
+        isDisliked = engagement.isDisliked,
         coinCount = engagement.coinCount,
         downloadProgress = downloadProgress,
         isInWatchLater = engagement.isInWatchLater,
         onFavoriteClick = onFavoriteClick,
         onFavoriteLongClick = onFavoriteLongClick,
         onLikeClick = onLikeClick,
+        onDislikeClick = onDislikeClick,
         onCoinClick = onCoinClick,
         onTripleClick = onTripleClick,
         onDownloadClick = onDownloadClick,
@@ -972,6 +979,8 @@ private fun CinemaVideoIntroSection(
     onPublicVideoNoteClick: (Long, String) -> Unit = { _, _ -> }
 ) {
     val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    var showAiSummarySheet by remember { mutableStateOf(false) }
+    var showNoteListSheet by remember { mutableStateOf(false) }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -989,6 +998,15 @@ private fun CinemaVideoIntroSection(
             VideoTitleWithDesc(
                 info = success.info,
                 videoTags = success.videoTags,
+                sponsorLabel = success.sponsorVideoLabel,
+                trailingStatsContent = {
+                    VideoSupplementStatsActions(
+                        showAiSummary = videoAiSummaryEntryEnabled,
+                        showNote = videoNoteEnabled,
+                        onAiSummaryClick = { showAiSummarySheet = true },
+                        onNoteClick = { showNoteListSheet = true },
+                    )
+                },
                 onDescriptionUrlClick = onOpenBilibiliLink,
                 bgmList = resolveDisplayBgmList(
                     bgmInfo = success.bgmInfo,
@@ -999,33 +1017,35 @@ private fun CinemaVideoIntroSection(
                 onTagClick = onSearchKeywordClick
             )
         }
-        if (shouldShowAiSummaryEntry(
-                aiSummary = success.aiSummary,
-                isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
-            )
-        ) {
-            AiSummaryCard(
-                aiSummary = success.aiSummary,
-                onCreateNoteDraftClick = onCreateNoteDraftFromAiSummary
-            )
-        } else if (videoAiSummaryEntryEnabled && success.aiSummaryPrompt != null) {
-            AiSummaryPromptCard(
-                promptState = success.aiSummaryPrompt,
-                onActionClick = onRetryAiSummary
-            )
-        }
-        if (shouldShowVideoNoteCard(videoNoteEnabled)) {
-            VideoNoteCard(
-                noteState = success.videoNoteState,
-                isLoggedIn = success.isLoggedIn,
-                onCreateOrEditClick = onOpenVideoNoteEditor,
-                onRetryClick = onRetryVideoNote,
-                onDeleteClick = onDeleteVideoNoteClick,
-                onShareClick = onShareVideoNote,
-                onPublicNoteClick = onPublicVideoNoteClick,
-                defaultCollapsed = videoNoteDefaultCollapsed
-            )
-        }
+        AiSummarySheet(
+            visible = showAiSummarySheet,
+            aiSummary = success.aiSummary,
+            promptState = success.aiSummaryPrompt,
+            onDismiss = { showAiSummarySheet = false },
+            onTimestampClick = null,
+            onRetry = onRetryAiSummary,
+            onCreateNoteDraft = {
+                showAiSummarySheet = false
+                onCreateNoteDraftFromAiSummary()
+            }
+        )
+        VideoNoteListSheet(
+            visible = showNoteListSheet,
+            noteState = success.videoNoteState,
+            isLoggedIn = success.isLoggedIn,
+            onDismiss = { showNoteListSheet = false },
+            onCreateOrEditClick = {
+                showNoteListSheet = false
+                onOpenVideoNoteEditor()
+            },
+            onRetryClick = onRetryVideoNote,
+            onDeleteClick = {
+                showNoteListSheet = false
+                onDeleteVideoNoteClick()
+            },
+            onShareClick = onShareVideoNote,
+            onPublicNoteClick = onPublicVideoNoteClick
+        )
     }
 }
 
@@ -1263,7 +1283,7 @@ private fun CinemaCommentsPane(
     var showImagePreview by remember { mutableStateOf(false) }
     var previewImages by remember { mutableStateOf<List<String>>(emptyList()) }
     var previewInitialIndex by remember { mutableIntStateOf(0) }
-    var sourceRect by remember { mutableStateOf<Rect?>(null) }
+    var sourceRect by remember { mutableStateOf<ImagePreviewSourceAnchor?>(null) }
     var previewTextContent by remember { mutableStateOf<ImagePreviewTextContent?>(null) }
     val shouldLoadMore by remember {
         derivedStateOf {
@@ -1283,7 +1303,10 @@ private fun CinemaCommentsPane(
         ImagePreviewDialog(
             images = previewImages,
             initialIndex = previewInitialIndex,
-            sourceRect = sourceRect,
+            sourceRect = sourceRect?.rect,
+            sourceRects = sourceRect?.galleryRects.orEmpty(),
+            sourceCornerRadiusDp = sourceRect?.cornerRadiusDp
+                ?: AppShapes.containerCornerDp(ContainerLevel.Field).value,
             textContent = previewTextContent,
             onDismiss = {
                 showImagePreview = false

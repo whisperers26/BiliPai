@@ -98,7 +98,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = "互动与评论",
         subtitle = "评论发送检测、评论装扮、AI 总结、双击点赞、收藏点按、视频简介与笔记",
         section = "设置",
-        aliases = listOf("互动", "评论", "楼中楼", "评论楼中楼", "评论检测", "发评反诈", "评论发送检测", "评论装扮", "个性装扮", "ai总结", "视频总结", "双击点赞", "收藏", "收藏夹", "快速收藏", "点按收藏", "收藏点按", "默认收藏夹", "视频简介", "简介默认展开", "视频笔记", "显示视频笔记", "默认折叠视频笔记", "笔记折叠", "视频标签", "视频标签大小", "标签大小", "标签紧凑", "标签更小", "tag")
+        aliases = listOf("互动", "评论", "楼中楼", "评论楼中楼", "评论检测", "发评反诈", "评论发送检测", "评论装扮", "个性装扮", "视频详情评论数", "评论标签数量", "简介评论数量", "ai总结", "视频总结", "双击点赞", "收藏", "收藏夹", "快速收藏", "点按收藏", "收藏点按", "默认收藏夹", "视频简介", "简介默认展开", "视频笔记", "显示视频笔记", "默认折叠视频笔记", "笔记折叠", "视频标签", "视频标签大小", "标签大小", "标签紧凑", "标签更小", "tag")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.DATA_BACKUP,
@@ -112,7 +112,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = "隐私与权限",
         subtitle = "隐私无痕、权限管理与黑名单",
         section = "设置",
-        aliases = listOf("搜索框推荐词", "默认搜索词", "一小时前搜索", "搜索提示", "搜索推荐词", "搜索发现推荐", "推荐词", "搜索联想词", "搜索建议", "联想开关", "隐私", "无痕", "权限", "权限管理", "黑名单", "屏蔽", "拉黑")
+        aliases = listOf("搜索框默认词", "搜索框推荐词", "默认搜索词", "一小时前搜索", "搜索提示", "搜索推荐词", "搜索发现推荐", "推荐词", "搜索联想词", "搜索建议", "联想开关", "隐私", "无痕", "权限", "权限管理", "黑名单", "屏蔽", "拉黑")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.DIAGNOSTICS,
@@ -136,7 +136,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.APPEARANCE,
-        title = "外观设置",
+        title = settingsDestinationCopy(SettingsSearchTarget.APPEARANCE).title,
         subtitle = "主题、字体、缩放、开屏与应用图标",
         section = "常规",
         // 泛入口别名：具体子项词（主题色/hex/md3颜色/字体大小/dpi/开屏壁纸等）交由
@@ -176,7 +176,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.PLAYBACK,
-        title = "播放设置",
+        title = settingsDestinationCopy(SettingsSearchTarget.PLAYBACK).title,
         subtitle = "解码、手势、后台播放",
         section = "常规",
         aliases = listOf(
@@ -313,7 +313,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.BOTTOM_BAR,
-        title = "导航设置",
+        title = settingsDestinationCopy(SettingsSearchTarget.BOTTOM_BAR).title,
         subtitle = "底栏、顶部标签、平板侧边栏",
         section = "常规",
         aliases = listOf(
@@ -344,57 +344,57 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.PERMISSION,
-        title = "权限管理",
-        subtitle = "查看每项系统权限的用途和当前授权状态",
+        title = settingsDestinationCopy(SettingsSearchTarget.PERMISSION).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.PERMISSION).summary,
         section = "隐私与安全",
         aliases = listOf("权限", "存储权限", "通知权限", "相册权限", "文件权限", "系统设置权限")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.MESSAGE_NOTIFICATION,
-        title = "消息通知",
+        title = settingsDestinationCopy(SettingsSearchTarget.MESSAGE_NOTIFICATION).title,
         subtitle = "后台检查私信、互动消息、关注更新与开播提醒",
         section = "隐私与安全",
         aliases = listOf("消息通知", "后台通知", "私信通知", "私信", "回复我的", "@我", "收到的赞", "系统通知", "开播提醒", "关注更新", "新消息提醒", "常驻后台", "后台消息", "通知")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.BLOCKED_LIST,
-        title = "黑名单管理",
-        subtitle = "管理已屏蔽的 UP 主",
+        title = settingsDestinationCopy(SettingsSearchTarget.BLOCKED_LIST).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.BLOCKED_LIST).summary,
         section = "隐私与安全",
         aliases = listOf("黑名单", "屏蔽", "up", "拉黑", "屏蔽up", "已屏蔽up", "屏蔽用户")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.SETTINGS_SHARE,
-        title = "设置分享",
+        title = settingsDestinationCopy(SettingsSearchTarget.SETTINGS_SHARE).title,
         subtitle = "把可分享的设置导出给他人，或从文件一键导入",
         section = "数据与存储",
         aliases = listOf("设置分享", "分享设置", "导入", "导出", "json", "配置分享", "设置包", "备份设置", "恢复设置")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.WEBDAV_BACKUP,
-        title = "WebDAV 云备份",
+        title = settingsDestinationCopy(SettingsSearchTarget.WEBDAV_BACKUP).title,
         subtitle = "把设置和插件配置备份到自己的云盘并随时恢复",
         section = "数据与存储",
         aliases = listOf("webdav", "云备份", "备份", "恢复", "自动备份", "测试连接", "远端目录", "服务器", "用户名")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.DOWNLOAD_PATH,
-        title = "下载位置",
-        subtitle = "选择视频等下载内容的保存目录",
+        title = settingsDestinationCopy(SettingsSearchTarget.DOWNLOAD_PATH).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.DOWNLOAD_PATH).summary,
         section = "数据与存储",
         aliases = listOf("下载", "目录", "路径", "导出目录", "下载目录", "存储位置", "文件夹")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.IMAGE_SAVE_PATH,
-        title = "图片保存位置",
+        title = settingsDestinationCopy(SettingsSearchTarget.IMAGE_SAVE_PATH).title,
         subtitle = "选择动态图片、头像和评论图片保存目录",
         section = "数据与存储",
         aliases = listOf("图片保存", "保存目录", "保存位置", "相册", "图片目录", "图片文件夹", "动态图片", "头像保存", "bili")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.CLEAR_CACHE,
-        title = "清除缓存",
-        subtitle = "清理应用缓存并设置自动清理周期与容量上限",
+        title = settingsDestinationCopy(SettingsSearchTarget.CLEAR_CACHE).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.CLEAR_CACHE).summary,
         section = "数据与存储",
         aliases = listOf(
             "缓存", "清理", "释放空间", "清缓存", "删除缓存", "空间清理", "自动清理",
@@ -403,14 +403,14 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.PLUGINS,
-        title = "插件中心",
-        subtitle = "安装、启用和管理扩展功能",
+        title = settingsDestinationCopy(SettingsSearchTarget.PLUGINS).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.PLUGINS).summary,
         section = "开发者选项",
         aliases = listOf("插件", "扩展", "json", "脚本", "规则", "屏蔽规则")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.EXPORT_LOGS,
-        title = "导出日志",
+        title = settingsDestinationCopy(SettingsSearchTarget.EXPORT_LOGS).title,
         subtitle = "导出已脱敏的运行记录，用于反馈和排查问题",
         section = "开发者选项",
         aliases = listOf(
@@ -420,78 +420,78 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.OPEN_SOURCE_LICENSES,
-        title = "开源许可证",
-        subtitle = "查看应用使用的开源项目及其许可协议",
+        title = settingsDestinationCopy(SettingsSearchTarget.OPEN_SOURCE_LICENSES).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.OPEN_SOURCE_LICENSES).summary,
         section = "关于",
         aliases = listOf("license", "许可证", "开源协议")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.OPEN_SOURCE_HOME,
-        title = "开源主页",
-        subtitle = "GitHub",
+        title = settingsDestinationCopy(SettingsSearchTarget.OPEN_SOURCE_HOME).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.OPEN_SOURCE_HOME).summary,
         section = "关于",
         aliases = listOf("github", "git", "仓库", "源码")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.CHECK_UPDATE,
-        title = "检查更新",
-        subtitle = "立即检查是否有可用的新版本",
+        title = settingsDestinationCopy(SettingsSearchTarget.CHECK_UPDATE).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.CHECK_UPDATE).summary,
         section = "关于",
         aliases = listOf("更新", "升级", "新版本", "检查", "自动检查更新", "版本更新", "检测渠道", "测试版", "正式版", "预发布", "beta", "稳定版")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.VIEW_RELEASE_NOTES,
-        title = "查看更新日志",
-        subtitle = "查看当前版本和最近版本的功能变化",
+        title = settingsDestinationCopy(SettingsSearchTarget.VIEW_RELEASE_NOTES).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.VIEW_RELEASE_NOTES).summary,
         section = "关于",
         aliases = listOf("更新日志", "changelog", "版本说明")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.REPLAY_ONBOARDING,
-        title = "重看使用须知",
-        subtitle = "开源约定与官方渠道",
+        title = settingsDestinationCopy(SettingsSearchTarget.REPLAY_ONBOARDING).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.REPLAY_ONBOARDING).summary,
         section = "关于",
         aliases = listOf("新手引导", "教程", "引导", "使用须知", "用户协议")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.TIPS,
-        title = "小贴士 & 隐藏操作",
-        subtitle = "了解不容易发现的快捷操作和进阶功能",
-        section = "帮助与系统",
+        title = settingsDestinationCopy(SettingsSearchTarget.TIPS).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.TIPS).summary,
+        section = "帮助与工具",
         aliases = listOf("贴士", "技巧", "帮助", "隐藏操作", "摸鱼模式", "空降助手", "自动连播", "自动横竖屏")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.OPEN_LINKS,
-        title = "默认打开链接",
-        subtitle = "设置应用链接支持",
-        section = "帮助与系统",
+        title = settingsDestinationCopy(SettingsSearchTarget.OPEN_LINKS).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.OPEN_LINKS).summary,
+        section = "帮助与工具",
         aliases = listOf("链接", "默认打开", "deep link")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.DONATE,
-        title = "打赏作者",
-        subtitle = "自愿支持项目后续持续开发和维护",
+        title = settingsDestinationCopy(SettingsSearchTarget.DONATE).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.DONATE).summary,
         section = "关注作者",
         aliases = listOf("打赏", "赞助", "支持")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.TELEGRAM,
-        title = "Telegram 频道 / 交流群",
-        subtitle = "@bilipai666 · @bilipai888",
+        title = settingsDestinationCopy(SettingsSearchTarget.TELEGRAM).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.TELEGRAM).summary,
         section = "关注作者",
         aliases = listOf("telegram", "tg", "频道", "交流群", "bilipai666", "bilipai888")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.TWITTER,
-        title = "Twitter / X",
-        subtitle = "@YangY_0x00",
+        title = settingsDestinationCopy(SettingsSearchTarget.TWITTER).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.TWITTER).summary,
         section = "关注作者",
         aliases = listOf("twitter", "x", "推特")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.DISCLAIMER,
-        title = "发布渠道声明",
-        subtitle = "GitHub · Telegram 频道与群组",
+        title = settingsDestinationCopy(SettingsSearchTarget.DISCLAIMER).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.DISCLAIMER).summary,
         section = "关于",
         aliases = listOf("声明", "发布渠道", "安全")
     ),
@@ -499,7 +499,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.APPEARANCE,
         title = "自定义主题颜色",
         subtitle = "使用取色器、输入色值或选择预设颜色",
-        section = "外观设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.APPEARANCE).title,
         aliases = listOf("自定义md3颜色", "自定义颜色", "md3颜色", "主题色", "hex", "material you"),
         focusId = SettingsSearchFocusIds.APPEARANCE_THEME
     ),
@@ -507,7 +507,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.APPEARANCE,
         title = "界面预设 / 主题模式",
         subtitle = "切换界面风格、明暗模式、颜色来源和应用语言",
-        section = "外观设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.APPEARANCE).title,
         // 只保留本项专属别名；MD3 颜色/取色类词归「自定义 MD3 颜色」，避免重叠稀释精准度
         aliases = listOf("界面预设", "主题模式", "深色风格", "应用语言", "语言"),
         focusId = SettingsSearchFocusIds.APPEARANCE_THEME
@@ -516,7 +516,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.APPEARANCE,
         title = "安卓液态玻璃",
         subtitle = "统一应用到首页顶部标签栏、搜索框、底部导航栏和评论区底栏",
-        section = "外观设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.APPEARANCE).title,
         aliases = listOf(
             "安卓原生液态玻璃",
             "全局液态玻璃",
@@ -532,10 +532,26 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         focusId = SettingsSearchFocusIds.APPEARANCE_THEME
     ),
     SettingsSearchEntry(
+        target = SettingsSearchTarget.HOME_FEED,
+        title = "卡片毛玻璃",
+        subtitle = "独立控制视频卡片信息区的壁纸模糊",
+        section = settingsDestinationCopy(SettingsSearchTarget.HOME_FEED).title,
+        aliases = listOf("卡片模糊", "磨砂卡片", "视频卡片毛玻璃"),
+        focusId = SettingsSearchFocusIds.HOME_OVERVIEW,
+    ),
+    SettingsSearchEntry(
+        target = SettingsSearchTarget.HOME_FEED,
+        title = "卡片动态取色",
+        subtitle = "独立控制视频卡片跟随壁纸或封面颜色",
+        section = settingsDestinationCopy(SettingsSearchTarget.HOME_FEED).title,
+        aliases = listOf("卡片取色", "封面取色", "视频卡片动态取色"),
+        focusId = SettingsSearchFocusIds.HOME_OVERVIEW,
+    ),
+    SettingsSearchEntry(
         target = SettingsSearchTarget.APPEARANCE,
         title = "屏幕帧率",
         subtitle = "跟随系统自动调节，或手动选择设备支持的显示模式",
-        section = "外观设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.APPEARANCE).title,
         aliases = listOf("刷新率", "高刷新率", "高刷", "帧率", "显示模式", "自动帧率"),
         focusId = SettingsSearchFocusIds.APPEARANCE_THEME
     ),
@@ -543,7 +559,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.APPEARANCE,
         title = "字体与显示大小",
         subtitle = "分别调整文字大小、界面缩放和精细显示比例",
-        section = "外观设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.APPEARANCE).title,
         aliases = listOf("字体大小", "界面缩放", "dpi", "显示与排版", "应用内dpi", "缩放"),
         focusId = SettingsSearchFocusIds.APPEARANCE_DISPLAY
     ),
@@ -551,7 +567,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.APPEARANCE,
         title = "开屏壁纸 / 启动画面",
         subtitle = "开屏壁纸、自定义壁纸、随机壁纸、图标遮罩动画",
-        section = "外观设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.APPEARANCE).title,
         aliases = listOf("开屏壁纸", "自定义壁纸", "相册壁纸", "启动画面", "随机壁纸", "开屏图标遮罩动画", "图标遮罩动画", "显示开屏图标", "隐藏开屏图标", "开屏图标动画", "启动壁纸"),
         focusId = SettingsSearchFocusIds.APPEARANCE_SPLASH
     ),
@@ -589,7 +605,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.PLAYBACK,
         title = "硬件解码 / 编码偏好",
         subtitle = "选择优先的视频编码，并设置无法播放时的备用编码",
-        section = "播放设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.PLAYBACK).title,
         aliases = listOf("硬件解码", "首选编码", "次选编码", "hevc", "avc", "av1", "解码"),
         focusId = SettingsSearchFocusIds.PLAYBACK_DECODER
     ),
@@ -597,23 +613,23 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.PLAYBACK,
         title = "播放速度",
         subtitle = "编辑播放器倍速列表、默认速度和长按临时加速",
-        section = "播放设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.PLAYBACK).title,
         aliases = listOf("播放速度", "倍速", "倍速列表", "默认播放速度", "长按倍速", "长按临时加速", "记忆上次播放速度"),
         focusId = SettingsSearchFocusIds.PLAYBACK_SPEED
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.PLAYBACK,
-        title = "后台播放 / 画中画 / 小窗",
-        subtitle = "设置离开播放页后停止、后台继续或进入小窗",
-        section = "播放设置",
-        aliases = listOf("后台播放", "画中画", "pip", "小窗", "小窗画中画", "音频焦点", "自动进入画中画", "离开播放页后停止", "视频小横条", "听视频小横条", "听视频横条", "当前视频条", "点击小横条", "小横条跳转详情", "小横条跳转听视频", "now playing"),
+        title = "后台播放 / 画中画 / 小窗 / 歌词界面",
+        subtitle = "设置离开播放页后停止、后台继续、进入小窗，以及听视频默认歌词界面",
+        section = settingsDestinationCopy(SettingsSearchTarget.PLAYBACK).title,
+        aliases = listOf("后台播放", "画中画", "pip", "小窗", "小窗画中画", "音频焦点", "自动进入画中画", "离开播放页后停止", "视频小横条", "听视频小横条", "听视频横条", "当前视频条", "点击小横条", "小横条跳转详情", "小横条跳转听视频", "now playing", "歌词界面", "听视频歌词", "沉浸歌词", "沉浸式歌词", "经典歌词", "逐字歌词", "逐字", "halcyon", "歌词样式"),
         focusId = SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.PLAYBACK,
         title = "手势灵敏度",
         subtitle = "调整进度、音量和亮度手势的响应速度",
-        section = "播放设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.PLAYBACK).title,
         aliases = listOf("手势灵敏度", "手势控制", "灵敏度"),
         focusId = SettingsSearchFocusIds.PLAYBACK_GESTURE
     ),
@@ -621,7 +637,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.PLAYBACK,
         title = "自动连播 / 跳过片头片尾 / 双击操作 / 弹幕 / 字幕 / 笔记",
         subtitle = "管理视频播放中的快捷操作、字幕、弹幕和内容辅助功能",
-        section = "播放设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.PLAYBACK).title,
         aliases = listOf("自动连播", "自动播放下一个", "进入视频自动播放", "进入视频不要自动播放", "不要自动播放", "自动跳过片头片尾", "跳过片头", "跳过片尾", "跳过op", "跳过ed", "双击点赞", "双击跳转", "取消双击跳转", "关闭双击跳转", "双击快进", "双击后退", "快进秒数", "后退秒数", "关注点赞弹幕", "关注弹幕", "点赞弹幕", "三连弹幕", "弹幕屏蔽", "弹幕同步", "弹幕云同步", "同步弹幕设置", "弹幕设置同步", "网页版弹幕", "字幕", "自动启用字幕", "ai总结", "视频简介", "默认展开视频简介", "简介默认展开", "视频标签", "视频标签大小", "标签大小", "标签紧凑", "标签更小", "tag", "视频笔记", "显示视频笔记", "默认折叠视频笔记", "笔记折叠", "播放器缩小策略", "竖屏视频缩小", "竖屏评论区缩小", "评论上滑缩小播放器", "详情页控件随滚动隐藏", "详情页标签栏隐藏", "评论排序隐藏", "下滑隐藏详情控件", "回顶显示详情控件", "横屏视频缩小", "上滑隐藏播放器", "暂停时缩小", "暂停评论缩小", "缩小后自动暂停", "自动暂停", "相关推荐暂停", "点击视频直接播放"),
         focusId = SettingsSearchFocusIds.PLAYBACK_INTERACTION
     ),
@@ -629,15 +645,15 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.PLAYBACK,
         title = "自动横竖屏 / 全屏方向 / 平板布局",
         subtitle = "设置进入和退出全屏的方式，以及平板播放页布局",
-        section = "播放设置",
-        aliases = listOf("自动横竖屏", "自动旋转", "全屏方向", "固定全屏比例", "全屏手势反向", "自动进入全屏", "自动退出全屏", "横屏适配", "平板评论区宽度", "评论区宽度", "评论折叠数量", "评论回复预览", "评论预览数量", "楼中楼", "评论楼中楼", "楼中楼已加载数量", "已加载条数", "评论检测", "发评反诈", "评论发送检测", "评论装扮", "个性装扮", "评论区个性装扮", "图片长按保存", "长按保存图片", "查看图片保存", "播放页隐藏状态栏", "隐藏状态栏", "状态栏", "进度条峰值弹幕", "峰值弹幕", "弹幕热度曲线"),
+        section = settingsDestinationCopy(SettingsSearchTarget.PLAYBACK).title,
+        aliases = listOf("自动横竖屏", "自动旋转", "全屏方向", "固定全屏比例", "全屏手势反向", "自动进入全屏", "自动退出全屏", "横屏适配", "平板评论区宽度", "评论区宽度", "评论折叠数量", "评论回复预览", "评论预览数量", "楼中楼", "评论楼中楼", "楼中楼已加载数量", "已加载条数", "评论检测", "发评反诈", "评论发送检测", "评论装扮", "个性装扮", "评论区个性装扮", "图片长按保存", "长按保存图片", "查看图片保存", "播放页隐藏状态栏", "隐藏状态栏", "状态栏", "进度条峰值弹幕", "峰值弹幕", "弹幕热度曲线", "紧凑播放器控件", "紧凑布局", "紧凑控件", "隐藏分享", "隐藏顶栏分享", "顶栏分享", "播放器间距", "控件间距", "播放器控件布局"),
         focusId = SettingsSearchFocusIds.PLAYBACK_FULLSCREEN
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.PLAYBACK,
         title = "网络与画质",
         subtitle = "自动最高画质、默认画质、默认音质、定向流量",
-        section = "播放设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.PLAYBACK).title,
         aliases = listOf("网络与画质", "自动最高画质", "默认画质", "无线网络默认画质", "流量默认画质", "默认音质", "音质", "Hi-Res", "杜比音质", "跟随上次选择", "定向流量", "b站定向流量"),
         focusId = SettingsSearchFocusIds.PLAYBACK_NETWORK
     ),
@@ -645,7 +661,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.PLAYBACK,
         title = "省流量模式",
         subtitle = "降低移动网络下的画质和首页图片清晰度",
-        section = "播放设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.PLAYBACK).title,
         aliases = listOf("省流量", "省流量模式", "节省流量"),
         focusId = SettingsSearchFocusIds.PLAYBACK_DATA_SAVER
     ),
@@ -653,7 +669,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.PLAYBACK,
         title = "播放器诊断 / 统计信息",
         subtitle = "显示播放状态并记录黑屏、卡顿等问题的排查信息",
-        section = "播放设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.PLAYBACK).title,
         aliases = listOf("播放器诊断日志", "详细统计信息", "调试", "日志"),
         focusId = SettingsSearchFocusIds.PLAYBACK_DEBUG
     ),
@@ -661,7 +677,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.BOTTOM_BAR,
         title = "悬浮底栏 / 搜索联动",
         subtitle = "底栏形态、图标交叉缩放、搜索与视频小横条联动",
-        section = "导航设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.BOTTOM_BAR).title,
         aliases = listOf(
             "悬浮底栏",
             "底栏搜索",
@@ -673,6 +689,15 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
             "选中图标 1.10 倍",
             "视频小横条联动",
             "底栏收拢",
+            "列表精简搜索",
+            "精简搜索",
+            "隐藏列表搜索栏",
+            "隐藏搜索栏",
+            "收藏搜索",
+            "历史搜索",
+            "稍后看搜索",
+            "稍后再看搜索",
+            "页内搜索",
         ),
         focusId = SettingsSearchFocusIds.BOTTOM_BAR_BEHAVIOR
     ),
@@ -680,7 +705,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.BOTTOM_BAR,
         title = "底栏显示模式 / 标签样式",
         subtitle = "底部导航、标签显示",
-        section = "导航设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.BOTTOM_BAR).title,
         aliases = listOf(
             "显示模式",
             "标签样式",
@@ -693,7 +718,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.BOTTOM_BAR,
         title = "顶部标签管理",
         subtitle = "显示、隐藏和排序标签，并设置首页右上角按钮",
-        section = "导航设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.BOTTOM_BAR).title,
         aliases = listOf(
             "完全隐藏顶部标签",
             "隐藏顶部标签",
@@ -719,7 +744,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.BOTTOM_BAR,
         title = "搜索分类栏顺序",
         subtitle = "调整搜索结果页顶部分类标签的显示顺序",
-        section = "导航设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.BOTTOM_BAR).title,
         aliases = listOf(
             "搜索分类",
             "搜索分类栏",
@@ -737,7 +762,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.BOTTOM_BAR,
         title = "平板侧边导航栏",
         subtitle = "设置平板上是否使用侧边栏以及是否显示账号切换",
-        section = "导航设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.BOTTOM_BAR).title,
         aliases = listOf("平板布局", "平板导航", "侧边导航栏", "侧边栏"),
         focusId = SettingsSearchFocusIds.BOTTOM_BAR_TABLET
     ),
@@ -745,7 +770,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.BOTTOM_BAR,
         title = "当前底栏预览",
         subtitle = "查看当前显示项目和排列顺序",
-        section = "导航设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.BOTTOM_BAR).title,
         aliases = listOf("当前底栏", "底栏预览", "底栏顺序"),
         focusId = SettingsSearchFocusIds.BOTTOM_BAR_CURRENT
     ),
@@ -753,7 +778,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         target = SettingsSearchTarget.BOTTOM_BAR,
         title = "可用底栏项目",
         subtitle = "选择底栏显示哪些项目，并调整顺序",
-        section = "导航设置",
+        section = settingsDestinationCopy(SettingsSearchTarget.BOTTOM_BAR).title,
         aliases = listOf("可用项目", "底栏项目", "显示隐藏项目", "底栏图标", "底栏文字"),
         focusId = SettingsSearchFocusIds.BOTTOM_BAR_AVAILABLE
     )

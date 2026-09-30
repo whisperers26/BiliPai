@@ -1,5 +1,10 @@
 package com.android.purebilibili.feature.audio.screen
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -29,8 +34,10 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
+import com.android.purebilibili.core.ui.transition.NowPlayingBarHandoffState
 import com.android.purebilibili.core.ui.transition.VideoCardSourceChromeSnapshot
 import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
+import com.android.purebilibili.core.ui.transition.resolveNowPlayingBarReturnVisibility
 import com.android.purebilibili.core.util.CardPositionManager
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -61,6 +68,8 @@ import coil3.compose.AsyncImage
 import com.android.purebilibili.feature.home.components.LiquidGlassTuning
 import com.android.purebilibili.feature.home.components.LocalLiquidGlassRenderConfig
 import com.android.purebilibili.feature.home.components.biliPaiFloatingDockShell
+import com.android.purebilibili.feature.home.components.resolveBiliPaiBottomBarShellColor
+import com.android.purebilibili.feature.home.components.resolveBottomBarDarkTheme
 import com.android.purebilibili.feature.home.components.resolveSharedBottomBarCapsuleShape
 import kotlin.math.abs
 import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
@@ -87,10 +96,7 @@ internal fun AudioNowPlayingBar(
     onDismiss: () -> Unit,
     expandDestinationLabel: String = "听视频",
     sourceRoute: String? = null,
-    isReturningFromDetail: Boolean = false,
-    returningDetailBvid: String? = null,
-    isSharedTransitionRunning: Boolean = false,
-    isSharedTransitionSourceOwner: Boolean = false,
+    handoff: NowPlayingBarHandoffState = NowPlayingBarHandoffState.Idle,
     glassEnabled: Boolean = LocalSettingsLiquidGlassEnabled.current,
     blurEnabled: Boolean = false,
     hazeState: HazeState? = null,
@@ -162,21 +168,25 @@ internal fun AudioNowPlayingBar(
         }
     }
     val reduceMotion = rememberSystemReduceMotion()
-    val sourceInActiveReturn = shouldHideAudioNowPlayingBarForSharedReturn(
-        isReturningFromDetail = isReturningFromDetail,
-        targetBvid = returningDetailBvid,
+    val sourceInActiveReturn = resolveNowPlayingBarReturnVisibility(
+        handoff = handoff,
         currentBvid = state.bvid,
-        isSharedTransitionRunning = isSharedTransitionRunning,
-        isSharedTransitionSourceOwner = isSharedTransitionSourceOwner,
-    )
+    ) <= 0f
 
     val chrome = resolveMusicPlayerChromeSpec(
         uiStyle = LocalAppUiStyle.current,
         glassEnabled = glassEnabled
     )
     val shape = resolveSharedBottomBarCapsuleShape()
-    val containerColor = AppSurfaceTokens.surfaceContainer()
     val glassActive = glassEnabled && miuixBackdrop != null
+    val containerColor = resolveBiliPaiBottomBarShellColor(
+        containerColor = AppSurfaceTokens.surfaceContainer(),
+        liquidGlassEnabled = glassEnabled,
+        darkTheme = resolveBottomBarDarkTheme(AppSurfaceTokens.background()),
+        liquidGlassTuning = liquidGlassTuning,
+    )
+    // 迷你条封面旋转：播放时逐帧失效是预期开销（封面独占 graphicsLayer，
+    // 不会连带模糊外壳层重绘）；暂停后 while 循环退出，帧率自然回落。
     val coverRotationDegrees = rememberMusicArtworkRotationDegrees(
         active = shouldRotateMusicArtwork(
             isPlaying = state.isPlaying,
@@ -506,5 +516,50 @@ private fun Modifier.audioNowPlayingArtistHeight(
     )
     layout(placeable.width, height) {
         placeable.placeRelative(0, 0)
+    }
+}
+
+/**
+ * 独立挂载路径的小横条 presence 宿主：与 dock 路径共用同一套
+ * presence 时长/曲线 token（几何向下收放 + alpha 窗口），
+ * 保证两条挂载路径的出入场节奏一致。Reduced motion 下退化为短淡入淡出。
+ */
+@Composable
+internal fun AudioNowPlayingBarPresenceHost(
+    visible: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val reduceMotion = rememberSystemReduceMotion()
+    val alphaEnterSpec = resolveAudioNowPlayingPresenceAnimationSpec(
+        active = true,
+        reduceMotion = reduceMotion,
+    )
+    val alphaExitSpec = resolveAudioNowPlayingPresenceAnimationSpec(
+        active = false,
+        reduceMotion = reduceMotion,
+    )
+    val geometryEnterSpec = resolveAudioNowPlayingPresenceEnterGeometrySpringSpec()
+    val geometryExitSpec = resolveAudioNowPlayingPresenceGeometrySpec(
+        active = false,
+        reduceMotion = reduceMotion,
+    )
+    AnimatedVisibility(
+        visible = visible,
+        enter = if (reduceMotion) {
+            fadeIn(alphaEnterSpec)
+        } else {
+            expandVertically(geometryEnterSpec, expandFrom = Alignment.Bottom) +
+                fadeIn(alphaEnterSpec)
+        },
+        exit = if (reduceMotion) {
+            fadeOut(alphaExitSpec)
+        } else {
+            shrinkVertically(geometryExitSpec, shrinkTowards = Alignment.Bottom) +
+                fadeOut(alphaExitSpec)
+        },
+        modifier = modifier,
+    ) {
+        content()
     }
 }

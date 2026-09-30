@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.ThumbUp
+import androidx.compose.material.icons.rounded.ThumbDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -104,11 +105,13 @@ fun ActionButtonsRow(
     info: ViewInfo,
     isFavorited: Boolean = false,
     isLiked: Boolean = false,
+    isDisliked: Boolean = false,
     coinCount: Int = 0,
     downloadProgress: Float = -1f,  //  -1 = 未下载, 0-1 = 进度, 1 = 已完成
     isInWatchLater: Boolean = false,  //  稍后再看状态
     onFavoriteClick: () -> Unit = {},
     onLikeClick: () -> Unit = {},
+    onDislikeClick: () -> Unit = {},
     onCoinClick: () -> Unit = {},
     onTripleClick: () -> Unit = {},
     onCommentClick: () -> Unit,
@@ -119,18 +122,20 @@ fun ActionButtonsRow(
     showCommentAction: Boolean = true,
     modifier: Modifier = Modifier.fillMaxWidth()
 ) {
-    val actionCount = 6 + if (showCommentAction) 1 else 0 // like/coin/fav/share/watchLater/cache[+comment]
+    val actionCount = 7 + if (showCommentAction) 1 else 0 // like/dislike/coin/fav/share/watchLater/cache[+comment]
     val itemSpacing = resolveVideoDetailActionRowItemSpacing(actionCount)
     val buttonHorizontalPadding = resolveVideoDetailActionButtonHorizontalPadding(actionCount)
     val actions = videoDetailActionButtons(
         info = info,
         isFavorited = isFavorited,
         isLiked = isLiked,
+        isDisliked = isDisliked,
         coinCount = coinCount,
         downloadProgress = downloadProgress,
         isInWatchLater = isInWatchLater,
         onFavoriteClick = onFavoriteClick,
         onLikeClick = onLikeClick,
+        onDislikeClick = onDislikeClick,
         onCoinClick = onCoinClick,
         onTripleClick = onTripleClick,
         onCommentClick = onCommentClick,
@@ -145,7 +150,7 @@ fun ActionButtonsRow(
     Row(
         modifier = modifier
             .animateContentSize()
-            .padding(horizontal = 4.dp, vertical = 6.dp),
+            .padding(horizontal = 4.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(itemSpacing),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -162,11 +167,13 @@ fun ActionButtonsGrid(
     info: ViewInfo,
     isFavorited: Boolean = false,
     isLiked: Boolean = false,
+    isDisliked: Boolean = false,
     coinCount: Int = 0,
     downloadProgress: Float = -1f,
     isInWatchLater: Boolean = false,
     onFavoriteClick: () -> Unit = {},
     onLikeClick: () -> Unit = {},
+    onDislikeClick: () -> Unit = {},
     onCoinClick: () -> Unit = {},
     onTripleClick: () -> Unit = {},
     onDownloadClick: () -> Unit = {},
@@ -180,11 +187,13 @@ fun ActionButtonsGrid(
         info = info,
         isFavorited = isFavorited,
         isLiked = isLiked,
+        isDisliked = isDisliked,
         coinCount = coinCount,
         downloadProgress = downloadProgress,
         isInWatchLater = isInWatchLater,
         onFavoriteClick = onFavoriteClick,
         onLikeClick = onLikeClick,
+        onDislikeClick = onDislikeClick,
         onCoinClick = onCoinClick,
         onTripleClick = onTripleClick,
         onCommentClick = {},
@@ -220,11 +229,13 @@ private fun videoDetailActionButtons(
     info: ViewInfo,
     isFavorited: Boolean,
     isLiked: Boolean,
+    isDisliked: Boolean,
     coinCount: Int,
     downloadProgress: Float,
     isInWatchLater: Boolean,
     onFavoriteClick: () -> Unit,
     onLikeClick: () -> Unit,
+    onDislikeClick: () -> Unit,
     onCoinClick: () -> Unit,
     onTripleClick: () -> Unit,
     onCommentClick: () -> Unit,
@@ -289,7 +300,7 @@ private fun videoDetailActionButtons(
         // Like - 支持长按触发三连
         add { modifier ->
             Box(
-                modifier = modifier.heightIn(min = 56.dp),
+                modifier = modifier.heightIn(min = 48.dp),
                 contentAlignment = Alignment.Center
             ) {
                 TripleProgressActionButton(
@@ -333,10 +344,28 @@ private fun videoDetailActionButtons(
             }
         }
 
+        // Dislike - 点踩（与点赞互斥，官方不展示点踩数，固定显示文字）
+        add { modifier ->
+            Box(
+                modifier = modifier.heightIn(min = 48.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                TripleProgressActionButton(
+                    icon = if (isDisliked) Icons.Rounded.ThumbDown else Icons.Outlined.ThumbDown,
+                    text = "点踩",
+                    isActive = isDisliked,
+                    activeColor = activeColors.primaryAction,
+                    progress = 0f,
+                    onClick = onDislikeClick,
+                    horizontalPadding = buttonHorizontalPadding
+                )
+            }
+        }
+
         // Coin
         add { modifier ->
             Box(
-                modifier = modifier.heightIn(min = 56.dp),
+                modifier = modifier.heightIn(min = 48.dp),
                 contentAlignment = Alignment.Center
             ) {
                 TripleProgressActionButton(
@@ -354,7 +383,7 @@ private fun videoDetailActionButtons(
         if (showCommentAction) {
             add { modifier ->
                 Box(
-                    modifier = modifier.heightIn(min = 56.dp),
+                    modifier = modifier.heightIn(min = 48.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     BiliActionButton(
@@ -372,7 +401,7 @@ private fun videoDetailActionButtons(
         // Favorite
         add { modifier ->
             Box(
-                modifier = modifier.heightIn(min = 56.dp),
+                modifier = modifier.heightIn(min = 48.dp),
                 contentAlignment = Alignment.Center
             ) {
                 TripleProgressActionButton(
@@ -391,7 +420,7 @@ private fun videoDetailActionButtons(
         // Share
         add { modifier ->
             Box(
-                modifier = modifier.heightIn(min = 56.dp),
+                modifier = modifier.heightIn(min = 48.dp),
                 contentAlignment = Alignment.Center
             ) {
                 BiliActionButton(
@@ -408,7 +437,7 @@ private fun videoDetailActionButtons(
         //  稍后再看
         add { modifier ->
             Box(
-                modifier = modifier.heightIn(min = 56.dp),
+                modifier = modifier.heightIn(min = 48.dp),
                 contentAlignment = Alignment.Center
             ) {
                 BiliActionButton(
@@ -432,7 +461,7 @@ private fun videoDetailActionButtons(
         val isDownloading = downloadProgress in 0f..0.99f
         add { modifier ->
             Box(
-                modifier = modifier.heightIn(min = 56.dp),
+                modifier = modifier.heightIn(min = 48.dp),
                 contentAlignment = Alignment.Center
             ) {
                 BiliActionButton(
@@ -493,7 +522,7 @@ private fun TripleProgressActionButton(
         verticalArrangement = Arrangement.Center,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
+            .heightIn(min = 48.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -821,7 +850,7 @@ private fun BiliActionButton(
         verticalArrangement = Arrangement.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
+            .heightIn(min = 48.dp)
             .graphicsLayer {
                 scaleX = scale * pulseScale
                 scaleY = scale * pulseScale

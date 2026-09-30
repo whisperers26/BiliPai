@@ -685,7 +685,9 @@ data class SpaceDynamicAuthor(
     val face: String = "",
     val pub_time: String = "",
     val pub_ts: Long = 0,
-    val pub_location_text: String = ""
+    val pub_location_text: String = "",
+    val official_verify: DynamicOfficialVerify? = null,
+    val vip: DynamicVipInfo? = null
 )
 
 @kotlinx.serialization.Serializable
@@ -857,7 +859,18 @@ data class SpaceAudioItem(
     val play_count: Int = 0,
     val reply_count: Int = 0,
     val share_count: Int = 0,
-    val collect_count: Int = 0
+    val collect_count: Int = 0,
+    // 真实播放/收藏/评论数在嵌套 statistic 里（顶层 play_count 恒为 0）
+    val statistic: SpaceAudioStatistic? = null
+)
+
+@Serializable
+data class SpaceAudioStatistic(
+    val sid: Long = 0,
+    val play: Long = 0,
+    val collect: Long = 0,
+    val comment: Long = 0,
+    val share: Long = 0
 )
 
 // ==========  Space Article Models ==========
@@ -983,4 +996,92 @@ data class SpaceCheeseItem(
     val status: String = "",
     val title: String = "",
     val ctime: String = ""
+)
+
+// App 端 /x/v2/space 的充电（elec）与大航海（guard）摘要，仅解析头部展示所需字段
+@Serializable
+data class SpaceSupportersResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: SpaceSupportersData? = null
+)
+
+@Serializable
+data class SpaceSupportersData(
+    val elec: SpaceElecBlock? = null,
+    val guard: SpaceGuardBlock? = null
+)
+
+@Serializable
+data class SpaceElecBlock(
+    val total: Long = 0L,
+    val list: List<SpaceSupporterUser> = emptyList()
+)
+
+@Serializable
+data class SpaceGuardBlock(
+    val uri: String = "",
+    val desc: String = "",
+    val item: List<SpaceSupporterUser> = emptyList()
+)
+
+@Serializable
+data class SpaceSupporterUser(
+    val mid: Long = 0L,
+    val uname: String = "",
+    val avatar: String = "",
+    val face: String = ""
+)
+
+// 充电排行 /x/upower/up/member/rank/v2
+@Serializable
+data class SpaceUpowerRankResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: SpaceUpowerRankData? = null
+)
+
+@Serializable
+data class SpaceUpowerRankData(
+    @SerialName("rank_info") val rankInfo: List<SpaceUpowerRankItem> = emptyList(),
+    @SerialName("privilege_type") val privilegeType: Int = 0,
+    val tabs: List<Int> = emptyList(),
+    @SerialName("level_info") val levelInfo: List<SpaceUpowerLevelInfo> = emptyList()
+)
+
+@Serializable
+data class SpaceUpowerRankItem(
+    val mid: Long = 0L,
+    val nickname: String = "",
+    val avatar: String = "",
+    val day: Int = 0
+)
+
+@Serializable
+data class SpaceUpowerLevelInfo(
+    @SerialName("privilege_type") val privilegeType: Int = 0,
+    val name: String = "",
+    @SerialName("member_total") val memberTotal: Int = 0
+)
+
+// 大航海 /xlive/app-ucenter/v1/guard/MainGuardCardAll
+@Serializable
+data class SpaceMemberGuardResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: SpaceMemberGuardData? = null
+)
+
+@Serializable
+data class SpaceMemberGuardData(
+    @SerialName("guard_top_list") val guardTopList: List<SpaceGuardMemberItem> = emptyList(),
+    @SerialName("has_more") val hasMore: Int = 0
+)
+
+@Serializable
+data class SpaceGuardMemberItem(
+    val uid: Long = 0L,
+    val username: String = "",
+    val face: String = "",
+    @SerialName("guard_level") val guardLevel: Int = 0
 )

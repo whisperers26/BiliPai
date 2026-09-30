@@ -18,6 +18,16 @@ internal fun resolveMessageNotificationTiming(mode: MessageNotificationMode): Me
     MessageNotificationMode.MORE_TIMELY -> MessageNotificationTiming(15, 60, false)
 }
 
+// Resident FGS keeps the fast lane only while the user is around (screen on) or the device is
+// charging; an idle device drops to a 15-minute floor so the 60–120s poll stops burning radio/CPU
+// overnight while WorkManager keeps its slower periodic guarantee.
+internal const val RESIDENT_IDLE_POLL_MS: Long = 15 * 60 * 1000L
+
+internal fun resolveResidentPollDelayMs(mode: MessageNotificationMode, screenOn: Boolean, charging: Boolean): Long {
+    val base = resolveMessageNotificationTiming(mode).residentPollSeconds * 1000
+    return if (screenOn || charging) base else RESIDENT_IDLE_POLL_MS
+}
+
 internal fun sessionNotificationKey(session: SessionItem): String = "${session.talker_id}_${session.session_type}"
 
 internal fun filterNewPrivateSessions(

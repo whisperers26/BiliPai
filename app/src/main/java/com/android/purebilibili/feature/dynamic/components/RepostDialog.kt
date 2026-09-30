@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 
 /**
  *  动态转发对话框
@@ -24,11 +25,12 @@ import androidx.compose.ui.text.font.FontWeight
 @Composable
 fun RepostDialog(
     onDismiss: () -> Unit,
-    onRepost: (content: String, onComplete: (Boolean) -> Unit) -> Unit
+    onRepost: (content: String, alsoComment: Boolean, onComplete: (Boolean) -> Unit) -> Unit
 ) {
     var repostText by remember { mutableStateOf("") }
+    var alsoComment by remember { mutableStateOf(false) }
     var isPosting by remember { mutableStateOf(false) }
-    
+
     AppAlertDialog(
         onDismissRequest = { if (!isPosting) onDismiss() },
         title = {
@@ -48,17 +50,32 @@ fun RepostDialog(
             }
         },
         text = {
-            AppTextField(
-                value = repostText,
-                onValueChange = { repostText = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(AppSpacingTokens.TripleExtraLarge * 2 + AppSpacingTokens.ExtraLarge),
-                placeholder = "说点什么吧...(可选)",
-                singleLine = false,
-                minLines = 3,
-                maxLines = 5,
-            )
+            Column {
+                AppTextField(
+                    value = repostText,
+                    onValueChange = { repostText = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(AppSpacingTokens.TripleExtraLarge * 2 + AppSpacingTokens.ExtraLarge),
+                    placeholder = "说点什么吧...(可选)",
+                    singleLine = false,
+                    minLines = 3,
+                    maxLines = 5,
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    Checkbox(
+                        checked = alsoComment,
+                        onCheckedChange = { alsoComment = it }
+                    )
+                    AppText(
+                        "同时转发到评论区",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
         },
         dismissButton = {
             AppDialogAction(onClick = { if (!isPosting) onDismiss() }) {
@@ -70,7 +87,7 @@ fun RepostDialog(
                 onClick = {
                     if (!isPosting) {
                         isPosting = true
-                        onRepost(repostText) { success ->
+                        onRepost(repostText, alsoComment) { success ->
                             if (!success) isPosting = false
                         }
                     }

@@ -13,6 +13,7 @@ private const val FALLBACK_START_SCALE = 0.96f
 private const val IMAGE_PREVIEW_OPEN_DURATION_MS = 320
 private const val IMAGE_PREVIEW_DISMISS_DURATION_MS = 300
 private const val IMAGE_PREVIEW_CANCEL_RECOVER_DURATION_MS = 180
+private const val IMAGE_PREVIEW_VERTICAL_DISMISS_FRACTION = 0.18f
 private const val IMAGE_PREVIEW_BLUR_QUANTUM_PX = 2f
 
 internal data class ImagePreviewTransitionFrame(
@@ -345,7 +346,10 @@ internal fun resolveImagePreviewVerticalDismissDecision(
     dragOffsetYPx: Float,
     containerHeightPx: Float
 ): ImagePreviewVerticalDismissDecision {
-    val threshold = maxOf(120f, containerHeightPx.coerceAtLeast(1f) * 0.14f)
+    val threshold = maxOf(
+        120f,
+        containerHeightPx.coerceAtLeast(1f) * IMAGE_PREVIEW_VERTICAL_DISMISS_FRACTION
+    )
     return if (kotlin.math.abs(dragOffsetYPx) >= threshold) {
         ImagePreviewVerticalDismissDecision.DISMISS
     } else {
@@ -354,10 +358,11 @@ internal fun resolveImagePreviewVerticalDismissDecision(
 }
 
 internal fun resolveImagePreviewDismissBackdropAlpha(
-    visualProgress: Float
+    visualProgress: Float,
+    startAlpha: Float = 1f,
 ): Float {
-    // 一镜到底：遮罩与 morph 进度线性同步，落点时立刻露底，减少「关完还黑一下」。
-    return visualProgress.coerceIn(0f, 1f)
+    // 保留下拉结束时的遮罩透明度，再与回位 morph 同步淡出，避免门槛处闪黑。
+    return startAlpha.coerceIn(0f, 1f) * visualProgress.coerceIn(0f, 1f)
 }
 
 /**

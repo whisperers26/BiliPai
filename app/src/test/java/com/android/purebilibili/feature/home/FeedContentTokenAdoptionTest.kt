@@ -66,6 +66,19 @@ class FeedContentTokenAdoptionTest {
         assertTrue(story.contains("FeedTitleHierarchy.Standard"))
     }
 
+    @Test
+    fun feed_statistic_and_cover_badge_styles_use_tabular_numerals() {
+        val tokens = locateDesignSystem(
+            "src/main/java/com/android/purebilibili/core/ui/FeedContentTokens.kt",
+        ).readText()
+
+        assertTrue(tokens.contains("const val TabularNumerals = \"tnum\""))
+        assertTrue(
+            tokens.contains("fontFeatureSettings = AppTypographyTokens.TabularNumerals"),
+            "统计数与封面时长必须启用等宽数字",
+        )
+    }
+
     private fun locate(path: String): File = listOf(File(path), File("app/$path"))
         .firstOrNull(File::exists) ?: error("Cannot locate $path")
 

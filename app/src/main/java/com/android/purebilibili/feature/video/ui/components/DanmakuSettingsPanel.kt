@@ -23,6 +23,7 @@ import com.android.purebilibili.feature.video.danmaku.partitionDanmakuBlockRules
 import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
+import com.android.purebilibili.core.ui.components.AppTabRowIndicatorPresentation
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppOutlinedButton
 import com.android.purebilibili.core.ui.components.AppOutlinedTextField
@@ -551,6 +552,7 @@ fun DanmakuSettingsPanel(
                     if (isFullscreenStyle) {
                         // 横屏分区 Tab：基础 / 高级 / 屏蔽，避免窄侧栏长滚动。
                         AppThemeAdaptiveTabRow(
+indicatorPresentation = AppTabRowIndicatorPresentation.TONAL_PILL,
                             options = listOf("基础", "高级", "屏蔽").mapIndexed { index, label ->
                                 AppSegmentOption(index, label)
                             },
@@ -1379,6 +1381,7 @@ private fun DanmakuBlockManagerDialog(
                 }
 
                 AppThemeAdaptiveTabRow(
+indicatorPresentation = AppTabRowIndicatorPresentation.TONAL_PILL,
                     options = listOf("关键词", "正则", "UID(hash)").mapIndexed { index, label ->
                         AppSegmentOption(
                             index,

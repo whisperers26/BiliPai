@@ -13,11 +13,14 @@ import com.android.purebilibili.data.model.response.SpaceDynamicOpus
 import com.android.purebilibili.data.model.response.SpaceDynamicOpusSummary
 import com.android.purebilibili.data.model.response.DynamicMajorBadge
 import com.android.purebilibili.data.model.response.DynamicBasic
+import com.android.purebilibili.data.model.response.DynamicOfficialVerify
+import com.android.purebilibili.data.model.response.DynamicVipInfo
 import com.android.purebilibili.data.model.response.DynamicMoreModule
 import com.android.purebilibili.data.model.response.DynamicThreePointItem
 import com.android.purebilibili.data.model.response.DynamicThreePointParams
 import com.android.purebilibili.data.model.response.SpaceDynamicCount
 import com.android.purebilibili.data.model.response.SpaceDynamicStat
+import com.android.purebilibili.data.model.response.SpaceDynamicAuthor
 import com.android.purebilibili.feature.dynamic.DynamicCommentTarget
 import com.android.purebilibili.feature.dynamic.resolveDynamicCommentTargets
 import com.android.purebilibili.feature.dynamic.components.resolveDynamicArchiveBadgeLabel
@@ -28,6 +31,24 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 class SpaceDynamicLoadPolicyTest {
+
+    @Test
+    fun resolveSpaceDynamicCardItem_preservesAuthorAvatarMarks() {
+        val item = SpaceDynamicItem(
+            modules = SpaceDynamicModules(
+                module_author = SpaceDynamicAuthor(
+                    name = "测试UP主",
+                    official_verify = DynamicOfficialVerify(type = 0),
+                    vip = DynamicVipInfo(type = 2, status = 1),
+                )
+            )
+        )
+
+        val author = resolveSpaceDynamicCardItem(item).modules.module_author
+        assertEquals(0, author?.official_verify?.type)
+        assertEquals(1, author?.vip?.status)
+        assertEquals(2, author?.vip?.type)
+    }
 
     @Test
     fun filterSpaceDynamicItemsByQuery_matchesDynamicTextAndArchiveTitle() {

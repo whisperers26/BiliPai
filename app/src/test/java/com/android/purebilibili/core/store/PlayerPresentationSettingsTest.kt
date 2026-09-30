@@ -2,6 +2,7 @@ package com.android.purebilibili.core.store
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PlayerPresentationSettingsTest {
@@ -27,5 +28,6 @@ class PlayerPresentationSettingsTest {
         val settings = PlayerControlVisibilitySettings()
         assertTrue(settings.showCastButton)
         assertTrue(settings.showFollowButton)
+        assertFalse(settings.compactPlayerChrome)
     }
 }

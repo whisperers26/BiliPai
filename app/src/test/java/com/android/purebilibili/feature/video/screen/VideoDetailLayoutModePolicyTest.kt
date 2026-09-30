@@ -270,41 +270,6 @@ class VideoDetailLayoutModePolicyTest {
     }
 
     @Test
-    fun systemMultiWindowFullscreenPolicy_usesInWindowFullscreenInsteadOfRelaunchingTask() {
-        assertTrue(
-            shouldUseInWindowFullscreenForSystemMultiWindow(
-                isInMultiWindowMode = true,
-                isInPictureInPictureMode = false,
-                isOrientationDrivenFullscreen = true,
-                isFullscreenMode = false
-            )
-        )
-        assertFalse(
-            shouldUseInWindowFullscreenForSystemMultiWindow(
-                isInMultiWindowMode = false,
-                isInPictureInPictureMode = false,
-                isOrientationDrivenFullscreen = true,
-                isFullscreenMode = false
-            )
-        )
-        assertFalse(
-            shouldUseInWindowFullscreenForSystemMultiWindow(
-                isInMultiWindowMode = true,
-                isInPictureInPictureMode = true,
-                isOrientationDrivenFullscreen = true,
-                isFullscreenMode = false
-            )
-        )
-        assertFalse(
-            shouldUseInWindowFullscreenForSystemMultiWindow(
-                isInMultiWindowMode = true,
-                isInPictureInPictureMode = false,
-                isOrientationDrivenFullscreen = true,
-                isFullscreenMode = true
-            )
-        )
-    }
-
     @Test
     fun floatingWindowFallback_detectsCurrentBoundsSmallerThanMaximum() {
         assertTrue(
@@ -343,24 +308,40 @@ class VideoDetailLayoutModePolicyTest {
                 isInMultiWindowMode = false
             )
         )
-    }
-
-    @Test
-    fun systemMultiWindowFullscreenPolicy_doesNotApplyRouteOrientationRequestInsideSmallWindow() {
         assertFalse(
-            shouldApplyStartFullscreenOrientationRequest(
-                startInFullscreen = true,
+            resolveVideoDetailFullscreenMode(
                 isOrientationDrivenFullscreen = true,
-                isLandscape = false,
+                isLandscape = true,
+                userRequestedFullscreen = false,
                 isInMultiWindowMode = true
+            )
+        )
+        assertFalse(
+            resolveVideoDetailFullscreenMode(
+                isOrientationDrivenFullscreen = true,
+                isLandscape = true,
+                userRequestedFullscreen = false,
+                isInMultiWindowMode = false,
+                manualPortraitHoldActive = true,
             )
         )
     }
 
     @Test
-    fun phoneOrientationPolicy_doesNotWriteRequestedOrientationInsideSmallWindow() {
+    fun systemSmallWindowFullscreenPolicy_requestsLandscapeOrientation() {
+        assertTrue(
+            shouldApplyStartFullscreenOrientationRequest(
+                startInFullscreen = true,
+                isOrientationDrivenFullscreen = true,
+                isLandscape = false
+            )
+        )
+    }
+
+    @Test
+    fun phoneOrientationPolicy_requestsLandscapeInsideSystemSmallWindow() {
         assertEquals(
-            null,
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
             resolvePhoneVideoRequestedOrientation(
                 autoRotateEnabled = true,
                 fullscreenMode = FullscreenMode.AUTO,

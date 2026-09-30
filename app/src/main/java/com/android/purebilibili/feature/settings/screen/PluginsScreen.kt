@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -752,7 +755,7 @@ fun PluginsContent(
                                 )
                                 AppText(
                                     text = if (isJsPreviewLoading) {
-                                        "正在预览 JS 插件..."
+                                        "正在预览 JS 插件…"
                                     } else {
                                         "支持链接或本地 .js，预览 manifest 和权限后安装"
                                     },
@@ -869,7 +872,7 @@ fun PluginsContent(
                             )
                             AppText(
                                 text = if (isKotlinPackageLoading) {
-                                    "正在读取 .bpplugin..."
+                                    "正在读取 .bpplugin…"
                                 } else {
                                     "选择 .bpplugin，展示 SHA-256、签名状态和敏感能力"
                                 },
@@ -1055,9 +1058,9 @@ fun PluginsContent(
                                 )
                                 AppText(
                                     text = if (isUiSkinPackageLoading) {
-                                        "正在读取 .bpskin..."
+                                        "正在读取皮肤及所需资源…"
                                     } else {
-                                        "选择 .bpskin、主题目录 ZIP 或装扮 _package.zip，只保存资源和启用记录"
+                                        "支持 .bpskin、主题 ZIP 和装扮 JSON；缺少的远程资源将联网下载"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1295,7 +1298,7 @@ fun PluginsContent(
                         ) {
                             AppCircularProgressIndicator(modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            AppText("正在预览...")
+                            AppText("正在预览…")
                         }
                     }
                 }
@@ -1373,7 +1376,7 @@ fun PluginsContent(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             AppCircularProgressIndicator(modifier = Modifier.size(18.dp))
-                            AppText("正在安装...", style = MaterialTheme.typography.bodySmall)
+                            AppText("正在安装…", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -1459,7 +1462,7 @@ fun PluginsContent(
                         ) {
                             AppCircularProgressIndicator(modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            AppText("正在安装...")
+                            AppText("正在安装…")
                         }
                     }
                     if (isPreviewLoading) {
@@ -1471,7 +1474,7 @@ fun PluginsContent(
                         ) {
                             AppCircularProgressIndicator(modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            AppText("正在加载插件信息...")
+                            AppText("正在加载插件信息…")
                         }
                     }
                 }
@@ -1512,7 +1515,7 @@ fun PluginsContent(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     AppCircularProgressIndicator(modifier = Modifier.size(20.dp))
-                    AppText("正在加载插件信息...")
+                    AppText("正在加载插件信息…")
                 }
             }
         )
@@ -1574,7 +1577,7 @@ fun PluginsContent(
                             ) {
                                 AppCircularProgressIndicator(modifier = Modifier.size(18.dp))
                                 AppText(
-                                    text = "正在安装...",
+                                    text = "正在安装…",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
@@ -1713,6 +1716,7 @@ fun PluginsContent(
     uiSkinPreview?.let { preview ->
         val previewModel = buildUiSkinPackagePreview(preview)
         val imagePreviewItems = buildUiSkinImagePreviewItems(uiSkinPreviewAssetFiles)
+        val previewContentMaxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.56f
         AppAlertDialog(
             onDismissRequest = {
                 if (!isImporting) {
@@ -1724,7 +1728,13 @@ fun PluginsContent(
             icon = { AppIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_brush_fill_24), contentDescription = null) },
             title = { AppText("界面皮肤包预览") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = previewContentMaxHeight)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     AppText(
                         text = previewModel.title,
                         style = MaterialTheme.typography.titleMedium,
@@ -1788,7 +1798,7 @@ fun PluginsContent(
                     }
                     UiSkinImagePreviewGrid(items = imagePreviewItems)
                     AppText(
-                        text = "宿主只保存资源和启用记录，不执行代码；可替换首页皮肤图标和装饰层，不替换底栏液态玻璃链路。",
+                        text = "皮肤只包含图片和配色，不执行代码。完整插画皮肤使用通栏底栏；其他皮肤沿用当前底栏样式。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

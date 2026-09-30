@@ -53,6 +53,7 @@ import com.android.purebilibili.core.util.resolveAppDisplayContext
 import com.android.purebilibili.core.util.resolveSafeAndroidPipRational
 import com.android.purebilibili.core.util.LARGE_SCREEN_SMALLEST_WIDTH_DP
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
+import com.android.purebilibili.feature.video.screen.isActivityInMultiWindowOrFloatingMode
 import androidx.window.layout.WindowMetricsCalculator
 // Imports for moved classes
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackViewModel
@@ -111,8 +112,15 @@ class VideoActivity : ComponentActivity() {
         enableEdgeToEdge()
         AppWindowSystemUiController.configureEdgeToEdgeHost(this)
         val entryDisplayContext = resolveAppDisplayContext()
+        val entryIsInMultiWindowOrFloatingMode = isActivityInMultiWindowOrFloatingMode(
+            activity = this,
+            displayContext = entryDisplayContext,
+        )
+        // 分屏 / 系统小窗（freeform）下窗口可以跟随横竖屏，不再强制竖屏，
+        // 让视频以横屏打开；普通手机窗口维持既有竖屏策略。
         if (
             savedInstanceState == null &&
+            !entryIsInMultiWindowOrFloatingMode &&
             (entryDisplayContext.isFoldableCoverWindow ||
                 minOf(
                     entryDisplayContext.currentWindowWidthDp,
@@ -199,7 +207,10 @@ class VideoActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(initialValue = true)
             val cardDynamicTintEnabled by SettingsManager
                 .getHomeCardDynamicTintEnabled(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = true)
+                .collectAsStateWithLifecycle(initialValue = false)
+            val cardFrostedGlassEnabled by SettingsManager
+                .getHomeCardFrostedGlassEnabled(this@VideoActivity)
+                .collectAsStateWithLifecycle(initialValue = false)
             val hapticFeedbackEnabled by SettingsManager
                 .getHapticFeedbackEnabled(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = true)
@@ -258,6 +269,8 @@ class VideoActivity : ComponentActivity() {
                     LocalVideoTransitionAdaptiveInfo provides videoTransitionAdaptiveInfo,
                     com.android.purebilibili.feature.home.components.cards.LocalHomeCardDynamicTintEnabled provides
                         cardDynamicTintEnabled,
+                    com.android.purebilibili.feature.home.components.cards.LocalHomeCardFrostedGlassEnabled provides
+                        cardFrostedGlassEnabled,
                 ) {
                 // VideoDetailScreen handles its own UI state and player initialization
                 com.android.purebilibili.feature.video.screen.VideoDetailScreen(
@@ -426,11 +439,13 @@ class VideoActivity : ComponentActivity() {
         //  [修复] 使用 SettingsManager 读取正确的小窗模式设置
         val mode = com.android.purebilibili.core.store.SettingsManager.getMiniPlayerModeSync(this)
         val shouldEnterPip = mode.supportsSystemPip
-        
+        val mini = MiniPlayerManager.getInstance(this)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && shouldEnterPip) {
             val state = viewModel.uiState.value
             if (state is VideoPlaybackUiState.Success) {
-                enterPictureInPictureMode(buildPipParams(true))
+                // 按真实播放状态生成遥控按钮，避免暂停态下仍显示「暂停」action。
+                enterPictureInPictureMode(buildPipParams(isPlaying = mini.isPlaying))
             }
         }
     }

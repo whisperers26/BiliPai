@@ -75,9 +75,22 @@ internal fun shouldShowRecommendOldContentDivider(
     refreshNewItemsKey: Long,
     revealedRefreshKey: Long,
     anchorBvid: String?,
-    oldContentStartIndex: Int?
+    oldContentStartIndex: Int?,
+    refreshTipVisible: Boolean = true
 ): Boolean {
+    if (!refreshTipVisible) return false
     if (currentCategory != HomeCategory.RECOMMEND) return false
     if (refreshNewItemsKey <= 0L || revealedRefreshKey != refreshNewItemsKey) return false
     return !anchorBvid.isNullOrBlank() || (oldContentStartIndex != null && oldContentStartIndex > 0)
 }
+
+/**
+ * 推荐流增量刷新合并后旧内容的保留上限，对齐 PiliPlus：
+ * 旧内容超过 [threshold] 条时只保留最新的 [keepCount] 条，防止长期不刷新列表无限膨胀。
+ * 返回应保留的旧内容条数（新内容不受影响）。
+ */
+internal fun resolveHomeRefreshKeptOldItemCount(
+    oldCount: Int,
+    threshold: Int = 200,
+    keepCount: Int = 50
+): Int = if (oldCount > threshold) keepCount else oldCount

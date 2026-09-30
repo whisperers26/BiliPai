@@ -26,6 +26,31 @@ import org.junit.Test
 
 class HomeHeaderVisualPolicyTest {
     @Test
+    fun `illustrated header uses a light action surface above the skin`() {
+        val source = File("src/main/java/com/android/purebilibili/feature/home/components/HomeHeader.kt")
+            .readText()
+        val action = source.substringAfter("val topRightActionButtonSize =")
+            .substringBefore("if (topRightUnreadBadge != null)")
+
+        assertTrue(action.contains("!hasIllustratedHeader &&"))
+        assertTrue(action.contains("if (hasIllustratedHeader) {"))
+        assertTrue(action.indexOf("if (hasIllustratedHeader) {") < action.indexOf("Modifier.homeTopBottomBarMatchedSurface("))
+        assertTrue(action.contains("OpticalContrastPalette.Highlight.copy(alpha = 0.16f)"))
+        assertTrue(action.contains("tint = if (hasIllustratedHeader)"))
+    }
+
+    @Test
+    fun `illustrated top tab labels draw over their skin background`() {
+        val source = File("src/main/java/com/android/purebilibili/feature/home/components/HomeHeader.kt")
+            .readText()
+        val tabs = source.substringAfter("val topTabsContent: @Composable (Dp) -> Unit =")
+            .substringBefore("    BoxWithConstraints(")
+
+        assertTrue(tabs.indexOf("topTabBackgroundImagePath?.let") < tabs.indexOf("HomeTopTabChrome("))
+        assertTrue(tabs.contains("containerZIndex = if (hasIllustratedHeader || useUnifiedTopPanel) 0f else -1f"))
+    }
+
+    @Test
     fun `legacy top tabs require liquid glass and floating bottom bar both disabled`() {
         assertTrue(
             shouldUseLegacyHomeTopTabs(
@@ -239,7 +264,7 @@ class HomeHeaderVisualPolicyTest {
     @Test
     fun `home header trims top chrome heights for better content density`() {
         assertEquals(48.dp, resolveHomeTopSearchBarHeight())
-        assertEquals(48.dp, resolveHomeTopSearchBarHeight(UiPreset.MD3))
+        assertEquals(56.dp, resolveHomeTopSearchBarHeight(UiPreset.MD3))
         assertEquals(56.dp, resolveHomeTopTabRowHeight(isTabFloating = true))
         assertEquals(56.dp, resolveHomeTopTabRowHeight(isTabFloating = true, uiPreset = UiPreset.MD3))
         assertEquals(56.dp, resolveHomeTopTabRowHeight(isTabFloating = false))
@@ -572,9 +597,9 @@ class HomeHeaderVisualPolicyTest {
     fun `home header trims horizontal spacing without cramping controls`() {
         assertEquals(14.dp, resolveHomeTopSearchRowHorizontalPadding())
         assertEquals(16.dp, resolveHomeTopSearchRowHorizontalPadding(UiPreset.MD3))
-        // 两主题统一：搜索胶囊与头像、设置按钮同高（36dp）。
-        assertEquals(36.dp, resolveHomeTopSearchPillHeight())
-        assertEquals(36.dp, resolveHomeTopSearchPillHeight(UiPreset.MD3))
+        // 搜索入口使用库组件的原生高度。
+        assertEquals(48.dp, resolveHomeTopSearchPillHeight())
+        assertEquals(56.dp, resolveHomeTopSearchPillHeight(UiPreset.MD3))
         // 分栏轨道与搜索行共用同一水平内边距，保证左右对齐。
         assertEquals(14.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true))
         assertEquals(16.dp, resolveHomeTopTabHorizontalPadding(isTabFloating = true, uiPreset = UiPreset.MD3))
@@ -786,7 +811,7 @@ class HomeHeaderVisualPolicyTest {
 
         assertTrue(searchShape is RoundedCornerShape)
         assertEquals(CircleShape, edgeShape)
-        assertEquals(36.dp, resolveHomeTopSearchPillHeight(UiPreset.MD3))
+        assertEquals(56.dp, resolveHomeTopSearchPillHeight(UiPreset.MD3))
         assertEquals(16.dp, resolveHomeTopSearchContentHorizontalPadding(UiPreset.MD3))
         assertEquals(12.dp, resolveHomeTopSearchIconTextGap(UiPreset.MD3))
     }
@@ -812,7 +837,7 @@ class HomeHeaderVisualPolicyTest {
             )
         )
         assertEquals(
-            36.dp,
+            48.dp,
             resolveHomeTopSearchPillHeight(
                 uiPreset = UiPreset.MD3,
                 androidNativeVariant = AndroidNativeVariant.MIUIX
@@ -1955,28 +1980,21 @@ class HomeHeaderVisualPolicyTest {
         assertFalse(headerSource.contains("HomeSkinAtmosphere("))
         assertFalse(headerSource.contains("resolveHomeSkinAtmospherePinnedHeight("))
         assertFalse(headerSource.contains("modifier = Modifier.matchParentSize()"))
-        assertTrue(headerSource.contains("skinTint = uiSkinDecoration?.searchCapsuleTint"))
+        assertTrue(headerSource.contains("AppSearchEntry("))
         assertTrue(headerSource.contains("uiSkinDecoration?.topAtmosphereTint"))
     }
 
     @Test
-    fun `home header search capsule reuses top tab dock liquid glass surface`() {
+    fun `home header search entry keeps native input over glass`() {
         val headerSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/HomeHeader.kt")
-        val searchCapsuleSource = headerSource
-            .substringAfter(".height(resolveHomeTopSearchPillHeight(topChromePolicy))")
-            .substringBefore("val searchFieldContent")
+        val searchEntrySource = headerSource.substringAfter("BottomBarMatchedReusableLiquidDock(")
+            .substringBefore("val topRightActionButtonSize")
 
-        assertTrue(searchCapsuleSource.contains("val skinSearchSurfaceColor = resolveHomeSkinSearchSurfaceColor("))
-        assertTrue(searchCapsuleSource.contains("surfaceColor = skinSearchSurfaceColor"))
-        assertTrue(searchCapsuleSource.contains("Modifier.homeTopBottomBarMatchedSurface("))
-        assertTrue(searchCapsuleSource.contains("renderMode = searchChromeRenderMode"))
-        assertTrue(searchCapsuleSource.contains("liquidGlassPreset = bottomBarLiquidGlassPreset"))
-        assertTrue(searchCapsuleSource.contains("Modifier.homeTopChromeSurface("))
-        assertFalse(searchCapsuleSource.contains("BiliPaiBottomBarIndicatorLayer("))
-        assertFalse(searchCapsuleSource.contains("searchChromeRenderModeEffective"))
-        assertFalse(searchCapsuleSource.contains("SimpleLiquidIndicator("))
-        assertFalse(searchCapsuleSource.contains(".matchParentSize()\n                                                .background("))
-        assertFalse(searchCapsuleSource.contains("uiSkinDecoration.searchCapsuleTint.copy(alpha = 0.22f)"))
+        assertTrue(searchEntrySource.contains("AppSearchEntry("))
+        assertTrue(searchEntrySource.contains("onSearchClick()"))
+        assertTrue(searchEntrySource.contains("searchChromeMaterialMode == TopTabMaterialMode.LIQUID_GLASS"))
+        assertTrue(searchEntrySource.contains("Color.Transparent"))
+        assertFalse(searchEntrySource.contains("homeTopChromeSurface("))
     }
 
     @Test

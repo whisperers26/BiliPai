@@ -15,6 +15,20 @@ import kotlin.test.assertTrue
 class BottomBarSurfaceColorPolicyTest {
 
     @Test
+    fun `floating skin artwork uses readable labels regardless of manifest tint`() {
+        val tintBasedColor = Color.Black
+
+        assertEquals(
+            OpticalContrastPalette.Highlight,
+            resolveFloatingBottomBarLabelColor(tintBasedColor, hasSkinArtwork = true),
+        )
+        assertEquals(
+            tintBasedColor,
+            resolveFloatingBottomBarLabelColor(tintBasedColor, hasSkinArtwork = false),
+        )
+    }
+
+    @Test
     fun `blur enabled follows blur style alpha`() {
         val color = resolveBottomBarSurfaceColor(
             surfaceColor = Color.White,

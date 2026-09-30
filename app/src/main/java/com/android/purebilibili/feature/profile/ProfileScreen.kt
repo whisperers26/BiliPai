@@ -98,6 +98,7 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.PickGalleryVisualMedia
 import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
+import com.android.purebilibili.feature.dynamic.components.isImagePreviewSourceHidden
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.resolveAppContentDialogLayoutPolicy
@@ -129,6 +130,7 @@ import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import com.android.purebilibili.core.ui.AppSplitLayout
 import com.android.purebilibili.core.ui.TopReadabilityChrome
 import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
+import com.android.purebilibili.core.ui.LocalBottomBarContentPadding
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.rememberAppBookmarkIcon
 import com.android.purebilibili.core.ui.rememberAppChevronDownIcon
@@ -1238,6 +1240,8 @@ private fun ProfileSpaceContent(
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (isTablet) {
+            // 悬浮底栏会盖在双栏内容上，列表尾部需要与手机分支同等的让位。
+            val bottomDockClearance = LocalBottomBarContentPadding.current
             Row(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1274,6 +1278,7 @@ private fun ProfileSpaceContent(
                         onFavoriteFolderClick = onFavoriteFolderClick,
                         contentColor = contentChrome.onSurfaceColor,
                     )
+                    Spacer(modifier = Modifier.height(bottomDockClearance))
                 }
                 ProfileSpaceFeedColumn(
                     user = user,
@@ -1299,7 +1304,7 @@ private fun ProfileSpaceContent(
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(
                         top = tabletWallpaperRevealHeight,
-                        bottom = 48.dp
+                        bottom = maxOf(48.dp, bottomDockClearance)
                     ),
                     listState = tabletFeedListState,
                 )
@@ -2820,6 +2825,7 @@ private fun ProfileDynamicMajorContent(item: SpaceDynamicItem, onVideoClick: (St
             )
         }
         if (cover.isNotBlank()) {
+            val coverSourceHidden = isImagePreviewSourceHidden(sourceRect)
             AsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(cover)
@@ -2830,6 +2836,7 @@ private fun ProfileDynamicMajorContent(item: SpaceDynamicItem, onVideoClick: (St
                 modifier = Modifier
                     .fillMaxWidth(0.72f)
                     .aspectRatio(1f)
+                    .alpha(if (coverSourceHidden) 0f else 1f)
                     .clip(AppShapes.container(ContainerLevel.Chip))
                     .onGloballyPositioned { coordinates ->
                         sourceRect = coordinates.boundsInWindow()
@@ -2851,7 +2858,7 @@ private fun ProfileDynamicMajorContent(item: SpaceDynamicItem, onVideoClick: (St
             images = imageUrls,
             initialIndex = selectedImageIndex.coerceIn(imageUrls.indices),
             sourceRect = sourceRect,
-            sourceCornerRadiusDp = 6f,
+            sourceCornerRadiusDp = AppShapes.containerCornerDp(ContainerLevel.Chip).value,
             textContent = previewText,
             defaultTextVisible = dynamicPreviewTextVisible,
             onDismiss = { selectedImageIndex = -1 }

@@ -63,7 +63,7 @@ fun BlockedListScreen(
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                blockedListSyncMessage = "正在导出黑名单 JSON..."
+                blockedListSyncMessage = "正在导出黑名单 JSON…"
                 blockedListSyncMessage = fileService.exportJsonToUri(uri, latestBlockedUps).fold(
                     onSuccess = { "已导出 ${latestBlockedUps.size} 个黑名单用户到 JSON 文件" },
                     onFailure = { it.message ?: "导出黑名单 JSON 失败" }
@@ -76,7 +76,7 @@ fun BlockedListScreen(
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                blockedListSyncMessage = "正在导入黑名单 JSON..."
+                blockedListSyncMessage = "正在导入黑名单 JSON…"
                 val text = fileService.readImportText(uri).getOrElse {
                     blockedListSyncMessage = it.message ?: "读取黑名单 JSON 失败"
                     return@launch
@@ -107,7 +107,7 @@ fun BlockedListScreen(
                 if (!syncingBlockedList) {
                     scope.launch {
                         syncingBlockedList = true
-                        blockedListSyncMessage = "正在同步 B站黑名单..."
+                        blockedListSyncMessage = "正在同步 B站黑名单…"
                         val result = syncRepository.importFromBilibili()
                         blockedListSyncMessage = result.fold(
                             onSuccess = { it.message },
@@ -121,7 +121,7 @@ fun BlockedListScreen(
                 if (!refreshingProfiles) {
                     scope.launch {
                         refreshingProfiles = true
-                        blockedListSyncMessage = "正在刷新黑名单用户资料..."
+                        blockedListSyncMessage = "正在刷新黑名单用户资料…"
                         blockedListSyncMessage = repository.refreshBlockedUpProfiles().message
                         refreshingProfiles = false
                     }

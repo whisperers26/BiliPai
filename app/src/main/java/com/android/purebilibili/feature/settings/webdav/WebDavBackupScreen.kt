@@ -118,7 +118,7 @@ fun WebDavBackupScreen(
                 AppPreferenceSectionTitle("连接状态")
                 AppPreferenceGroup {
                     val statusText = when {
-                        uiState.isBusy -> uiState.statusMessage ?: "正在处理..."
+                        uiState.isBusy -> uiState.statusMessage ?: "正在处理…"
                         // 恢复会覆盖本地持久化文件，进程重启后才能稳定读取新内容。
                         uiState.restoreRequiresRestart -> uiState.statusMessage ?: "恢复完成，重启应用后生效"
                         !uiState.statusMessage.isNullOrBlank() -> uiState.statusMessage ?: ""

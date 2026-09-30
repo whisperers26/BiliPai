@@ -112,7 +112,8 @@ class DynamicScreenStructureTest {
             "src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicTopBar.kt"
         ).readText()
 
-        assertTrue(screenSource.contains("dynamicTopActionsCollapsed by rememberSaveable"))
+        assertTrue(screenSource.contains("getDynamicTopActionsCollapsed("))
+        assertTrue(screenSource.contains("setDynamicTopActionsCollapsed("))
         assertTrue(screenSource.contains("actionDockCollapsed = dynamicTopActionsCollapsed"))
         assertTrue(topBarSource.contains("visible = !actionDockCollapsed"))
         assertTrue(topBarSource.contains("onActionDockCollapsedChange(!actionDockCollapsed)"))

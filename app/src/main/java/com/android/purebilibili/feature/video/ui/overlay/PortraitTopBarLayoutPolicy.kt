@@ -22,14 +22,15 @@ fun shouldApplyStatusBarPaddingToPortraitTopBar(
 ): Boolean = statusBarVisible
 
 fun resolvePortraitTopBarLayoutPolicy(
-    widthDp: Int
+    widthDp: Int,
+    compact: Boolean = false
 ): PortraitTopBarLayoutPolicy {
     if (widthDp >= 1400) {
         return PortraitTopBarLayoutPolicy(
             horizontalPaddingDp = 24,
-            verticalPaddingDp = 12,
-            leftSectionSpacingDp = 14,
-            rightSectionSpacingDp = 10,
+            verticalPaddingDp = if (compact) 8 else 12,
+            leftSectionSpacingDp = if (compact) 7 else 14,
+            rightSectionSpacingDp = if (compact) 5 else 10,
             buttonSizeDp = 52,
             iconSizeDp = 28,
             chipFontSp = 15,
@@ -42,9 +43,9 @@ fun resolvePortraitTopBarLayoutPolicy(
     if (widthDp >= 840) {
         return PortraitTopBarLayoutPolicy(
             horizontalPaddingDp = 16,
-            verticalPaddingDp = 10,
-            leftSectionSpacingDp = 10,
-            rightSectionSpacingDp = 8,
+            verticalPaddingDp = if (compact) 6 else 10,
+            leftSectionSpacingDp = if (compact) 5 else 10,
+            rightSectionSpacingDp = if (compact) 4 else 8,
             buttonSizeDp = 40,
             iconSizeDp = 22,
             chipFontSp = 13,
@@ -57,9 +58,9 @@ fun resolvePortraitTopBarLayoutPolicy(
     if (widthDp >= 600) {
         return PortraitTopBarLayoutPolicy(
             horizontalPaddingDp = 12,
-            verticalPaddingDp = 9,
-            leftSectionSpacingDp = 9,
-            rightSectionSpacingDp = 6,
+            verticalPaddingDp = if (compact) 5 else 9,
+            leftSectionSpacingDp = if (compact) 4 else 9,
+            rightSectionSpacingDp = if (compact) 3 else 6,
             buttonSizeDp = 36,
             iconSizeDp = 20,
             chipFontSp = 12,
@@ -71,9 +72,9 @@ fun resolvePortraitTopBarLayoutPolicy(
 
     return PortraitTopBarLayoutPolicy(
         horizontalPaddingDp = 8,
-        verticalPaddingDp = 8,
-        leftSectionSpacingDp = 8,
-        rightSectionSpacingDp = 4,
+        verticalPaddingDp = if (compact) 4 else 8,
+        leftSectionSpacingDp = if (compact) 3 else 8,
+        rightSectionSpacingDp = if (compact) 2 else 4,
         buttonSizeDp = 32,
         iconSizeDp = 18,
         chipFontSp = 11,

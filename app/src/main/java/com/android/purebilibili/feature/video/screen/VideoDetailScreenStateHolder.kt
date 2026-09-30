@@ -32,6 +32,7 @@ import android.view.Window
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.Animatable
@@ -672,6 +673,7 @@ internal fun VideoDetailScreenStateHolder(
                 }
             },
             toggleLike = engagementViewModel::toggleLike,
+            toggleDislike = engagementViewModel::toggleDislike,
             openCoinDialog = engagementViewModel::openCoinDialog,
             doTripleAction = engagementViewModel::doTripleAction,
             toggleWatchLater = engagementViewModel::toggleWatchLater
@@ -1252,23 +1254,33 @@ internal fun VideoDetailScreenStateHolder(
             )
         )
 
-    // 🔧 [修复] 追踪用户是否主动请求全屏（点击全屏按钮）
-    // 使用 rememberSaveable 确保状态在横竖屏切换时保持
-    var userRequestedFullscreen by rememberSaveable { mutableStateOf(false) }
-    var manualPortraitHoldActive by rememberSaveable { mutableStateOf(false) }
-    var preserveCurrentFrameOnFullscreenChange by remember { mutableStateOf(false) }
-    var pendingFullscreenPositionRestoreMs by remember { mutableLongStateOf(-1L) }
     val activity = remember { context.findActivity() }
-    val playerWindowOrientationPolicy = remember(displayContext) {
-        com.android.purebilibili.core.util.resolvePlayerWindowOrientationPolicy(displayContext)
-    }
-    val usesInWindowFullscreen = playerWindowOrientationPolicy.usesInWindowFullscreen
     val isActivityInMultiWindowMode = activity?.let {
-        displayContext.isInMultiWindowMode || isActivityInMultiWindowOrFloatingMode(
+        isActivityInMultiWindowOrFloatingMode(
             activity = it,
             displayContext = displayContext,
         )
     } ?: displayContext.isInMultiWindowMode
+
+    // 🔧 [修复] 追踪用户是否主动请求全屏（点击全屏按钮）
+    // 使用 rememberSaveable 确保状态在横竖屏切换时保持
+    // 分屏 / 系统小窗下打开视频即进入全屏（横屏形态），无需手动点全屏
+    // A landscape request can temporarily change freeform bounds enough that the OS
+    // stops reporting multi-window. Do not key this intent to that changing signal:
+    // resetting it lets the sensor immediately request portrait and starts an orientation loop.
+    var userRequestedFullscreen by rememberSaveable(currentBvid) {
+        mutableStateOf(isActivityInMultiWindowMode)
+    }
+    var hasHandledStartFullscreenRequest by rememberSaveable(currentBvid, startInFullscreen) {
+        mutableStateOf(false)
+    }
+    var manualPortraitHoldActive by rememberSaveable { mutableStateOf(false) }
+    var preserveCurrentFrameOnFullscreenChange by remember { mutableStateOf(false) }
+    var pendingFullscreenPositionRestoreMs by remember { mutableLongStateOf(-1L) }
+    val playerWindowOrientationPolicy = remember(displayContext) {
+        com.android.purebilibili.core.util.resolvePlayerWindowOrientationPolicy(displayContext)
+    }
+    val usesInWindowFullscreen = playerWindowOrientationPolicy.usesInWindowFullscreen
 
     // 📐 全屏模式逻辑：
     // - 紧凑窗口：横放时自动进入全屏
@@ -1300,7 +1312,13 @@ internal fun VideoDetailScreenStateHolder(
     }
     val orientationPolicyDevice = playerPresentation.isOrientationDriven
     val isOrientationDrivenFullscreen = playerPresentation.isOrientationDriven
-    val isFullscreenMode = playerPresentation.isFullscreen
+    val isFullscreenMode = resolveVideoDetailFullscreenMode(
+        isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
+        isLandscape = isLandscape,
+        userRequestedFullscreen = userRequestedFullscreen,
+        isInMultiWindowMode = isActivityInMultiWindowMode,
+        manualPortraitHoldActive = manualPortraitHoldActive,
+    )
     var previousDisplayRole by remember {
         mutableStateOf(displayContext.foldableDisplayRole)
     }
@@ -1319,17 +1337,19 @@ internal fun VideoDetailScreenStateHolder(
         }
         previousDisplayRole = displayContext.foldableDisplayRole
     }
-    LaunchedEffect(appWindowAdaptiveInfo, playerPresentation) {
+    LaunchedEffect(appWindowAdaptiveInfo, playerPresentation, isFullscreenMode) {
         com.android.purebilibili.core.util.Logger.d(
             "VideoDetailScreen",
             com.android.purebilibili.core.util.formatAppAdaptiveStrategySnapshot(
                 appWindowAdaptiveInfo.toAdaptiveStrategySnapshot(
                     playerPresentation = if (playerPresentation.usesInWindowFullscreen) {
                         "in-window(user=${playerPresentation.userFullscreenIntent}," +
-                            "fullscreen=${playerPresentation.isFullscreen})"
-                    } else if (playerPresentation.orientationGeneratedFullscreen) {
+                            "fullscreen=$isFullscreenMode)"
+                    } else if (
+                        isFullscreenMode && playerPresentation.orientationGeneratedFullscreen
+                    ) {
                         "orientation-generated"
-                    } else if (playerPresentation.isFullscreen) {
+                    } else if (isFullscreenMode) {
                         "user-fullscreen"
                     } else {
                         "inline"
@@ -1451,39 +1471,39 @@ internal fun VideoDetailScreenStateHolder(
         }
     }
 
-    //  从小窗展开时自动进入全屏
+    //  路由请求只负责本次视频入口的初始方向。横屏切回竖屏后不能再次把它当成
+    //  新请求，否则 startInFullscreen 会和用户的退出操作互相触发方向切换。
     LaunchedEffect(
         startInFullscreen,
-        isOrientationDrivenFullscreen,
-        isLandscape,
-        displayContext,
+        currentBvid,
     ) {
-        if (startInFullscreen) {
-            if (!isOrientationDrivenFullscreen) {
-                userRequestedFullscreen = true
-            } else {
-                context.findActivity()?.let { activity ->
-                    val isInMultiWindowMode = isActivityInMultiWindowOrFloatingMode(
-                        activity = activity,
-                        displayContext = displayContext,
+        if (!startInFullscreen || hasHandledStartFullscreenRequest) return@LaunchedEffect
+        if (!isOrientationDrivenFullscreen) {
+            userRequestedFullscreen = true
+            hasHandledStartFullscreenRequest = true
+        } else {
+            context.findActivity()?.let { activity ->
+                val isInMultiWindowMode = isActivityInMultiWindowOrFloatingMode(
+                    activity = activity,
+                    displayContext = displayContext,
+                )
+                if (!shouldApplyStartFullscreenOrientationRequest(
+                        startInFullscreen = startInFullscreen,
+                        isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
+                        isLandscape = isLandscape
                     )
-                    if (!shouldApplyStartFullscreenOrientationRequest(
-                            startInFullscreen = startInFullscreen,
-                            isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
-                            isLandscape = isLandscape,
-                            isInMultiWindowMode = isInMultiWindowMode
-                        )
-                    ) {
-                        if (isInMultiWindowMode) {
-                            userRequestedFullscreen = true
-                        }
-                        return@let
+                ) {
+                    if (isInMultiWindowMode) {
+                        userRequestedFullscreen = true
                     }
-                    activity.applyPlayerRequestedOrientation(
-                        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
-                        displayContext = displayContext,
-                    )
+                    hasHandledStartFullscreenRequest = true
+                    return@let
                 }
+                activity.applyPlayerRequestedOrientation(
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+                    displayContext = displayContext,
+                )
+                hasHandledStartFullscreenRequest = true
             }
         }
     }
@@ -5390,6 +5410,9 @@ internal fun VideoDetailScreenStateHolder(
         )
     }
 
+    // 分屏 / 系统自由小窗的边界由 Android 窗口管理器控制。仅旋转 Compose
+    // 根图层不会把任务窗口变成横向矩形，并会让播放器 Surface 与 UI 变换不一致，
+    // 导致视频被拉伸；因此窗口内全屏仍使用正常布局，由播放器按视频比例适配窗口。
     VideoDetailScreenContent(
         transitionState = transitionState,
         routeSheetMotion = routeSheetMotion,

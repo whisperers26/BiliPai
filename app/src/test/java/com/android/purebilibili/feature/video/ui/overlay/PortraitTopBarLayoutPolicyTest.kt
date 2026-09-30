@@ -60,4 +60,25 @@ class PortraitTopBarLayoutPolicyTest {
         assertEquals(28, policy.iconSizeDp)
         assertEquals(15, policy.chipFontSp)
     }
+
+    @Test
+    fun compactPhone_tightensSectionSpacing() {
+        val classic = resolvePortraitTopBarLayoutPolicy(widthDp = 393, compact = false)
+        val compact = resolvePortraitTopBarLayoutPolicy(widthDp = 393, compact = true)
+
+        assertEquals(8, classic.leftSectionSpacingDp)
+        assertEquals(4, classic.rightSectionSpacingDp)
+        assertEquals(3, compact.leftSectionSpacingDp)
+        assertEquals(2, compact.rightSectionSpacingDp)
+    }
+
+    @Test
+    fun compactPhone_liftsTopBarWithoutShrinkingTouchTarget() {
+        val classic = resolvePortraitTopBarLayoutPolicy(widthDp = 393, compact = false)
+        val compact = resolvePortraitTopBarLayoutPolicy(widthDp = 393, compact = true)
+
+        assertEquals(8, classic.verticalPaddingDp)
+        assertEquals(4, compact.verticalPaddingDp)
+        assertEquals(classic.buttonSizeDp, compact.buttonSizeDp)
+    }
 }

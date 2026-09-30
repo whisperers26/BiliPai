@@ -13,7 +13,15 @@ import kotlinx.serialization.json.jsonPrimitive
 data class SubtitleCue(
     val startMs: Long,
     val endMs: Long,
-    val content: String
+    val content: String,
+    /** AI 逐字字幕提供的词级时间戳；普通 CC 字幕为空。 */
+    val words: List<SubtitleWordSpan> = emptyList()
+)
+
+data class SubtitleWordSpan(
+    val text: String,
+    val startMs: Long,
+    val endMs: Long
 )
 
 data class SubtitleLoadResult(
@@ -250,7 +258,29 @@ fun parseBiliSubtitleBody(rawJson: String): List<SubtitleCue> {
             SubtitleCue(
                 startMs = startMs,
                 endMs = endMs,
-                content = content
+                content = content,
+                words = obj["words"].asJsonArrayOrNull().orEmpty().mapNotNull { wordElement ->
+                    val wordObject = wordElement.asJsonObjectOrNull() ?: return@mapNotNull null
+                    val wordText = listOf("word", "text", "content")
+                        .firstNotNullOfOrNull { key ->
+                            wordObject[key]?.jsonPrimitive?.content?.trim()?.takeIf { it.isNotBlank() }
+                        }
+                        ?: return@mapNotNull null
+                    val startSeconds = wordObject["start"].asDoubleOrNull()
+                        ?: wordObject["start_time"].asDoubleOrNull()
+                        ?: return@mapNotNull null
+                    val endSeconds = wordObject["end"].asDoubleOrNull()
+                        ?: wordObject["end_time"].asDoubleOrNull()
+                        ?: return@mapNotNull null
+                    // 不同接口时间单位混用：大于 100000 视作毫秒，否则按秒
+                    val wordStartMs = if (startSeconds > 100_000.0) startSeconds.toLong() else (startSeconds * 1000.0).toLong()
+                    val wordEndMs = if (endSeconds > 100_000.0) endSeconds.toLong() else (endSeconds * 1000.0).toLong()
+                    SubtitleWordSpan(
+                        text = wordText,
+                        startMs = wordStartMs.coerceAtLeast(0L),
+                        endMs = wordEndMs.coerceAtLeast(wordStartMs)
+                    )
+                }
             )
         }.sortedBy { cue -> cue.startMs }
     } catch (_: Throwable) {

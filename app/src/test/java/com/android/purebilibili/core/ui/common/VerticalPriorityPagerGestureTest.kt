@@ -32,6 +32,29 @@ class VerticalPriorityPagerGestureTest {
     }
 
     @Test
+    fun `early vertical drift does not lock vertical before a horizontal swipe shows intent`() {
+        // 用户场景：手指落下先向下漂几像素，随后横向滑动。竖向漂移超出系统
+        // slop 但仍在意图宽限内时必须保持 UNDECIDED，给横向锁定留机会。
+        assertEquals(
+            PagerGestureDirection.UNDECIDED,
+            resolveVerticalPriorityPagerGestureDirection(
+                totalX = 3f,
+                totalY = 9f,
+                touchSlop = 8f,
+            ),
+        )
+        // 漂移继续累积直到超出宽限后，仍归属竖向（保持既有偏竖语义）。
+        assertEquals(
+            PagerGestureDirection.VERTICAL,
+            resolveVerticalPriorityPagerGestureDirection(
+                totalX = 4f,
+                totalY = 14f,
+                touchSlop = 8f,
+            ),
+        )
+    }
+
+    @Test
     fun `ambiguous diagonal drag prefers vertical content`() {
         assertEquals(
             PagerGestureDirection.VERTICAL,

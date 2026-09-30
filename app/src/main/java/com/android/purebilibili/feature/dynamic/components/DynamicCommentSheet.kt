@@ -176,6 +176,11 @@ fun DynamicCommentOverlayHost(
             onViewReplies = { reply -> viewModel.openSubReply(reply) },
             onReply = { reply -> viewModel.startCommentReply(reply) },
             onLike = { reply -> viewModel.likeComment(reply.rpid) },
+            onHate = { reply ->
+                viewModel.hateComment(reply.rpid) { _, message ->
+                    if (!inspectionMode) android.widget.Toast.makeText(toastContext, message, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            },
             dynamicAuthorMid = dynamicItem?.modules?.module_author?.mid ?: 0L,
             currentUserMid = TokenManager.midCache,
             onDelete = { reply ->
@@ -202,6 +207,11 @@ fun DynamicCommentOverlayHost(
             onLoadMoreSubReplies = { viewModel.loadMoreSubReplies() },
             onSubReplySortModeChange = { viewModel.setSubReplySortMode(it) },
             onThreadCommentLike = { rpid -> viewModel.likeComment(rpid) },
+            onThreadCommentHate = { rpid ->
+                viewModel.hateComment(rpid) { _, message ->
+                    if (!inspectionMode) android.widget.Toast.makeText(toastContext, message, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            },
             onThreadCommentDelete = { rpid ->
                 viewModel.deleteDynamicComment(rpid) { _, message ->
                     if (!inspectionMode) {
@@ -237,6 +247,7 @@ fun DynamicCommentSheet(
     onViewReplies: (ReplyItem) -> Unit = {},
     onReply: (ReplyItem) -> Unit = {},
     onLike: (ReplyItem) -> Unit = {},
+    onHate: (ReplyItem) -> Unit = {},
     dynamicAuthorMid: Long = 0L,
     currentUserMid: Long? = null,
     onDelete: (ReplyItem) -> Unit = {},
@@ -251,6 +262,7 @@ fun DynamicCommentSheet(
     onLoadMoreSubReplies: () -> Unit = {},
     onSubReplySortModeChange: (SubReplySortMode) -> Unit = {},
     onThreadCommentLike: (Long) -> Unit = {},
+    onThreadCommentHate: (Long) -> Unit = {},
     onThreadCommentDelete: (Long) -> Unit = {},
     onThreadCommentReport: (Long, Int) -> Unit = { _, _ -> },
 ) {
@@ -274,7 +286,7 @@ fun DynamicCommentSheet(
     var showImagePreview by remember { mutableStateOf(false) }
     var previewImages by remember { mutableStateOf<List<String>>(emptyList()) }
     var previewInitialIndex by remember { mutableIntStateOf(0) }
-    var previewSourceRect by remember { mutableStateOf<Rect?>(null) }
+    var previewSourceRect by remember { mutableStateOf<ImagePreviewSourceAnchor?>(null) }
     var previewTextContent by remember { mutableStateOf<ImagePreviewTextContent?>(null) }
     val sortModes = remember { listOf(CommentSortMode.HOT, CommentSortMode.NEWEST) }
     val sortModeLabels = remember(sortModes) { sortModes.map { it.label } }
@@ -283,7 +295,10 @@ fun DynamicCommentSheet(
         ImagePreviewDialog(
             images = previewImages,
             initialIndex = previewInitialIndex,
-            sourceRect = previewSourceRect,
+            sourceRect = previewSourceRect?.rect,
+            sourceRects = previewSourceRect?.galleryRects.orEmpty(),
+            sourceCornerRadiusDp = previewSourceRect?.cornerRadiusDp
+                ?: AppShapes.containerCornerDp(ContainerLevel.Field).value,
             textContent = previewTextContent,
             onDismiss = {
                 showImagePreview = false
@@ -530,6 +545,8 @@ fun DynamicCommentSheet(
                                 onReplyClick = { onReply(reply) },
                                 onLikeClick = { onLike(reply) },
                                 isLiked = isDynamicCommentLiked(reply),
+                                onHateClick = { onHate(reply) },
+                                isHated = reply.action == 2,
                                 onDeleteClick = { onDelete(reply) },
                                 onReportClick = { reason -> onReport(reply, reason) },
                                 canToggleTop = dynamicAuthorMid > 0L,
@@ -607,6 +624,7 @@ fun DynamicCommentSheet(
                                 currentMid = currentUserMid ?: 0L,
                                 onDeleteComment = onThreadCommentDelete,
                                 onCommentLike = onThreadCommentLike,
+                                onCommentHate = onThreadCommentHate,
                                 onReportComment = onThreadCommentReport,
                                 likedComments = likedThreadComments,
                                 onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUserClick) },
@@ -751,13 +769,14 @@ fun LazyListScope.dynamicInlineCommentItems(
     onViewReplies: (ReplyItem) -> Unit,
     onReply: (ReplyItem) -> Unit = {},
     onLike: (ReplyItem) -> Unit = {},
+    onHate: (ReplyItem) -> Unit = {},
     dynamicAuthorMid: Long = 0L,
     currentUserMid: Long? = null,
     onDelete: (ReplyItem) -> Unit = {},
     onToggleTop: (ReplyItem) -> Unit = {},
     onReport: (ReplyItem, Int) -> Unit = { _, _ -> },
     onUserClick: (Long) -> Unit,
-    onImagePreview: (List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit,
+    onImagePreview: (List<String>, Int, ImagePreviewSourceAnchor?, ImagePreviewTextContent?) -> Unit,
 ) {
     when {
         isLoading && comments.isEmpty() -> item(key = "dynamic_inline_comment_skeleton") {
@@ -786,6 +805,8 @@ fun LazyListScope.dynamicInlineCommentItems(
                 onReplyClick = { onReply(reply) },
                 onLikeClick = { onLike(reply) },
                 isLiked = isDynamicCommentLiked(reply),
+                onHateClick = { onHate(reply) },
+                isHated = reply.action == 2,
                 onDeleteClick = { onDelete(reply) },
                 onReportClick = { reason -> onReport(reply, reason) },
                 canToggleTop = dynamicAuthorMid > 0L,
@@ -1003,7 +1024,7 @@ private fun CommentItem(
     onToggleTop: (ReplyItem) -> Unit = {},
     onReport: (ReplyItem, Int) -> Unit = { _, _ -> },
     onUserClick: (Long) -> Unit,
-    onImagePreview: (List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit,
+    onImagePreview: (List<String>, Int, ImagePreviewSourceAnchor?, ImagePreviewTextContent?) -> Unit,
     subReplyState: SubReplyUiState = SubReplyUiState(),
     modifier: Modifier = Modifier,
 ) {
@@ -1382,6 +1403,11 @@ private fun CommentItem(
     }
 }
 
+// 评论时间组合期热路径：共享 formatter，避免每行新建 SimpleDateFormat。
+// 仅主线程（Compose 组合）调用，不涉及 SimpleDateFormat 的线程安全问题。
+private val commentDayFormatter =
+    java.text.SimpleDateFormat("MM-dd", java.util.Locale.CHINA)
+
 /**
  * 格式化时间戳
  */
@@ -1393,10 +1419,6 @@ private fun formatTime(timestamp: Long): String {
         diff < 3600 -> "${diff / 60}分钟前"
         diff < 86400 -> "${diff / 3600}小时前"
         diff < 604800 -> "${diff / 86400}天前"
-        else -> {
-            val date = java.text.SimpleDateFormat("MM-dd", java.util.Locale.CHINA)
-                .format(java.util.Date(timestamp * 1000))
-            date
-        }
+        else -> commentDayFormatter.format(java.util.Date(timestamp * 1000))
     }
 }

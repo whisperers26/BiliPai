@@ -484,7 +484,7 @@ internal fun RelatedVideoGridRow(
         mutableStateOf<RelatedVideoBlockRequest?>(null)
     }
     var isBlockingCreator by remember { mutableStateOf(false) }
-    val blockedUpRepository = remember(context) { BlockedUpRepository(context) }
+    val blockedUpRepository = remember { BlockedUpRepository.getInstance(context) }
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()

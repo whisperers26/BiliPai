@@ -199,6 +199,7 @@ internal sealed interface BiliPaiNavKey : NavKey {
     data class LikedVideos(
         val mid: Long = 0L,
         val ownerName: String = "",
+        val isCoinArchive: Boolean = false,
     ) : BiliPaiNavKey {
         override val routeBase: String = "liked_videos"
 
@@ -227,6 +228,30 @@ internal sealed interface BiliPaiNavKey : NavKey {
         val mid: Long
     ) : BiliPaiNavKey {
         override val routeBase: String = "following"
+    }
+
+    @Serializable
+    data class UpowerRank(
+        val mid: Long,
+        val name: String = "",
+        val count: Long = 0L,
+    ) : BiliPaiNavKey {
+        override val routeBase: String = "upower_rank"
+        companion object : BiliPaiNavKey {
+            override val routeBase: String = "upower_rank"
+        }
+    }
+
+    @Serializable
+    data class MemberGuard(
+        val mid: Long,
+        val name: String = "",
+        val count: Long = 0L,
+    ) : BiliPaiNavKey {
+        override val routeBase: String = "member_guard"
+        companion object : BiliPaiNavKey {
+            override val routeBase: String = "member_guard"
+        }
     }
 
     @Serializable

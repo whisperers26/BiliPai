@@ -376,7 +376,9 @@ internal fun resolveSpaceDynamicCardItem(item: SpaceDynamicItem): DynamicItem {
                     name = author.name,
                     face = author.face,
                     pub_time = author.pub_time,
-                    pub_ts = author.pub_ts
+                    pub_ts = author.pub_ts,
+                    official_verify = author.official_verify,
+                    vip = author.vip
                 )
             },
             module_dynamic = item.modules.module_dynamic?.let { content ->

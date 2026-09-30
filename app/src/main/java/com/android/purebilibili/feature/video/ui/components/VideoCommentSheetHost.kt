@@ -86,6 +86,7 @@ import com.android.purebilibili.data.repository.resolveCommentFraudLightMessage
 import com.android.purebilibili.data.repository.shouldShowCommentFraudResultDialog
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewSourceAnchor
 import com.android.purebilibili.feature.video.screen.CommentUrlNavigationTarget
 import com.android.purebilibili.feature.video.screen.resolveCommentUrlNavigationTarget
 import com.android.purebilibili.feature.video.ui.pager.resolveVideoSubReplySheetMaxHeightFraction
@@ -353,7 +354,7 @@ fun VideoCommentSheetHost(
     topReservedPx: Int = 0,
     onTimestampClick: ((Long) -> Unit)? = null,
     maxTimestampMs: Long? = null,
-    onImagePreview: ((List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit)? = null,
+    onImagePreview: ((List<String>, Int, ImagePreviewSourceAnchor?, ImagePreviewTextContent?) -> Unit)? = null,
     forceInitialize: Boolean = false,
     handleFraudEvents: Boolean = true,
     onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
@@ -479,10 +480,10 @@ fun VideoCommentSheetHost(
     var fallbackPreviewVisible by remember { mutableStateOf(false) }
     var fallbackPreviewImages by remember { mutableStateOf<List<String>>(emptyList()) }
     var fallbackPreviewIndex by remember { mutableIntStateOf(0) }
-    var fallbackPreviewSourceRect by remember { mutableStateOf<Rect?>(null) }
+    var fallbackPreviewSourceRect by remember { mutableStateOf<ImagePreviewSourceAnchor?>(null) }
     var fallbackPreviewTextContent by remember { mutableStateOf<ImagePreviewTextContent?>(null) }
 
-    val previewCallback: (List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit =
+    val previewCallback: (List<String>, Int, ImagePreviewSourceAnchor?, ImagePreviewTextContent?) -> Unit =
         onImagePreview ?: { images, index, rect, textContent ->
             fallbackPreviewImages = images
             fallbackPreviewIndex = index
@@ -495,7 +496,10 @@ fun VideoCommentSheetHost(
         ImagePreviewDialog(
             images = fallbackPreviewImages,
             initialIndex = fallbackPreviewIndex,
-            sourceRect = fallbackPreviewSourceRect,
+            sourceRect = fallbackPreviewSourceRect?.rect,
+            sourceRects = fallbackPreviewSourceRect?.galleryRects.orEmpty(),
+            sourceCornerRadiusDp = fallbackPreviewSourceRect?.cornerRadiusDp
+                ?: AppShapes.containerCornerDp(ContainerLevel.Field).value,
             textContent = fallbackPreviewTextContent,
             onDismiss = {
                 fallbackPreviewVisible = false
@@ -883,7 +887,7 @@ internal fun VideoCommentMainList(
     onCommentUrlClick: (String) -> Unit,
     onTimestampClick: ((Long) -> Unit)?,
     maxTimestampMs: Long?,
-    onImagePreview: (List<String>, Int, Rect?, ImagePreviewTextContent?) -> Unit,
+    onImagePreview: (List<String>, Int, ImagePreviewSourceAnchor?, ImagePreviewTextContent?) -> Unit,
     onBackToTop: () -> Unit = {},
     scrollToTopRequest: Int = 0,
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),

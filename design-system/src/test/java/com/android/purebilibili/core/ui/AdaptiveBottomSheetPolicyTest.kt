@@ -107,6 +107,26 @@ class AdaptiveBottomSheetPolicyTest {
     }
 
     @Test
+    fun `app sheet facade binds predictive back to the dialog window`() {
+        val path = "src/main/java/com/android/purebilibili/core/ui/AppSheetComponents.kt"
+        val source = listOf(File(path), File("design-system/$path"))
+            .firstOrNull(File::exists)
+            ?.readText()
+            ?: error("Cannot locate AppSheetComponents.kt from ${File(".").absolutePath}")
+
+        // 侧边/预测返回必须绑在弹层 Dialog 窗口，并由 NavigationBackHandler 关闭；
+        // Dialog 默认 dismissOnBackPress 关闭，避免与 handler 双触发。
+        assertTrue(source.contains("fun ModalSheetNavigationHost("))
+        assertTrue(source.contains("findViewTreeNavigationEventDispatcherOwner()"))
+        assertTrue(source.contains("LocalNavigationEventDispatcherOwner provides owner"))
+        assertTrue(source.contains("NavigationBackHandler("))
+        assertTrue(source.contains("ModalSheetNavigationHost("))
+        assertTrue(source.contains("shouldDismissOnBackPress = false"))
+        assertTrue(source.contains("DialogProperties("))
+        assertTrue(source.contains("dismissOnBackPress = false"))
+    }
+
+    @Test
     fun `overlay visual progress should scale scrim and disable blur when hidden`() {
         val hidden = resolveInteractiveOverlayProgressVisual(
             presentationProgress = 0f,

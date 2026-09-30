@@ -82,7 +82,7 @@ object AppShapes {
                 ContainerLevel.MediaCover -> return 12.dp
                 ContainerLevel.ProminentCard -> return 20.dp
                 ContainerLevel.Chip -> return 10.dp
-                ContainerLevel.Dialog -> return 28.dp
+                ContainerLevel.Dialog -> return 32.dp
                 else -> Unit
             }
         }

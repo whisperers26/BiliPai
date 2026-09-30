@@ -9,7 +9,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,10 +16,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -29,16 +26,10 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.sin
 
-import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.ui.rememberAppShareIcon
-import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.data.model.response.UgcSeason
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.Folder
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.android.purebilibili.feature.video.ui.VideoDetailShapes
 
 /**
  *  视频合集展示行
@@ -54,8 +45,6 @@ fun CollectionRow(
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val shareIcon = rememberAppShareIcon()
     val collectionSubscriptionId = remember(ugcSeason) { resolveCollectionSubscriptionId(ugcSeason) }
     val allEpisodes = remember(ugcSeason.sections) { ugcSeason.sections.flatMap { it.episodes } }
     val currentAid = remember(allEpisodes, currentBvid, currentCid) {
@@ -65,11 +54,6 @@ fun CollectionRow(
             currentCid = currentCid
         )
     }
-    val sortMode by SettingsManager
-        .getCollectionSortMode(context, collectionSubscriptionId)
-        .collectAsStateWithLifecycle(initialValue = CollectionSortMode.ASCENDING
-        )
-
     // 计算当前视频在合集中的位置
     val currentIndex = resolveCurrentUgcEpisodeIndex(
         episodes = allEpisodes,
@@ -85,84 +69,59 @@ fun CollectionRow(
     AppSurface(
         modifier = modifier
             .fillMaxWidth(),
-        shape = androidx.compose.ui.graphics.RectangleShape,
-        color = Color.Transparent  // 透明背景，与周围统一
+        shape = if (immersive) {
+            androidx.compose.ui.graphics.RectangleShape
+        } else {
+            androidx.compose.foundation.shape.RoundedCornerShape(6.dp)
+        },
+        // PiliPlus 同款：非沉浸时为圆角单行卡片（略浅于页面背景的容器色）
+        color = if (immersive) {
+            Color.Transparent
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        }
     ) {
         Row(
             modifier = Modifier
                 .clickable(onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 12.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            //  合集图标
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(VideoDetailShapes.compactIcon())
-                    .background(accentColor.copy(alpha = if (immersive) 0.18f else 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                AppIcon(
-                    Icons.Outlined.Folder,
-                    contentDescription = null,
-                    tint = accentColor,
-                    modifier = Modifier.size(18.dp)
+            //  合集信息（PiliPlus 式单行：合集：标题 …… 播放指示 n/total >）
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                AppText(
+                    text = "合集：",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = titleColor,
+                    fontWeight = FontWeight.Medium
+                )
+                AppText(
+                    text = ugcSeason.title,
+                    modifier = Modifier.weight(1f, fill = false),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = titleColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
-            
-            Spacer(modifier = Modifier.width(12.dp))
-            
-            //  合集信息
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AppText(
-                        text = "合集",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accentColor,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    AppText(
-                        text = ugcSeason.title,
-                        modifier = Modifier.weight(1f, fill = false),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = titleColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    CollectionPlaybackIndicator(
-                        isPlaying = isPlaying,
-                        color = accentColor,
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (currentPosition > 0 && totalCount > 0) {
-                        AppText(
-                            text = "$currentPosition/$totalCount",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = secondaryColor,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    AppText(
-                        text = resolveCollectionSortLabel(sortMode),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (immersive) secondaryColor else accentColor.copy(alpha = 0.88f)
-                    )
-                }
+            if (currentPosition > 0 && totalCount > 0) {
+                CollectionPlaybackIndicator(
+                    isPlaying = isPlaying,
+                    color = accentColor,
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                AppText(
+                    text = "$currentPosition/$totalCount",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = secondaryColor,
+                    fontWeight = FontWeight.Medium
+                )
             }
+
 
             Spacer(modifier = Modifier.width(6.dp))
 
+            //  订阅按钮（保留行内直达入口）
             CollectionSubscriptionButton(
                 collectionId = collectionSubscriptionId,
                 currentBvid = currentBvid,
@@ -171,33 +130,12 @@ fun CollectionRow(
                 immersive = immersive,
             )
 
-            //  分享按钮
-            AppIconButton(
-                onClick = {
-                    val shareUrl = "https://space.bilibili.com/${ugcSeason.mid}/lists/${ugcSeason.id}?type=season"
-                    val shareText = "${ugcSeason.title}\n$shareUrl"
-                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(android.content.Intent.EXTRA_TEXT, shareText)
-                    }
-                    context.startActivity(android.content.Intent.createChooser(intent, "分享合集"))
-                },
-                modifier = Modifier.size(28.dp)
-            ) {
-                AppIcon(
-                    shareIcon,
-                    contentDescription = "分享合集",
-                    modifier = Modifier.size(16.dp),
-                    tint = accentColor.copy(alpha = if (immersive) 0.9f else 1f)
-                )
-            }
-            
             //  右侧箭头
             AppIcon(
                 Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                 contentDescription = "查看合集",
                 tint = secondaryColor.copy(alpha = if (immersive) 0.8f else 0.5f),
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(14.dp)
             )
         }
     }

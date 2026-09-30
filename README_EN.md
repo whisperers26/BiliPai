@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-09-11 · Current build: 0.2.3-beta.33 · Latest documented release: v0.2.3-beta.33</sub>
+  <sub>Last updated: 2026-09-28 · Current source build: 0.2.3-alpha.9 · Latest documented release: v0.2.3-alpha.9</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Release-0.2.3--beta.33-fb7299?style=flat-square" alt="Release">
+  <img src="https://img.shields.io/badge/Release-0.2.3--alpha.9-fb7299?style=flat-square" alt="Release">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -452,15 +452,13 @@ See the [current roadmap](docs/wiki/ROADMAP.md) for priorities, completion crite
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Current source build (v0.2.3-beta.33 · 2026-09-11)
+### Current source build (v0.2.3-alpha.9 · 2026-09-28)
 
-- Current source build: `0.2.3-beta.33` / `versionCode 357`.
-- Segmented navigation prevents right-angle protrusion during scrolling; category and filter bars upgraded to adaptive sliding liquid track; long labels fully visible without truncation.
-- Search results page adapted for tablets and foldables with multi-column grid layout and user-customizable column counts.
-- Dynamic feed detail and incremental refresh refactored with fallback recovery for offline stability; enriched rich text and comments panel interactions.
-- Danmaku blocking rules support regex and advanced prefix syntax with smart retention of curly brace quantifier commas.
-- Fixed Samsung Android 13 crashes and foldable cover-screen landscape cold-start jitter; smoother card predictive-return curves and squircle transitions.
-- See [CHANGELOG.md](CHANGELOG.md) for the complete beta.26 → beta.27 notes.
+- Current source build: `0.2.3-alpha.9` / `versionCode 405`.
+- Live reservation reminders, a home feed refresh shortcut, and a video-detail comment-count setting are available.
+- Comment dislikes, image-preview return targets, video-card return animations, and dynamic mention highlighting have been fixed.
+- Space pagination and audio hydration, creator-announcement copying, and listening-video background transitions have been improved.
+- See [CHANGELOG.md](CHANGELOG.md) for the complete alpha.9 notes.
 - Official Telegram: channel [@bilipai666](https://t.me/bilipai666), group [@bilipai888](https://t.me/bilipai888/1).
 
 ---
@@ -473,7 +471,7 @@ cd BiliPai
 ./gradlew :app:assembleDev
 ```
 
-The installable artifact is exported to `app/build/outputs/bilipai/dev/BiliPai-0.2.3-beta.33-dev.apk`. Release builds use `app/build/outputs/bilipai/release/BiliPai-0.2.3-beta.33.apk`; AGP's internal `app-*.apk` files are not delivery artifacts.
+The installable artifact is exported to `app/build/outputs/bilipai/dev/BiliPai-0.2.3-alpha.7-dev.apk`. Release builds use `app/build/outputs/bilipai/release/BiliPai-0.2.3-alpha.7.apk`; AGP's internal `app-*.apk` files are not delivery artifacts.
 
 ---
 

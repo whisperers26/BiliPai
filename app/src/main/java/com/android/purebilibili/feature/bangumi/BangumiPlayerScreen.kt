@@ -236,6 +236,13 @@ fun BangumiPlayerScreen(
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 updatePlaybackDebug("player error ${error.errorCodeName}")
                 android.util.Log.e("BangumiPlayer", "❌ 播放错误: ${error.errorCodeName} - ${error.message}", error)
+                // DRM 加密流（课程 4K 等高码率档）本播放器不支持解密，自动降档重试
+                val isDrmError = error.errorCodeName == "ERROR_CODE_DRM_SCHEME_UNSUPPORTED" ||
+                    error.errorCodeName == "ERROR_CODE_DRM_CONTENT_ERROR" ||
+                    error.errorCodeName == "ERROR_CODE_DRM_SYSTEM_UNSUPPORTED"
+                if (isDrmError) {
+                    viewModel.handlePlaybackDrmError()
+                }
             }
 
             override fun onPlayerErrorChanged(error: androidx.media3.common.PlaybackException?) {

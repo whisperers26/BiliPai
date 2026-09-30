@@ -93,6 +93,15 @@ internal fun shouldClearSearchFocusWhenShowingResults(
     previousShowResults: Boolean
 ): Boolean = showResults && !previousShowResults
 
+/**
+ * Typing in the results query must keep the result chrome so the top search field is not
+ * disposed mid-edit (which drops IME and caret). Only an empty query returns to landing.
+ */
+internal fun shouldKeepResultsOnQueryChange(
+    showResults: Boolean,
+    newQuery: String
+): Boolean = showResults && newQuery.isNotEmpty()
+
 internal fun shouldForceLowBudgetSearchHeaderBlur(
     isSearching: Boolean,
     isScrollingResults: Boolean

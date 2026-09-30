@@ -305,12 +305,7 @@ private fun SearchVideoFilterSheetHost(
         OverlayBottomSheet(
             show = true,
             title = "筛选",
-            // Miuix owns this sheet's surface, so the app popup renderer cannot tint it.
-            backgroundColor = if (LocalAppThemeConfig.current.liquidGlassEnabled) {
-                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.96f)
-            } else {
-                BottomSheetDefaults.backgroundColor()
-            },
+            backgroundColor = BottomSheetDefaults.backgroundColor(),
             onDismissRequest = onDismiss,
             content = sheetContent
         )

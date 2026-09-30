@@ -1,46 +1,88 @@
 // 文件路径: feature/video/ui/components/CollectionSheet.kt
 package com.android.purebilibili.feature.video.ui.components
 
-import coil3.request.crossfade
-import com.android.purebilibili.core.ui.components.AppIcon
-import com.android.purebilibili.core.ui.components.AppText
-import com.android.purebilibili.core.ui.components.AppHorizontalDivider
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.MyLocation
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Subtitles
+import androidx.compose.material.icons.outlined.VerticalAlignBottom
+import androidx.compose.material.icons.outlined.VerticalAlignTop
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
-import androidx.compose.ui.platform.LocalContext
-import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.core.ui.rememberAppClearIcon
-import com.android.purebilibili.core.ui.components.AppIconButton
-import com.android.purebilibili.data.model.response.UgcEpisode
-import com.android.purebilibili.data.model.response.UgcSeason
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.PlayArrow
-import kotlinx.coroutines.launch
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.request.crossfade
+import com.android.purebilibili.core.ui.AppModalBottomSheet
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.components.AppHorizontalDivider
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.rememberAppClearIcon
+import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.data.model.response.Page
+import com.android.purebilibili.data.model.response.UgcEpisode
+import com.android.purebilibili.data.model.response.UgcSeason
+import com.android.purebilibili.data.model.response.UgcSection
 import com.android.purebilibili.feature.home.components.cards.VideoCardCoverDurationText
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
- *  视频合集底部弹窗
- * 显示合集中的所有视频列表
+ * 合集底部弹窗：
+ * - 工具栏：合集标题 + 订阅 + 跳顶/跳底/定位当前 + 排序切换 + 关闭
+ * - 多 section 时展示分区切换行
+ * - 条目：封面（时长角标）+ 标题（当前集高亮）+ 发布时间 + 播放/弹幕数
+ * - 单集多分 P 时展示分 P chips，点击直达对应分 P
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,15 +96,22 @@ fun CollectionSheet(
     val context = LocalContext.current
     val clearIcon = rememberAppClearIcon()
     val scope = rememberCoroutineScope()
-    val allEpisodes = remember(ugcSeason.sections) { ugcSeason.sections.flatMap { it.episodes } }
+    val listState = rememberLazyListState()
     val collectionSubscriptionId = remember(ugcSeason) { resolveCollectionSubscriptionId(ugcSeason) }
-    val currentAid = remember(allEpisodes, currentBvid, currentCid) {
-        resolveCurrentUgcEpisodeAid(
-            episodes = allEpisodes,
-            currentBvid = currentBvid,
-            currentCid = currentCid
+
+    val sections = remember(ugcSeason.sections) { ugcSeason.sections }
+    val initialSectionIndex = remember(ugcSeason, currentBvid, currentCid) {
+        sections.indexOfFirst { section ->
+            section.episodes.any { isCurrentUgcEpisode(currentBvid, currentCid, it) }
+        }.takeIf { it >= 0 } ?: 0
+    }
+    var selectedSectionIndex by remember(ugcSeason) {
+        mutableIntStateOf(
+            if (sections.isEmpty()) 0 else initialSectionIndex.coerceIn(sections.indices)
         )
     }
+    val activeSection: UgcSection = sections.getOrNull(selectedSectionIndex) ?: UgcSection()
+
     val storedSortMode by SettingsManager
         .getCollectionSortMode(context, collectionSubscriptionId)
         .collectAsStateWithLifecycle(initialValue = CollectionSortMode.ASCENDING)
@@ -75,9 +124,10 @@ fun CollectionSheet(
         }
     }
     val sortMode = localSortMode ?: storedSortMode
-    val sortedEpisodes = remember(allEpisodes, sortMode, currentBvid, currentCid) {
+
+    val sortedEpisodes = remember(activeSection, sortMode, currentBvid, currentCid) {
         sortCollectionEpisodes(
-            episodes = allEpisodes,
+            episodes = activeSection.episodes,
             sortMode = sortMode,
             currentBvid = currentBvid,
             currentCid = currentCid
@@ -88,8 +138,35 @@ fun CollectionSheet(
         currentBvid = currentBvid,
         currentCid = currentCid
     )
-    
-    com.android.purebilibili.core.ui.AppModalBottomSheet(
+
+    // 打开或切换分区时自动滚动到当前集
+    LaunchedEffect(selectedSectionIndex, currentIndex) {
+        if (currentIndex > 0) {
+            kotlinx.coroutines.delay(100)
+            listState.scrollToItem(currentIndex)
+        }
+    }
+
+    fun scrollToEpisode(index: Int) {
+        if (index < 0 || sortedEpisodes.isEmpty()) return
+        scope.launch {
+            listState.animateScrollToItem(index.coerceIn(0, sortedEpisodes.lastIndex))
+        }
+    }
+
+    fun cycleSortMode() {
+        val nextMode = when (sortMode) {
+            CollectionSortMode.ASCENDING -> CollectionSortMode.DESCENDING
+            CollectionSortMode.DESCENDING -> CollectionSortMode.RECENT
+            CollectionSortMode.RECENT -> CollectionSortMode.ASCENDING
+        }
+        localSortMode = nextMode
+        scope.launch {
+            SettingsManager.setCollectionSortMode(context, collectionSubscriptionId, nextMode)
+        }
+    }
+
+    AppModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         windowInsets = WindowInsets(0.dp)  //  沉浸式
@@ -97,39 +174,71 @@ fun CollectionSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)  //  确保整个区域有背景色
+                .background(MaterialTheme.colorScheme.surface)
         ) {
-            //  标题栏
+            // ── 工具栏（PiliPlus：标题 + 收藏 + 跳转/定位 + 排序 + 关闭）──
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .heightIn(min = 44.dp)
+                    .padding(horizontal = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    AppText(
-                        text = ugcSeason.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    AppText(
-                        text = "共 ${allEpisodes.size} 个视频",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
+                AppText(
+                    text = "合集",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 CollectionSubscriptionButton(
                     collectionId = collectionSubscriptionId,
                     currentBvid = currentBvid,
-                    currentAid = currentAid,
+                    currentAid = resolveCurrentUgcEpisodeAid(
+                        episodes = sections.flatMap { it.episodes },
+                        currentBvid = currentBvid,
+                        currentCid = currentCid
+                    ),
                     fontSize = MaterialTheme.typography.labelMedium.fontSize
                 )
-
+                Spacer(modifier = Modifier.weight(1f))
+                AppIconButton(onClick = { scrollToEpisode(0) }) {
+                    Icon(
+                        Icons.Outlined.VerticalAlignTop,
+                        contentDescription = "跳至顶部",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                AppIconButton(onClick = { scrollToEpisode(sortedEpisodes.lastIndex) }) {
+                    Icon(
+                        Icons.Outlined.VerticalAlignBottom,
+                        contentDescription = "跳至底部",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                AppIconButton(onClick = { scrollToEpisode(currentIndex) }) {
+                    Icon(
+                        Icons.Outlined.MyLocation,
+                        contentDescription = "定位当前播放",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                AppIconButton(onClick = ::cycleSortMode) {
+                    val sortIcon: ImageVector = when (sortMode) {
+                        CollectionSortMode.ASCENDING -> Icons.Outlined.ArrowUpward
+                        CollectionSortMode.DESCENDING -> Icons.Outlined.ArrowDownward
+                        CollectionSortMode.RECENT -> Icons.Outlined.History
+                    }
+                    Icon(
+                        sortIcon,
+                        contentDescription = "排序：${sortMode.label}",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
                 AppIconButton(onClick = onDismiss) {
                     AppIcon(
                         clearIcon,
@@ -138,188 +247,221 @@ fun CollectionSheet(
                     )
                 }
             }
-            
+
             AppHorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-            val sortModes = remember { CollectionSortMode.entries.toList() }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                AppText(
-                    text = "排序",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                CommentSegmentedControl(
-                    items = sortModes.map(::resolveCollectionSortLabel),
-                    selectedIndex = sortModes.indexOf(sortMode).coerceAtLeast(0),
-                    onScaleChange = { index ->
-                        sortModes.getOrNull(index)?.let { nextMode ->
-                            localSortMode = nextMode
-                            scope.launch {
-                                SettingsManager.setCollectionSortMode(context, collectionSubscriptionId, nextMode)
-                            }
-                        }
+            // ── 分区切换（仅多 section 时展示）──
+            if (sections.size > 1) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    sections.forEachIndexed { index, section ->
+                        val isSelected = index == selectedSectionIndex
+                        AppText(
+                            text = section.title.ifBlank { "第${index + 1}季" },
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier
+                                .clip(AppShapes.container(ContainerLevel.Chip))
+                                .clickable { selectedSectionIndex = index }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
                     }
-                )
-            }
-
-            AppHorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            
-            //  视频列表
-            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-            
-            // 自动滚动到当前播放的视频
-            LaunchedEffect(currentIndex) {
-                if (currentIndex != -1) {
-                    // 稍微延迟一下以确保布局完成
-                    kotlinx.coroutines.delay(100)
-                    listState.scrollToItem(currentIndex)
                 }
             }
 
+            // ── 视频列表 ──
             LazyColumn(
                 state = listState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f, fill = false)
-                    .heightIn(max = 400.dp),
+                    .heightIn(max = 460.dp),
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                itemsIndexed(sortedEpisodes, key = { _, episode -> episode.id }) { index, episode ->
+                itemsIndexed(
+                    sortedEpisodes,
+                    key = { _, episode -> "${selectedSectionIndex}-${episode.bvid}-${episode.cid}-${episode.id}" }
+                ) { _, episode ->
                     val isCurrentEpisode = isCurrentUgcEpisode(
                         currentBvid = currentBvid,
                         currentCid = currentCid,
                         episode = episode
                     )
-                    val publishTimeText = remember(episode.arc?.pubdate, episode.arc?.ctime) {
-                        resolveCollectionEpisodePublishTimeText(episode)
-                    }
-                    val metadataText = remember(publishTimeText, isCurrentEpisode) {
-                        buildList {
-                            if (publishTimeText.isNotBlank()) add(publishTimeText)
-                            if (isCurrentEpisode) add("正在播放")
-                        }.joinToString(" · ")
-                    }
-                    
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { 
-                                if (!isCurrentEpisode) {
-                                    onEpisodeClick(episode)
-                                }
+                    CollectionEpisodeRow(
+                        episode = episode,
+                        isCurrentEpisode = isCurrentEpisode,
+                        onClick = {
+                            if (!isCurrentEpisode) {
+                                onEpisodeClick(episode)
                             }
-                            .background(
-                                if (isCurrentEpisode) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                else Color.Transparent
-                            )
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        //  视频封面缩略图
-                        Box(
-                            modifier = Modifier
-                                .width(120.dp)
-                                .aspectRatio(16f / 9f)
-                                .clip(AppShapes.container(ContainerLevel.Chip))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            // 封面图
-                            episode.arc?.pic?.let { pic ->
-                                AsyncImage(
-                                    model = ImageRequest.Builder(context)
-                                        .data(FormatUtils.fixImageUrl(pic))
-                                        .crossfade(true)
-                                        .build(),
-                                    contentDescription = episode.title,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                )
-                            }
-                            
-                            episode.arc?.duration?.let { duration ->
-                                if (duration > 0) {
-                                    VideoCardCoverDurationText(
-                                        text = formatDuration(duration),
-                                        modifier = Modifier
-                                            .align(Alignment.BottomEnd)
-                                            .padding(4.dp),
-                                    )
-                                }
-                            }
-                            
-                            // 正在播放覆盖层
-                            if (isCurrentEpisode) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    AppIcon(
-                                        Icons.Outlined.PlayArrow,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(28.dp)
-                                    )
-                                }
-                            }
+                        },
+                        onPartClick = { part ->
+                            // 分 P 直达：沿用当前集元信息，仅替换目标 cid
+                            onEpisodeClick(episode.copy(cid = part.cid))
                         }
-                        
-                        Spacer(modifier = Modifier.width(12.dp))
-                        
-                        //  视频信息
-                        Column(modifier = Modifier.weight(1f)) {
-                            AppText(
-                                text = episode.title,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (isCurrentEpisode) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.onSurface,
-                                fontWeight = if (isCurrentEpisode) FontWeight.SemiBold 
-                                            else FontWeight.Normal,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            
-                            if (metadataText.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                AppText(
-                                    text = metadataText,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (isCurrentEpisode) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
+                    )
                 }
             }
-            
-            //  内容底部间距 + 导航栏区域填充（合并为一个 Spacer，用 surface 色填充）
-            val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-            Spacer(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(16.dp + navBarHeight)  // 16dp 内容间距 + 导航栏高度
-                    .background(MaterialTheme.colorScheme.surface)
-            )
         }
     }
 }
 
 /**
- * 格式化时长
+ * 单集合条目：
+ * 封面（时长角标）｜标题（当前集 primary + 加粗）、发布时间、播放/弹幕数
+ * 单集多分 P 时在条目下方展示分 P chips。
  */
-private fun formatDuration(seconds: Int): String {
-    return FormatUtils.formatDuration(seconds)
+@Composable
+private fun CollectionEpisodeRow(
+    episode: UgcEpisode,
+    isCurrentEpisode: Boolean,
+    onClick: () -> Unit,
+    onPartClick: (Page) -> Unit
+) {
+    val arc = episode.arc
+    val publishTimeText = remember(episode.arc?.pubdate, episode.arc?.ctime) {
+        resolveCollectionEpisodeAbsoluteTimeText(episode)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .width(132.dp)
+                    .aspectRatio(16f / 9f)
+                    .clip(AppShapes.container(ContainerLevel.Chip))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                arc?.pic?.takeIf { it.isNotBlank() }?.let { pic ->
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(FormatUtils.resolveVideoCoverUrl(pic, useLowQuality = true))
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = episode.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                VideoCardCoverDurationText(
+                    text = FormatUtils.formatDuration(arc?.duration ?: 0),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp),
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                AppText(
+                    text = episode.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (isCurrentEpisode) FontWeight.Bold else FontWeight.Normal,
+                    color = if (isCurrentEpisode) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (publishTimeText.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    AppText(
+                        text = publishTimeText,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip
+                    )
+                }
+                val stat = arc?.stat
+                if (stat != null && (stat.view > 0 || stat.danmaku > 0)) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (stat.view > 0) {
+                            CollectionEpisodeStat(
+                                icon = Icons.Outlined.PlayArrow,
+                                text = FormatUtils.formatStat(stat.view.toLong())
+                            )
+                        }
+                        if (stat.danmaku > 0) {
+                            CollectionEpisodeStat(
+                                icon = Icons.Outlined.Subtitles,
+                                text = FormatUtils.formatStat(stat.danmaku.toLong())
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 分 P chips：单集多 P 时展示
+        if (episode.pages.size > 1) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                episode.pages.forEachIndexed { pageIndex, page ->
+                    AppText(
+                        text = "${pageIndex + 1}.${page.part}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .clip(AppShapes.container(ContainerLevel.Chip))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable(enabled = page.cid > 0) { onPartClick(page) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CollectionEpisodeStat(
+    icon: ImageVector,
+    text: String
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(modifier = Modifier.width(3.dp))
+        AppText(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** 绝对时间格式：2026-09-25 12:00 */
+internal fun resolveCollectionEpisodeAbsoluteTimeText(episode: UgcEpisode): String {
+    val timestamp = episode.arc?.pubdate?.takeIf { it > 0L } ?: return ""
+    val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+    return formatter.format(Date(timestamp * 1000L))
 }

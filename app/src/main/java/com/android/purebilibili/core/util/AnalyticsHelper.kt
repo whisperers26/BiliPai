@@ -435,6 +435,20 @@ object AnalyticsHelper {
             Log.e(TAG, "Failed to log like", e)
         }
     }
+
+    /**
+     * 记录点踩事件
+     */
+    fun logDislike(videoId: String, isDisliked: Boolean) {
+        if (!isEnabled) return
+        try {
+            logAnalyticsEvent(if (isDisliked) "video_dislike" else "video_undislike") {
+                maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to log dislike", e)
+        }
+    }
     
     /**
      * 记录收藏事件

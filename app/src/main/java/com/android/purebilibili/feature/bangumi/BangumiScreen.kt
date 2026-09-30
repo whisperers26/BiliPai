@@ -61,6 +61,7 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppLiquidAwareTabRow
 import com.android.purebilibili.core.ui.components.AppSearchField
+import com.android.purebilibili.core.ui.components.AppTabRowIndicatorPresentation
 import com.android.purebilibili.core.ui.components.AppSearchFieldPresentation
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.rememberAppBackIcon
@@ -235,6 +236,7 @@ fun BangumiScreen(
                     }
                     if (state.page == BangumiHubPage.FOLLOW) {
                         AppLiquidAwareTabRow(
+                            indicatorPresentation = AppTabRowIndicatorPresentation.TONAL_PILL,
                             options = BangumiFollowStatus.entries.map { AppSegmentOption(it, it.label) },
                             selectedValue = state.followStatus,
                             enabled = state.followStates[state.channel to state.followStatus]?.isMutating != true,

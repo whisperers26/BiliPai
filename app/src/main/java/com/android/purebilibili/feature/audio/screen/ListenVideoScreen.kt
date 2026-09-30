@@ -825,6 +825,13 @@ private fun ListenVideoTrackSheet(
     }
 }
 
+@Composable
 private fun libraryContentPadding(): PaddingValues {
-    return PaddingValues(start = 20.dp, top = 10.dp, end = 20.dp, bottom = 120.dp)
+    val bottomDockClearance = com.android.purebilibili.core.ui.LocalBottomBarContentPadding.current
+    return PaddingValues(
+        start = 20.dp,
+        top = 10.dp,
+        end = 20.dp,
+        bottom = maxOf(120.dp, bottomDockClearance),
+    )
 }

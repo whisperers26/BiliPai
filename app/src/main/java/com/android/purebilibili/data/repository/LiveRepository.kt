@@ -1331,6 +1331,20 @@ object LiveRepository {
     }
 
     /**
+     * 进房上报（登录态，写入直播观看历史；对齐 PiliPlus roomEntryAction）
+     */
+    suspend fun reportRoomEntry(roomId: Long): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache ?: ""
+            val resp = api.reportLiveRoomEntry(roomId = roomId, csrf = csrf, csrfToken = csrf)
+            if (resp.code == 0) Result.success(true) else Result.failure(Exception(resp.message))
+        } catch (e: Exception) {
+            // 进房上报失败静默处理
+            Result.failure(e)
+        }
+    }
+
+    /**
      * 获取直播弹幕表情
      * 返回: Map<关键词, 图片URL>
      */
