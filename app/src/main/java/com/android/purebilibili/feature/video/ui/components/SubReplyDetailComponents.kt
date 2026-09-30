@@ -1455,7 +1455,7 @@ private fun SubReplyDetailItem(
                     Spacer(modifier = Modifier.weight(1f))
 
                     if (onDeleteClick != null) {
-                        AppIconButton(onClick = onDeleteClick) {
+                        SubReplyFooterIconAction(onClick = onDeleteClick) {
                             AppIcon(
                                 imageVector = Icons.Outlined.Delete,
                                 contentDescription = "删除",
@@ -1491,7 +1491,7 @@ private fun SubReplyDetailItem(
                     }
 
                     Spacer(modifier = Modifier.width(8.dp))
-                    AppIconButton(
+                    SubReplyFooterIconAction(
                         onClick = { onHateClick?.invoke() },
                         enabled = onHateClick != null
                     ) {
@@ -1604,7 +1604,7 @@ private fun SubReplyTextAction(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .sizeIn(minWidth = 48.dp, minHeight = 32.dp)
             .clickable(role = Role.Button, onClick = onClick)
     ) {
         AppIcon(
@@ -1619,5 +1619,22 @@ private fun SubReplyTextAction(
             style = MaterialTheme.typography.labelMedium,
             color = appearance.actionTint
         )
+    }
+}
+
+/** Icon action for the reply footer; keeps the row as short as the text actions beside it. */
+@Composable
+private fun SubReplyFooterIconAction(
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(32.dp)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+    ) {
+        content()
     }
 }
