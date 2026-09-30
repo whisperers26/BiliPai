@@ -1,5 +1,13 @@
 # **BiliPai魔改，仅为个人使用，折叠屏体验优化**
 
+本仓库是 [jay3-yy/BiliPai](https://github.com/jay3-yy/BiliPai) 的个人 fork，工作分支为 `mymain`（`main` 仅同步上游）。相对上游的主要改动：
+
+- **折叠屏 / 平板视频页**：近正方形内屏下的播放器高度、状态栏避让、信息页与评论页侧边栏（可左右滑动切换）、完整可读的「更多推荐」卡片；标题与 UP 主同行的头部布局，联合投稿信息收进展开详情。
+- **弹幕**：全屏时按实际视频画面宽度缩放；直播弹幕沿用视频弹幕设置并修复不显示的问题；滚动弹幕按真实帧间隔推进，运动更平滑。
+- **播放**：长按 2 倍速通过 AudioTrack 变速，起播更顺畅；双击快进/快退在点击一侧显示白色 +N/-N 文字（含竖屏与离线播放器）；新增「显示发现音乐」开关，默认关闭。
+- **稳定性**：修复 Retrofit 服务存于 static final 字段时的 ART JIT 崩溃。
+- **发布**：检查更新指向本 fork 的 Release，发布 APK 使用独立签名，由 `scripts/publish_fork_release.sh` 发布。
+
 <div align="center">
 
 <img src="docs/images/233娘.jpeg" height="96" alt="BiliPai" />
