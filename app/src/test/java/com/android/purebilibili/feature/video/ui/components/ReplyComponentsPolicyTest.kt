@@ -669,15 +669,11 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
-    fun `compact reply spacing tightens only the gap between comments`() {
-        val regular = resolveReplyItemLayoutPolicy()
-        val compact = resolveReplyItemLayoutPolicy(compactSpacing = true)
+    fun `reply item layout keeps the gap between comments tight`() {
+        val policy = resolveReplyItemLayoutPolicy()
 
-        assertEquals(10, regular.topPaddingDp)
-        assertEquals(10, regular.bottomPaddingDp)
-        assertEquals(4, compact.topPaddingDp)
-        assertEquals(4, compact.bottomPaddingDp)
-        assertEquals(regular.copy(topPaddingDp = 4, bottomPaddingDp = 4), compact)
+        assertEquals(4, policy.topPaddingDp)
+        assertEquals(4, policy.bottomPaddingDp)
     }
 
     @Test

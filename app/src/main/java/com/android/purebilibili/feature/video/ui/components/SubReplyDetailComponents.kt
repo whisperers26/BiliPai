@@ -1205,7 +1205,7 @@ private fun SubReplyDetailItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 14.dp, bottom = 14.dp, start = 16.dp, end = 16.dp)
+                .padding(top = 4.dp, bottom = 4.dp, start = 16.dp, end = 16.dp)
         ) {
             ReplyMemberAvatar(
                 member = item.member,
