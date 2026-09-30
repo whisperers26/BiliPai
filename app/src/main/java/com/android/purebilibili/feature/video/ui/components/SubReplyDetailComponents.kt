@@ -1287,7 +1287,7 @@ private fun SubReplyDetailItem(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1366,8 +1366,6 @@ private fun SubReplyDetailItem(
                 }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(10.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
