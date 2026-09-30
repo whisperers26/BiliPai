@@ -217,6 +217,8 @@ fun BottomBarSettingsContent(
         .collectAsStateWithLifecycle(initialValue = false)
     val bottomBarSearchEnabled by SettingsManager.getBottomBarSearchEnabled(context)
         .collectAsStateWithLifecycle(initialValue = false)
+    val listScopedSearchEnabled by SettingsManager.getListScopedSearchEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = false)
     val isLargeScreenCapable = windowSizeClass.isTabletDevice ||
         displayContext.isKnownFoldableDevice
     val tabletUseSidebar by SettingsManager.getTabletUseSidebar(context)
@@ -397,6 +399,21 @@ fun BottomBarSettingsContent(
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSTeal,
                         )
+                        if (bottomBarSearchEnabled) {
+                            AppPreferenceDivider()
+                            AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.BOTTOM_BAR_SEARCH),
+                                title = "列表精简搜索",
+                                subtitle = "隐藏收藏、历史与稍后再看页顶部搜索栏；底栏搜索仅搜索当前页内容",
+                                checked = listScopedSearchEnabled,
+                                onCheckedChange = { enabled ->
+                                    scope.launch {
+                                        SettingsManager.setListScopedSearchEnabled(context, enabled)
+                                    }
+                                },
+                                iconTint = com.android.purebilibili.core.theme.iOSTeal,
+                            )
+                        }
                     }
                 }
             }

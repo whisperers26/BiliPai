@@ -155,6 +155,7 @@ internal enum class HomeCardWallpaperSurfaceMode {
  */
 internal fun resolveHomeCardWallpaperSurfaceMode(
     dynamicTintEnabled: Boolean,
+    frostedGlassEnabled: Boolean,
     wallpaperVisible: Boolean,
     wallpaperIsStatic: Boolean,
     backdropReady: Boolean,
@@ -163,11 +164,12 @@ internal fun resolveHomeCardWallpaperSurfaceMode(
     lowBlurBudgetForced: Boolean,
     sdkInt: Int,
 ): HomeCardWallpaperSurfaceMode {
-    if (!dynamicTintEnabled || !wallpaperVisible) {
+    if (!wallpaperVisible) {
         return HomeCardWallpaperSurfaceMode.STANDARD
     }
     if (
-        wallpaperIsStatic &&
+        frostedGlassEnabled &&
+            wallpaperIsStatic &&
             backdropReady &&
             blurEnabled &&
             !isDataSaverActive &&
@@ -176,7 +178,11 @@ internal fun resolveHomeCardWallpaperSurfaceMode(
     ) {
         return HomeCardWallpaperSurfaceMode.REALTIME_FROSTED
     }
-    return HomeCardWallpaperSurfaceMode.LIGHTWEIGHT_TINT
+    return if (dynamicTintEnabled) {
+        HomeCardWallpaperSurfaceMode.LIGHTWEIGHT_TINT
+    } else {
+        HomeCardWallpaperSurfaceMode.STANDARD
+    }
 }
 
 internal fun resolveHomeGlassChromeStyle(

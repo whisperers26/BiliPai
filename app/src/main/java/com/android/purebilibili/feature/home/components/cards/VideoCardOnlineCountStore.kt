@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.asStateFlow
 
 private const val VIDEO_CARD_ONLINE_COUNT_TTL_MS = 60_000L
 
+// 有界化上限：正常一屏可见卡片不到 20 张，512 条足够覆盖一次长会话的所有滚动历史。
+internal const val VIDEO_CARD_ONLINE_COUNT_MAX_ENTRIES = 512
+
 internal fun shouldLoadVideoCardOnlineCount(
     showOnlineCount: Boolean,
     bvid: String,
@@ -41,7 +44,8 @@ private data class VideoCardOnlineCountCacheEntry(
 internal class VideoCardOnlineCountStore(
     private val fetchOnlineCount: suspend (String, Long) -> String,
     private val nowMs: () -> Long = { System.currentTimeMillis() },
-    private val ttlMs: Long = VIDEO_CARD_ONLINE_COUNT_TTL_MS
+    private val ttlMs: Long = VIDEO_CARD_ONLINE_COUNT_TTL_MS,
+    private val maxEntries: Int = VIDEO_CARD_ONLINE_COUNT_MAX_ENTRIES
 ) {
     private val states = ConcurrentHashMap<String, MutableStateFlow<String>>()
     private val cache = ConcurrentHashMap<String, VideoCardOnlineCountCacheEntry>()
@@ -83,6 +87,7 @@ internal class VideoCardOnlineCountStore(
                     text = text,
                     fetchedAtMs = nowMs()
                 )
+                sweepCachesIfOverCap()
             } else {
                 cache.remove(key)
             }
@@ -91,6 +96,44 @@ internal class VideoCardOnlineCountStore(
             state.value = ""
         } finally {
             inFlight.remove(key)
+        }
+    }
+
+    /**
+     * 长时间刷首页会为每张卡片累积一个 StateFlow + 缓存条目且永不释放。
+     * 超过容量上限后：过期条目直接清 cache，未被订阅（卡片已不可见）的 StateFlow 一并清；
+     * 仍超限再按最旧 fetchedAtMs 淘汰。仍被订阅的 StateFlow 保留，避免冻结可见卡片。
+     */
+    private fun sweepCachesIfOverCap() {
+        if (cache.size <= maxEntries) return
+        val now = nowMs()
+        val staleIterator = cache.entries.iterator()
+        while (staleIterator.hasNext()) {
+            val entry = staleIterator.next()
+            if (now - entry.value.fetchedAtMs >= ttlMs) {
+                staleIterator.remove()
+                removeUnsubscribedState(entry.key)
+            }
+        }
+        if (cache.size > maxEntries) {
+            cache.entries.asSequence()
+                .sortedBy { it.value.fetchedAtMs }
+                .take(cache.size - maxEntries)
+                .toList()
+                .forEach { entry ->
+                    cache.remove(entry.key)
+                    removeUnsubscribedState(entry.key)
+                }
+        }
+        if (states.size > maxEntries) {
+            states.entries.removeIf { it.value.subscriptionCount.value == 0 }
+        }
+    }
+
+    private fun removeUnsubscribedState(key: String) {
+        val flow = states[key] ?: return
+        if (flow.subscriptionCount.value == 0) {
+            states.remove(key, flow)
         }
     }
 }

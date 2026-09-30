@@ -38,7 +38,7 @@ internal fun resolveHiResCodecMaxInputSize(
  * 音轨的单帧可能超过该大小，最终触发 Media3 `InsufficientCapacityException`。
  */
 @OptIn(UnstableApi::class)
-internal class HiResCompatibleRenderersFactory(
+internal open class HiResCompatibleRenderersFactory(
     context: Context
 ) : DefaultRenderersFactory(context) {
 

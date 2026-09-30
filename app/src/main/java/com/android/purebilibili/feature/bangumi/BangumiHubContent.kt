@@ -73,6 +73,7 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppLiquidAwareTabRow
 import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
+import com.android.purebilibili.core.ui.components.AppTabRowIndicatorPresentation
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
@@ -386,6 +387,7 @@ private fun TimelineSection(
             104.dp
         }
         AppThemeAdaptiveTabRow(
+            indicatorPresentation = AppTabRowIndicatorPresentation.TONAL_PILL,
             options = BangumiTimelineRange.entries.map { range ->
                 AppSegmentOption(range, range.label)
             },
@@ -407,6 +409,7 @@ private fun TimelineSection(
                     112.dp
                 }
                 AppThemeAdaptiveTabRow(
+                    indicatorPresentation = AppTabRowIndicatorPresentation.TONAL_PILL,
                     options = state.days.mapIndexed { index, item ->
                         AppSegmentOption(index, resolveBangumiTimelineDayLabel(item))
                     },
@@ -663,6 +666,7 @@ private fun BangumiFollowContent(
         ) {
             if (showStatusTabs) {
                 AppLiquidAwareTabRow(
+                    indicatorPresentation = AppTabRowIndicatorPresentation.TONAL_PILL,
                     options = BangumiFollowStatus.entries.map { AppSegmentOption(it, it.label) },
                     selectedValue = status,
                     enabled = !state.isMutating,

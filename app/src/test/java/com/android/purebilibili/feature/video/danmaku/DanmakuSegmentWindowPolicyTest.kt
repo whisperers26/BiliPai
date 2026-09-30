@@ -54,6 +54,34 @@ class DanmakuSegmentWindowPolicyTest {
     }
 
     @Test
+    fun `return to original window cancels a different pending load`() {
+        assertTrue(shouldCancelPendingDanmakuWindow(listOf(4, 5, 6), 0L, 10))
+        assertFalse(shouldRequestDanmakuWindow(listOf(1, 2), listOf(4, 5, 6), true, 0L, 10))
+    }
+
+    @Test
+    fun `same pending window and absent requests are preserved`() {
+        assertFalse(shouldCancelPendingDanmakuWindow(listOf(4, 5, 6), 4 * 360_000L, 10))
+        assertFalse(shouldCancelPendingDanmakuWindow(emptyList(), 0L, 10))
+    }
+
+    @Test
+    fun `scrubbing gates asynchronous data and playback callbacks`() {
+        val source = java.io.File(
+            "src/main/java/com/android/purebilibili/feature/video/danmaku/DanmakuManager.kt"
+        ).readText()
+        val dataCommit = source.substringAfter("activeSegmentIndices = requestedSegments")
+        assertTrue(dataCommit.indexOf("if (isSeekScrubbing)") < dataCommit.indexOf("rollWindowForward("))
+        val playingCallback = source.substringAfter("override fun onIsPlayingChanged(isPlayerPlaying: Boolean) {")
+        assertTrue(playingCallback.trimStart().startsWith("if (isSeekScrubbing) return"))
+        val overlay = java.io.File(
+            "src/main/java/com/android/purebilibili/feature/video/ui/overlay/PortraitProgressBar.kt"
+        ).readText()
+        assertFalse(overlay.contains("tryAwaitRelease()"))
+        assertTrue(overlay.contains("if (dragInProgress) currentOnSeekDragCancel()"))
+    }
+
+    @Test
     fun `renderer supports seamless forward window roll instead of timeline reload`() {
         val managerSource = java.io.File(
             "src/main/java/com/android/purebilibili/feature/video/danmaku/DanmakuManager.kt"
@@ -63,7 +91,9 @@ class DanmakuSegmentWindowPolicyTest {
         ).readText()
 
         assertTrue(managerSource.contains("rollWindowForward("))
-        assertTrue(managerSource.contains("reason != \"playback_progress\" || neighborIndices.isEmpty()"))
+        assertFalse(managerSource.contains("reason = \"${'$'}reason:complete\""))
+        assertFalse(managerSource.contains("reason = \"${'$'}reason:anchor\""))
+        assertTrue(managerSource.contains("reason != \"playback_progress\""))
         assertTrue(engineSource.contains("controller.appendData("))
         assertTrue(engineSource.contains("controller.discardDataBefore("))
     }

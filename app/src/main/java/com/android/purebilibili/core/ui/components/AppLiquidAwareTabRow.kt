@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.isSpecified
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
+import com.android.purebilibili.core.ui.components.AppTabRowIndicatorPresentation
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
 import top.yukonga.miuix.kmp.blur.Backdrop
@@ -59,6 +60,7 @@ fun <T> AppThemeAdaptiveTabRow(
     tapPressRefractionEnabled: Boolean = true,
     miuixBackdrop: Backdrop? = null,
     preferInlineContentStyle: Boolean = false,
+    indicatorPresentation: AppTabRowIndicatorPresentation = AppTabRowIndicatorPresentation.UNDERLINE,
     indicatorPositionProvider: (() -> Float)? = null,
     isScrollInProgressProvider: () -> Boolean = { false },
 ) {
@@ -78,6 +80,7 @@ fun <T> AppThemeAdaptiveTabRow(
         tapPressRefractionEnabled = tapPressRefractionEnabled,
         miuixBackdrop = miuixBackdrop,
         preferInlineContentStyle = preferInlineContentStyle,
+        indicatorPresentation = indicatorPresentation,
         indicatorPositionProvider = indicatorPositionProvider,
         isScrollInProgressProvider = isScrollInProgressProvider,
     )
@@ -105,6 +108,7 @@ fun <T> AppLiquidAwareTabRow(
     tapPressRefractionEnabled: Boolean = true,
     miuixBackdrop: Backdrop? = null,
     preferInlineContentStyle: Boolean = false,
+    indicatorPresentation: AppTabRowIndicatorPresentation = AppTabRowIndicatorPresentation.UNDERLINE,
     indicatorPositionProvider: (() -> Float)? = null,
     isScrollInProgressProvider: () -> Boolean = { false },
 ) {
@@ -138,6 +142,7 @@ fun <T> AppLiquidAwareTabRow(
                 compactMiuixWhenTwoOptions = compactMiuixWhenTwoOptions,
                 height = height,
                 allowLabelOverflow = true,
+                indicatorPresentation = indicatorPresentation,
                 indicatorPositionProvider = indicatorPositionProvider,
             )
         }

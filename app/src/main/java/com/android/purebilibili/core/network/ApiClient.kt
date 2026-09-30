@@ -102,6 +102,10 @@ private class AppSessionCookieJar : okhttp3.CookieJar {
             cookieStore[url.host]?.let { cookies.addAll(it) }
         }
 
+        // 会话备份改为异步恢复后，网络线程在此等到恢复完成（通常为 0 等待），
+        // 避免启动窗口内的请求被当成匿名请求发出。
+        TokenManager.awaitRestore()
+
         var buvid3 = TokenManager.buvid3Cache
         if (buvid3.isNullOrEmpty()) {
             buvid3 = UUID.randomUUID().toString() + "infoc"
@@ -742,6 +746,16 @@ interface BilibiliApi {
         @retrofit2.http.Field("csrf_token") csrfToken: String
     ): SimpleApiResponse
 
+    //  进房上报（登录态，写入直播观看历史；对齐 PiliPlus roomEntryAction）
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("https://api.live.bilibili.com/xlive/web-room/v1/index/roomEntryAction")
+    suspend fun reportLiveRoomEntry(
+        @retrofit2.http.Field("room_id") roomId: Long,
+        @retrofit2.http.Field("platform") platform: String = "pc",
+        @retrofit2.http.Field("csrf") csrf: String,
+        @retrofit2.http.Field("csrf_token") csrfToken: String
+    ): SimpleApiResponse
+
     //  [新增] 获取直播弹幕表情
     @GET("https://api.live.bilibili.com/xlive/web-ucenter/v2/emoticon/GetEmoticons")
     suspend fun getLiveEmoticons(
@@ -1338,6 +1352,16 @@ interface BilibiliApi {
     suspend fun hasLiked(
         @Query("aid") aid: Long
     ): HasLikedResponse
+
+    //  点踩/取消点踩视频（App 端点：优先 APP access_key 鉴权，同时依赖 CookieJar 注入的登录态与 csrf）
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("https://app.bilibili.com/x/v2/view/dislike")
+    suspend fun dislikeVideo(
+        @retrofit2.http.Field("aid") aid: Long,
+        @retrofit2.http.Field("dislike") dislike: Int,   // 0=点踩, 1=取消点踩
+        @retrofit2.http.Field("csrf") csrf: String,
+        @retrofit2.http.Field("access_key") accessKey: String? = null
+    ): SimpleApiResponse
     
     //  [新增] 投币
     @retrofit2.http.FormUrlEncoded
@@ -1990,9 +2014,33 @@ interface SpaceApi {
         @QueryMap params: Map<String, String>
     ): com.android.purebilibili.data.model.response.LikedVideosResponse
 
+    @retrofit2.http.Headers(
+        "User-Agent: Mozilla/5.0 BiliDroid/8.43.0 (bbcallen@gmail.com) os/android model/android mobi_app/android build/8430300 channel/master innerVer/8430300 osVer/15 network/2",
+        "bili-http-engine: cronet",
+        "env: prod",
+        "app-key: android64",
+        "x-bili-aurora-zone: sh001"
+    )
+    @GET("https://app.bilibili.com/x/v2/space/coinarc")
+    suspend fun getSpaceCoinArchive(
+        @QueryMap params: Map<String, String>
+    ): com.android.purebilibili.data.model.response.LikedVideosResponse
+
     // 获取用户详细信息 (需要 WBI 签名)
     @GET("x/space/wbi/acc/info")
     suspend fun getSpaceInfo(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.SpaceInfoResponse
+
+    // App 端空间接口，仅用于头部充电（elec）/大航海（guard）摘要（需 appkey 签名）
+    @GET("https://app.bilibili.com/x/v2/space")
+    suspend fun getAppSpaceSupporters(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.SpaceSupportersResponse
+
+    // 充电排行（网页端接口）
+    @GET("x/upower/up/member/rank/v2")
+    suspend fun getUpowerRank(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.SpaceUpowerRankResponse
+
+    // 大航海/舰队列表（直播域名）
+    @GET("https://api.live.bilibili.com/xlive/app-ucenter/v1/guard/MainGuardCardAll")
+    suspend fun getMemberGuard(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.SpaceMemberGuardResponse
 
     @GET("x/space/wbi/acc/info")
     suspend fun getSpaceInfoRaw(@QueryMap params: Map<String, String>): okhttp3.ResponseBody
@@ -2130,6 +2178,22 @@ suspend fun SpaceApi.getSpaceLikedArchive(
     pageSize: Int = 20,
 ): com.android.purebilibili.data.model.response.LikedVideosResponse {
     return getSpaceLikedArchive(
+        buildSpaceLikedArchiveParams(
+            mid = mid,
+            page = page,
+            pageSize = pageSize,
+            accessToken = TokenManager.accessTokenCache,
+            accessTokenPlatform = TokenManager.accessTokenPlatformCache,
+        )
+    )
+}
+
+suspend fun SpaceApi.getSpaceCoinArchive(
+    mid: Long,
+    page: Int = 1,
+    pageSize: Int = 20,
+): com.android.purebilibili.data.model.response.LikedVideosResponse {
+    return getSpaceCoinArchive(
         buildSpaceLikedArchiveParams(
             mid = mid,
             page = page,
@@ -2927,7 +2991,7 @@ object NetworkModule {
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
             .writeTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-            //  [性能优化] HTTP 磁盘缓存 - 10MB，减少重复请求
+            //  [性能优化] HTTP 磁盘缓存 - 32MB，减少重复请求
             .cache(okhttp3.Cache(
                 directory = java.io.File(appContext?.cacheDir ?: java.io.File("/tmp"), "okhttp_cache"),
                 maxSize = resolveApiHttpCacheBudgetBytes()
@@ -3182,6 +3246,12 @@ object NetworkModule {
             .retryOnConnectionFailure(true)
             .followRedirects(true)
             .followSslRedirects(true)
+            //  风控降级流量与主客户端访问同一批 B 站 API，装一份独立 HTTP 缓存
+            //  （目录独立，okhttp3.Cache 不能被两个客户端共享同一实例）
+            .cache(okhttp3.Cache(
+                directory = java.io.File(appContext?.cacheDir ?: java.io.File("/tmp"), "okhttp_cache_guest"),
+                maxSize = resolveApiHttpCacheBudgetBytes() / 2
+            ))
             //  CookieJar 使用全新的 buvid3，不复用可能被污染的 buvid3Cache
             .cookieJar(object : okhttp3.CookieJar {
                 // 为 guest 模式生成独立的 buvid3，避免复用被风控的 buvid3

@@ -399,14 +399,14 @@ fun CacheClearAnimationDialog(
                             if (progress.isComplete) "共释放 ${progress.clearedSize}"
                             else "已清理 ${progress.clearedSize}"
                         } else {
-                            "准备中..."
+                            "准备中…"
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     if (progress.isComplete) {
                         AppText(
-                            text = "即将自动关闭...",
+                            text = "即将自动关闭…",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

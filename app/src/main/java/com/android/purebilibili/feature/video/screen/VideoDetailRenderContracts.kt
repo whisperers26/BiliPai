@@ -64,6 +64,7 @@ internal data class VideoDetailEngagementActions(
     val toggleFavorite: () -> Unit,
     val onFavoriteAction: (isLongPress: Boolean) -> Unit,
     val toggleLike: () -> Unit,
+    val toggleDislike: () -> Unit = {},
     val openCoinDialog: () -> Unit,
     val doTripleAction: () -> Unit,
     val toggleWatchLater: () -> Unit

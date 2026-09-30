@@ -1,5 +1,7 @@
 plugins {
     id("com.android.test")
+    // Baseline profile 生成端：本模块宏基准的产物作为 profile 发布给 :app
+    alias(libs.plugins.androidx.baselineprofile)
     // AGP 9+ built-in Kotlin
 }
 
@@ -48,7 +50,8 @@ kotlin {
 }
 
 dependencies {
-    implementation("androidx.benchmark:benchmark-macro-junit4:1.4.1")
+    // 与 androidx.baselineprofile 插件 1.5.0 对齐（1.4.1 与 AGP 9 不兼容线配套）
+    implementation("androidx.benchmark:benchmark-macro-junit4:1.5.0")
     implementation("androidx.test.ext:junit:1.3.0")
     implementation("androidx.test.uiautomator:uiautomator:2.3.0")
     implementation("androidx.tracing:tracing-perfetto:1.0.0")

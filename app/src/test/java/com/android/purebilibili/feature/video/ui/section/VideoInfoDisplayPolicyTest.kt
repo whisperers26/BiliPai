@@ -323,4 +323,17 @@ class VideoInfoDisplayPolicyTest {
         assertFalse(shouldUseCompactUpInfoLayout(0))
         assertFalse(shouldUseCompactUpInfoLayout(-1))
     }
+
+    @Test
+    fun sponsorLabel_stacksAboveTitleOnlyWhenLong() {
+        assertFalse(shouldStackSponsorLabelAboveTitle("恰饭"))
+        assertFalse(shouldStackSponsorLabelAboveTitle("赞助/恰饭"))
+        assertFalse(shouldStackSponsorLabelAboveTitle(""))
+
+        val longLabel = "过场/开场动画/音乐:非音乐部分/赞助/恰饭/离题闲聊/玩笑"
+        assertTrue(longLabel.length > 10)
+        assertTrue(shouldStackSponsorLabelAboveTitle(longLabel))
+        assertTrue(shouldStackSponsorLabelAboveTitle("12345678901"))
+        assertFalse(shouldStackSponsorLabelAboveTitle("1234567890"))
+    }
 }

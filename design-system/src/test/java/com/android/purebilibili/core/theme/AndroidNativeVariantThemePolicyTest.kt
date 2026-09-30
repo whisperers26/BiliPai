@@ -1,6 +1,9 @@
 package com.android.purebilibili.core.theme
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.Shapes
+import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -95,5 +98,20 @@ class AndroidNativeVariantThemePolicyTest {
 
         assertSame(MiuixAlignedShapes, miuix)
         assertSame(Md3Shapes, material)
+    }
+
+    @Test
+    fun md3Shapes_alignWithChromeCornerTokens() {
+        // MD3 路径的 MaterialTheme.shapes 必须与 chrome token(容器 24dp / 胶囊 28dp)同一套圆角语言,
+        // small/extraSmall 保持官方默认以保护输入框与芯片观感。
+        val expected = Shapes(
+            extraSmall = RoundedCornerShape(4.dp),
+            small = RoundedCornerShape(8.dp),
+            medium = RoundedCornerShape(16.dp),
+            large = RoundedCornerShape(24.dp),
+            extraLarge = RoundedCornerShape(28.dp)
+        )
+
+        assertEquals(expected, Md3Shapes)
     }
 }

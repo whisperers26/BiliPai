@@ -185,6 +185,37 @@ class VideoDomainViewModelTest {
         assertEquals(VideoComposerEvent.CommentSent, viewModel.events.first())
     }
 
+    @Test
+    fun `dislike clears local like state and keeps it against stale seeds`() = runTest(dispatcher) {
+        val viewModel = VideoEngagementViewModel(actions = FakeEngagementActions())
+        val first = subject("BV1", generation = 1L)
+        viewModel.bindSubject(first, VideoEngagementSeed(isLiked = true, isDisliked = false, likeCount = 10))
+
+        viewModel.toggleDislike()
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.isDisliked)
+        assertFalse(viewModel.uiState.value.isLiked)
+        assertEquals(9, viewModel.uiState.value.likeCount)
+
+        viewModel.bindSubject(first, VideoEngagementSeed(isLiked = true, isDisliked = false, likeCount = 10))
+        assertTrue(viewModel.uiState.value.isDisliked)
+        assertFalse(viewModel.uiState.value.isLiked)
+    }
+
+    @Test
+    fun `like clears local dislike state`() = runTest(dispatcher) {
+        val viewModel = VideoEngagementViewModel(actions = FakeEngagementActions())
+        val first = subject("BV1", generation = 1L)
+        viewModel.bindSubject(first, VideoEngagementSeed(isLiked = false, isDisliked = true))
+
+        viewModel.toggleLike()
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.isLiked)
+        assertFalse(viewModel.uiState.value.isDisliked)
+    }
+
     private fun subject(bvid: String, generation: Long) = VideoSubjectSnapshot(
         bvid = bvid,
         cid = generation,
@@ -204,6 +235,9 @@ class VideoDomainViewModelTest {
 
         override suspend fun toggleLike(aid: Long, currentlyLiked: Boolean, bvid: String) =
             pendingLike?.await() ?: Result.success(!currentlyLiked)
+
+        override suspend fun toggleDislike(aid: Long, currentlyDisliked: Boolean, bvid: String) =
+            Result.success(!currentlyDisliked)
 
         override suspend fun toggleFavorite(aid: Long, currentlyFavorited: Boolean, bvid: String) =
             Result.success(!currentlyFavorited)

@@ -122,6 +122,21 @@ internal fun shouldLimitEarlyPlaybackBuffer(
 }
 
 /**
+ * 进入详情的第一时刻 mediaPeriodId 可能为 null（period 尚未就绪），
+ * 此时同样按「开头」限流，否则限流失效、一进页面就预缓冲满 maxBuffer。
+ * 有 period 但时长未知（直播等）维持常规策略。
+ */
+internal fun shouldLimitEarlyPlaybackBufferForPeriod(
+    hasKnownMediaPeriod: Boolean,
+    playbackPositionUs: Long,
+    mediaPeriodDurationUs: Long
+): Boolean = !hasKnownMediaPeriod ||
+    shouldLimitEarlyPlaybackBuffer(
+        playbackPositionUs = playbackPositionUs,
+        mediaPeriodDurationUs = mediaPeriodDurationUs
+    )
+
+/**
  * [DefaultLoadControl] has static duration thresholds. This wrapper caps only the forward
  * buffer for the first quarter, then delegates to the regular fast-buffering policy.
  */
@@ -161,12 +176,18 @@ private class FirstQuarterAwareLoadControl(
         delegate.retainBackBufferFromKeyframe(playerId)
 
     override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean {
-        val periodDurationUs = runCatching {
-            parameters.timeline
-                .getPeriodByUid(parameters.mediaPeriodId.periodUid, period)
-                .durationUs
-        }.getOrDefault(C.TIME_UNSET)
-        val limitEarlyBuffer = shouldLimitEarlyPlaybackBuffer(
+        val hasKnownMediaPeriod = parameters.mediaPeriodId != null
+        val periodDurationUs = if (hasKnownMediaPeriod) {
+            runCatching {
+                parameters.timeline
+                    .getPeriodByUid(parameters.mediaPeriodId!!.periodUid, period)
+                    .durationUs
+            }.getOrDefault(C.TIME_UNSET)
+        } else {
+            C.TIME_UNSET
+        }
+        val limitEarlyBuffer = shouldLimitEarlyPlaybackBufferForPeriod(
+            hasKnownMediaPeriod = hasKnownMediaPeriod,
             playbackPositionUs = parameters.playbackPositionUs,
             mediaPeriodDurationUs = periodDurationUs
         )

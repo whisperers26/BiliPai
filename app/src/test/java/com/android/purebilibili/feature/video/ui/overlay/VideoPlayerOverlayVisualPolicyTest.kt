@@ -68,4 +68,17 @@ class VideoPlayerOverlayVisualPolicyTest {
         assertEquals(16, policy.qualitySwitchCornerRadiusDp)
         assertEquals(28, policy.interactionIconSizeDp)
     }
+
+    @Test
+    fun compactMode_shrinksChromeScrimsOnly() {
+        val classic = resolveVideoPlayerOverlayVisualPolicy(widthDp = 393, compact = false)
+        val compact = resolveVideoPlayerOverlayVisualPolicy(widthDp = 393, compact = true)
+
+        assertEquals(140, classic.topScrimHeightDp)
+        assertEquals(200, classic.bottomScrimHeightDp)
+        assertEquals(105, compact.topScrimHeightDp)
+        assertEquals(150, compact.bottomScrimHeightDp)
+        assertEquals(classic.lockButtonSizeDp, compact.lockButtonSizeDp)
+        assertEquals(classic.centerPlayButtonSizeDp, compact.centerPlayButtonSizeDp)
+    }
 }

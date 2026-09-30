@@ -23,8 +23,8 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppPreference
 import com.android.purebilibili.core.ui.components.AppPreferenceDivider
 import com.android.purebilibili.core.ui.components.AppPreferenceGroup
-import com.android.purebilibili.core.ui.components.AppSearchEntry
 import com.android.purebilibili.core.ui.components.AppLiquidAwareSearchField
+import com.android.purebilibili.core.ui.components.AppSearchEntry
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.rememberAdaptiveListVisualCapabilities
 import com.android.purebilibili.core.ui.components.rememberAdaptivePreferenceIconContainerColor

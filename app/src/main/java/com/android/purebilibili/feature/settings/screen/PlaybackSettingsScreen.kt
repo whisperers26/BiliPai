@@ -164,6 +164,13 @@ fun PlaybackSettingsContent(
     val audioNowPlayingBarOpensAudioMode by SettingsManager
         .getAudioNowPlayingBarOpensAudioMode(context)
         .collectAsStateWithLifecycle(initialValue = false)
+    val musicLyricsUiStyle by SettingsManager
+        .getMusicLyricsUiStyle(context)
+        .collectAsStateWithLifecycle(initialValue = SettingsManager.MusicLyricsUiStyle.CLASSIC)
+    val loudnessNormalizationEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getLoudnessNormalizationEnabled(context).collectAsStateWithLifecycle(initialValue = false)
+    val startupAutoPlayEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getStartupAutoPlayEnabled(context).collectAsStateWithLifecycle(initialValue = false)
     val playerDiagnosticLoggingEnabled by com.android.purebilibili.core.store.SettingsManager
         .getPlayerDiagnosticLoggingEnabled(context)
         .collectAsStateWithLifecycle(initialValue = DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED)
@@ -694,6 +701,69 @@ fun PlaybackSettingsContent(
                             onCheckedChange = {
                                 scope.launch {
                                     SettingsManager.setAudioNowPlayingBarOpensAudioMode(context, it)
+                                }
+                            },
+                            iconTint = iOSOrange
+                        )
+                        AppPreferenceDivider()
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYLIST_AUTO_CONTINUE),
+                            title = "响度均衡",
+                            subtitle = if (loudnessNormalizationEnabled) {
+                                "自动拉平不同曲目间的响度差异；切换后重新开始播放生效"
+                            } else {
+                                "关闭后保留各视频原始响度"
+                            },
+                            checked = loudnessNormalizationEnabled,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setLoudnessNormalizationEnabled(context, it)
+                                }
+                            },
+                            iconTint = iOSOrange
+                        )
+                        AppPreferenceDivider()
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYLIST_AUTO_CONTINUE),
+                            title = "启动自动续播",
+                            subtitle = if (startupAutoPlayEnabled) {
+                                "冷启动后进入播放场景时自动续播上一次的曲目"
+                            } else {
+                                "关闭后需要手动恢复播放"
+                            },
+                            checked = startupAutoPlayEnabled,
+                            onCheckedChange = {
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setStartupAutoPlayEnabled(context, it)
+                                }
+                            },
+                            iconTint = iOSOrange
+                        )
+                        AppPreferenceDivider()
+                        SettingsSingleChoicePreference(
+                            title = "听视频歌词界面：${musicLyricsUiStyle.label}",
+                            subtitle = when (musicLyricsUiStyle) {
+                                SettingsManager.MusicLyricsUiStyle.CLASSIC ->
+                                    "经典全屏歌词；可在听视频右上角更多菜单临时切换"
+                                SettingsManager.MusicLyricsUiStyle.IMMERSIVE ->
+                                    "沉浸式大字歌词，支持逐字推进高亮（Halcyon 风格）"
+                            },
+                            options = listOf(
+                                AppSegmentOption(
+                                    SettingsManager.MusicLyricsUiStyle.CLASSIC,
+                                    SettingsManager.MusicLyricsUiStyle.CLASSIC.label
+                                ),
+                                AppSegmentOption(
+                                    SettingsManager.MusicLyricsUiStyle.IMMERSIVE,
+                                    SettingsManager.MusicLyricsUiStyle.IMMERSIVE.label
+                                ),
+                            ),
+                            selectedValue = musicLyricsUiStyle,
+                            onSelectionChange = { style ->
+                                scope.launch {
+                                    SettingsManager.setMusicLyricsUiStyle(context, style)
                                 }
                             },
                             iconTint = iOSOrange
@@ -1279,6 +1349,9 @@ private fun PlaybackInteractionSettingsSection(
     val videoInfoDefaultExpanded by com.android.purebilibili.core.store.SettingsManager
         .getVideoInfoDefaultExpanded(context)
         .collectAsStateWithLifecycle(initialValue = false)
+    val showVideoDetailCommentCount by SettingsManager
+        .getShowVideoDetailCommentCount(context)
+        .collectAsStateWithLifecycle(initialValue = true)
     val commentFraudDetectionEnabled by com.android.purebilibili.core.store.SettingsManager
         .getCommentFraudDetectionEnabled(context)
         .collectAsStateWithLifecycle(initialValue = true)
@@ -1474,8 +1547,8 @@ private fun PlaybackInteractionSettingsSection(
             iconTint = com.android.purebilibili.core.theme.iOSPurple
         )
         AppPreferenceDivider()
-	        AppSwitchPreference(
-	            icon = rememberSettingsSemanticIcon(SettingsIconRole.VIDEO_DESCRIPTION),
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.VIDEO_DESCRIPTION),
             title = "默认展开视频简介",
             subtitle = if (videoInfoDefaultExpanded) {
                 "进入视频页时默认展开标题、简介和标签"
@@ -1490,6 +1563,23 @@ private fun PlaybackInteractionSettingsSection(
                 }
             },
             iconTint = com.android.purebilibili.core.theme.iOSBlue
+        )
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.INTERACTION_COMMENT),
+            title = "视频详情显示评论数",
+            subtitle = if (showVideoDetailCommentCount) {
+                "在视频详情页“评论”标签旁显示视频评论总数"
+            } else {
+                "关闭后只显示“评论”"
+            },
+            checked = showVideoDetailCommentCount,
+            onCheckedChange = { enabled ->
+                scope.launch {
+                    SettingsManager.setShowVideoDetailCommentCount(context, enabled)
+                }
+            },
+            iconTint = com.android.purebilibili.core.theme.iOSTeal,
         )
         AppPreferenceDivider()
         val videoTagSizePreset by com.android.purebilibili.core.store.SettingsManager
@@ -2363,6 +2453,19 @@ private fun PlaybackFullscreenGestureSettingsSection(
                 }
             },
             iconTint = com.android.purebilibili.core.theme.iOSPink
+        )
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.CAST_BUTTON),
+            title = "紧凑播放器控件",
+            subtitle = "隐藏顶栏分享，收紧按钮间距与黑色遮罩；分享仍可在「更多」中使用",
+            checked = playerControlVisibility.compactPlayerChrome,
+            onCheckedChange = {
+                scope.launch {
+                    SettingsManager.setCompactPlayerChrome(context, it)
+                }
+            },
+            iconTint = com.android.purebilibili.core.theme.iOSBlue
         )
         AppPreferenceDivider()
         SettingsSingleChoicePreference(

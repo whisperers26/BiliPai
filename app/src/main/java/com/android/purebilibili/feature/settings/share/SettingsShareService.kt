@@ -59,6 +59,16 @@ class SettingsShareService(private val context: Context) : SettingsShareServiceC
     private val savedProfilesDirectory: File
         get() = File(context.filesDir, "settings-profiles")
 
+    companion object {
+        /**
+         * 同步标记检查，供 Application 启动路径判断是否需要为首次运行同步应用内置默认值。
+         * 标记已存在时启动路径可以直接跳过，不再进入 runBlocking/IO 派发。
+         */
+        fun hasBundledDefaultMarker(context: Context): Boolean =
+            context.getSharedPreferences(DEFAULT_PROFILE_PREFS, Context.MODE_PRIVATE)
+                .getBoolean(DEFAULT_PROFILE_APPLIED_KEY, false)
+    }
+
     /** Applies the bundled profile once, only for a genuinely new settings store. */
     suspend fun applyBundledDefaultIfNeeded(): Result<Boolean> = withContext(Dispatchers.IO) {
         runCatching {

@@ -1300,6 +1300,7 @@ private fun LightweightHomeTopTabs(
                     labelFontSize = resolveFloatingDockLabelFontSize(
                         showIcon = showIcon,
                         showText = showText,
+                        fontScale = density.fontScale,
                     ),
                     liquidGlassEffectsEnabled = isLiquidGlassEnabled,
                     miuixBackdrop = miuixBackdrop,

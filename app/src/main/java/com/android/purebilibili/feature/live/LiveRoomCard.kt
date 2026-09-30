@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.AppTypographyTokens
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
@@ -143,7 +144,9 @@ internal fun LiveRoomCard(
                     AppText(
                         text = "${formatLiveViewerCount(model.viewerCount)}人看过",
                         color = LiveStatusPalette.MediaContent,
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFeatureSettings = AppTypographyTokens.TabularNumerals
+                        ),
                         maxLines = 1,
                     )
                 }

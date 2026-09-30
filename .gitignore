@@ -121,3 +121,4 @@ app/src/test/java/com/android/purebilibili/docs/UiDesignDocumentationStructureTe
 # Local Reasonix session settings and metadata
 .reasonix/
 reasonix.toml
+.zcodeignore

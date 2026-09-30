@@ -28,15 +28,139 @@ import androidx.compose.ui.unit.LayoutDirection
 
 class MiuixVideoCardNavTransitionTest {
     @Test
-    fun heroNavMotionUsesDurationTokensAndVelocityCapableReleaseSpecs() {
+    fun settledEntryRebindsRemovingScopeBeforeReturnStarts() {
+        var depth = -.5f
+        fun scope(removing: Boolean, lowerPage: Boolean = false) = object : NavTransitionScope {
+            override val relativeDepth get() = if (lowerPage) depth + 1f else depth
+            override val role get() = when {
+                relativeDepth > 0f -> NavRole.Covered
+                relativeDepth == 0f -> NavRole.Top
+                removing -> NavRole.Outgoing
+                else -> NavRole.Incoming
+            }
+            override val change = if (removing) NavChange.Pop else NavChange.Push
+            override val layoutSize = IntSize(1080, 2400)
+            override val layoutDirection = LayoutDirection.Ltr
+            override val density = Density(3f)
+            override val gesture: NavGesture? = null
+            override val settle: NavSettle? = null
+        }
+        val progress = MiuixVideoCardTransitionProgress()
+        progress.bind(scope(removing = false))
+        assertEquals(VideoCardTransitionSettleState.AutoEnter, progress.settleStateOrNull())
+        depth = 0f
+        assertEquals(VideoCardTransitionSettleState.Held, progress.settleStateOrNull())
+
+        // Miuix captures isRemoving in a fresh scope before its driver leaves depth zero.
+        progress.bind(scope(removing = true))
+        depth = -.4f
+        progress.bind(scope(removing = false, lowerPage = true))
+        assertEquals(VideoCardTransitionSettleState.AutoReturn, progress.settleStateOrNull())
+        assertEquals(.6f, progress.depthOrNull())
+
+        // The source reaches Top in the final frame; it must not steal exit completion.
+        depth = -1f
+        progress.bind(scope(removing = false, lowerPage = true))
+        assertEquals(VideoCardTransitionSettleState.Idle, progress.settleStateOrNull())
+        assertEquals(0f, progress.depthOrNull())
+    }
+
+    @Test
+    fun heroNavMotionReservesTimeForCommittedCardLanding() {
         val spec = resolveVideoHeroMotionSpec(360)
         val entering = resolveVideoHeroNavMotion(spec, false)
         val returning = resolveVideoHeroNavMotion(spec, true)
         assertEquals(360, (entering.programmatic as NavSettleSpec.Tween).durationMillis)
         assertEquals(299, (returning.programmatic as NavSettleSpec.Tween).durationMillis)
-        assertEquals(spec.commitStiffness, (returning.commit as NavSettleSpec.Spring).stiffness)
+        assertEquals(spec.returnDurationMillis, (returning.commit as NavSettleSpec.Tween).durationMillis)
         assertEquals(spec.cancelStiffness, (returning.cancel as NavSettleSpec.Spring).stiffness)
-        assertEquals(1f, (returning.commit as NavSettleSpec.Spring).dampingRatio)
+    }
+
+    @Test
+    fun fullGestureKeepsCardAirborneUntilCommitSettleFinishes() {
+        val scope = object : NavTransitionScope {
+            override var relativeDepth = 0f
+            override var role = NavRole.Top
+            override val change = NavChange.Pop
+            override val layoutSize = IntSize(1080, 2400)
+            override val layoutDirection = LayoutDirection.Ltr
+            override val density = Density(3f)
+            override var gesture: NavGesture? = NavGesture(0f, NavSwipeEdge.Left, 500f)
+            override var settle: NavSettle? = null
+        }
+        val progress = MiuixVideoCardTransitionProgress()
+        progress.bind(scope)
+        assertEquals(1f, progress.depthOrNull())
+        scope.relativeDepth = -.999f
+        scope.gesture = NavGesture(.999f, NavSwipeEdge.Left, 500f)
+        assertEquals(.2f, progress.depthOrNull()!!, absoluteTolerance = .001f)
+        scope.settle = object : NavSettle {
+            override val phase = NavSettlePhase.Commit
+            override val releaseVelocity = 0f
+            override val elapsedMillis = 0f
+        }
+        scope.role = NavRole.Outgoing
+        assertEquals(.2f, progress.depthOrNull()!!, absoluteTolerance = .001f)
+        scope.relativeDepth = -.9995f
+        assertEquals(.1f, progress.depthOrNull()!!, absoluteTolerance = .002f)
+        scope.relativeDepth = -1f
+        assertEquals(0f, progress.depthOrNull())
+    }
+
+    @Test
+    fun interruptingEntryRetainsItsCurrentPositionAndLeavesLandingDistance() {
+        val scope = object : NavTransitionScope {
+            override var relativeDepth = -.5f
+            override val role = NavRole.Incoming
+            override val change = NavChange.Push
+            override val layoutSize = IntSize(1080, 2400)
+            override val layoutDirection = LayoutDirection.Ltr
+            override val density = Density(3f)
+            override var gesture: NavGesture? = NavGesture(0f, NavSwipeEdge.Left, 500f)
+            override val settle: NavSettle? = null
+        }
+        val progress = MiuixVideoCardTransitionProgress()
+        progress.bind(scope)
+        assertEquals(.5f, progress.depthOrNull())
+        scope.relativeDepth = -.9f
+        scope.gesture = NavGesture(.4f, NavSwipeEdge.Left, 500f)
+        assertEquals(.2f, progress.depthOrNull()!!, absoluteTolerance = .001f)
+        // A very early interruption is already inside the reserved landing range.
+        // The first gesture frame must stay at the current position.
+        val earlyScope = object : NavTransitionScope by scope {
+            override val relativeDepth = -.9f
+            override val gesture = NavGesture(0f, NavSwipeEdge.Left, 500f)
+        }
+        val earlyProgress = MiuixVideoCardTransitionProgress()
+        earlyProgress.bind(earlyScope)
+        assertEquals(.1f, earlyProgress.depthOrNull()!!, absoluteTolerance = .001f)
+    }
+
+    @Test
+    fun cancelledGestureReturnsToFullscreenWithoutJumpingAtRelease() {
+        val scope = object : NavTransitionScope {
+            override var relativeDepth = -.6f
+            override val role = NavRole.Incoming
+            override val change = NavChange.Pop
+            override val layoutSize = IntSize(1080, 2400)
+            override val layoutDirection = LayoutDirection.Ltr
+            override val density = Density(3f)
+            override var gesture: NavGesture? = NavGesture(.6f, NavSwipeEdge.Left, 500f)
+            override var settle: NavSettle? = null
+        }
+        val progress = MiuixVideoCardTransitionProgress()
+        progress.bind(scope)
+        val released = progress.depthOrNull()!!
+        scope.settle = object : NavSettle {
+            override val phase = NavSettlePhase.Cancel
+            override val releaseVelocity = 0f
+            override val elapsedMillis = 0f
+        }
+        assertEquals(released, progress.depthOrNull())
+        scope.relativeDepth = -.3f
+        assertTrue(progress.depthOrNull()!! > released)
+        scope.relativeDepth = 0f
+        assertEquals(1f, progress.depthOrNull())
     }
 
     @Test
@@ -132,7 +256,7 @@ class MiuixVideoCardNavTransitionTest {
         val progress = MiuixVideoCardTransitionProgress()
         progress.bind(scope)
         assertTrue(progress.isGestureInProgress())
-        assertEquals(.6f, progress.depthOrNull())
+        assertEquals(.68f, progress.depthOrNull()!!, absoluteTolerance = .001f)
         scope.settle = object : NavSettle {
             override val phase = NavSettlePhase.Cancel
             override val releaseVelocity = 0f

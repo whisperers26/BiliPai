@@ -54,6 +54,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.util.resolveSingleColumnFeedMaxWidth
+import com.android.purebilibili.core.util.responsiveContentWidth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,6 +96,7 @@ fun InboxScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .responsiveContentWidth(maxWidth = resolveSingleColumnFeedMaxWidth())
         ) {
             when {
                 uiState.isLoading -> {
@@ -727,6 +730,10 @@ private fun MessageSmallFlag(text: String) {
     )
 }
 
+// 会话行组合期热路径：共享 formatter，避免每行新建 SimpleDateFormat。
+// 仅主线程（Compose 组合）调用，不涉及 SimpleDateFormat 的线程安全问题。
+private val inboxDayFormatter = SimpleDateFormat("MM-dd", Locale.getDefault())
+
 private fun formatTime(timestamp: Long): String {
     if (timestamp == 0L) return ""
 
@@ -739,9 +746,6 @@ private fun formatTime(timestamp: Long): String {
         diff < 3600_000 -> "${diff / 60_000}分钟前"
         diff < 86400_000 -> "${diff / 3600_000}小时前"
         diff < 172800_000 -> "昨天"
-        else -> {
-            val sdf = SimpleDateFormat("MM-dd", Locale.getDefault())
-            sdf.format(Date(msgTime))
-        }
+        else -> inboxDayFormatter.format(Date(msgTime))
     }
 }

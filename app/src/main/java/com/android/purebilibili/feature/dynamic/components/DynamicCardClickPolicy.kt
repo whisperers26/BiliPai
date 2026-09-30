@@ -199,6 +199,14 @@ internal fun resolveDynamicOpusPresentationBlocks(
     return buildList {
         opus.contentBlocks.forEach { block ->
             when (block) {
+                is OpusContentBlock.Text -> {
+                    // 空白段落不参与布局，避免在文末/图前多出一行高度。
+                    if (normalizeDynamicBodyText(block.text).isNotBlank() ||
+                        block.richTextNodes.any { resolveDynamicRichTextNodeToken(it).isNotBlank() }
+                    ) {
+                        add(block.copy(text = normalizeDynamicBodyText(block.text)))
+                    }
+                }
                 is OpusContentBlock.Image -> keepImage(block.pic)?.let { add(block.copy(pic = it)) }
                 is OpusContentBlock.Divider -> {
                     val dividerPic = block.pic
@@ -232,6 +240,17 @@ internal fun shouldExpandDynamicOpusDetailImages(
     imageLayout: DynamicDetailImageLayout,
 ): Boolean {
     return imageLayout == DynamicDetailImageLayout.EXPANDED
+}
+
+/**
+ * 仅有 opus.pics、尚未解析出正文块时（seed / 部分详情），详情页仍按图片布局设置展开，
+ * 避免先画九宫格再在完整详情到达后整块跳成大图。
+ */
+internal fun shouldExpandDynamicOpusFallbackImages(
+    isDetail: Boolean,
+    imageLayout: DynamicDetailImageLayout,
+): Boolean {
+    return isDetail && shouldExpandDynamicOpusDetailImages(imageLayout)
 }
 
 internal fun toggleDynamicDetailImageLayout(
@@ -360,21 +379,14 @@ internal fun resolveDynamicCardPrimaryAction(item: DynamicItem): DynamicCardPrim
     }
 
     major?.article?.let { article ->
-            when (val target = BilibiliNavigationTargetParser.parse(article.jump_url)) {
-                is BilibiliNavigationTarget.Dynamic -> {
-                    return DynamicCardPrimaryAction.OpenDynamicDetail(target.dynamicId)
-                }
-                is BilibiliNavigationTarget.Article -> {
-                    return DynamicCardPrimaryAction.OpenArticle(
-                        articleId = target.articleId,
-                        title = article.title.ifBlank { article.desc }
-                    )
-                }
-                else -> Unit
-            }
-            if (article.id > 0L) {
+            // 专栏卡片统一打开专栏渲染器。新专栏的 jump_url 常是 /opus/ 链接，
+            // 不能据此把专栏当图文动态打开详情页。
+            val jumpTarget = BilibiliNavigationTargetParser.parse(article.jump_url)
+            val articleId = (jumpTarget as? BilibiliNavigationTarget.Article)?.articleId
+                ?: article.id
+            if (articleId > 0L) {
                 return DynamicCardPrimaryAction.OpenArticle(
-                    articleId = article.id,
+                    articleId = articleId,
                     title = article.title.ifBlank { article.desc }
                 )
             }

@@ -919,6 +919,7 @@ fun HomeScreen(
         recommendOldContentRevealKey
     ) {
         if (currentCategory != HomeCategory.RECOMMEND) return@LaunchedEffect
+        if (!homeSettings.homeRefreshTipVisible) return@LaunchedEffect
         if ((refreshNewItemsCount ?: 0) <= 0) return@LaunchedEffect
         val targetKey = refreshNewItemsKey
         if (targetKey <= 0L || recommendOldContentRevealKey == targetKey) return@LaunchedEffect
@@ -1250,13 +1251,19 @@ fun HomeScreen(
         contentWidth,
         displayMode,
         homeSettings.gridColumnCount,
+        homeSettings.gridColumnCountCompact,
         homeSettings.homeFeedCardWidthPreset,
         windowSizeClass.widthSizeClass
     ) {
         resolveHomeFeedGridColumns(
             contentWidthDp = contentWidth.value.toInt(),
             displayMode = displayMode,
-            fixedColumnCount = homeSettings.gridColumnCount,
+            // 窄屏（折叠屏外屏/手机竖屏）与宽屏（内屏/平板）各自独立的固定列数记忆
+            fixedColumnCount = resolveHomeFeedStoredColumnCount(
+                widthSizeClass = windowSizeClass.widthSizeClass,
+                compactColumnCount = homeSettings.gridColumnCountCompact,
+                defaultColumnCount = homeSettings.gridColumnCount,
+            ),
             cardWidthPreset = homeSettings.homeFeedCardWidthPreset,
             widthSizeClass = windowSizeClass.widthSizeClass
         )
@@ -1273,7 +1280,10 @@ fun HomeScreen(
             displayMode = displayMode,
         )
     }
-    LaunchedEffect(homeSettings.gridColumnCount) {
+    LaunchedEffect(
+        homeSettings.gridColumnCount,
+        homeSettings.gridColumnCountCompact,
+    ) {
         interactiveColumns = null
     }
 
@@ -1353,7 +1363,7 @@ fun HomeScreen(
         )
     }
     val shouldCaptureHomeWallpaperBackdrop =
-        homeSettings.homeCardDynamicTintEnabled &&
+        homeSettings.homeCardFrostedGlassEnabled &&
             homeWallpaperBackdropAppearance.visible &&
             homeWallpaperUri.isNotBlank() &&
             isStaticHomeWallpaperUri(homeWallpaperUri) &&
@@ -1641,7 +1651,12 @@ fun HomeScreen(
         AppSpacingTokens.None
     }
     val listTopPadding = statusBarHeight + chromeHeight +
-        (if (effectiveHomeSettings.hideTopTabs) AppSpacingTokens.Small else (homeTopPresetStyle.tabsToContentSpacing + floatingDockLift)) +
+        (if (effectiveHomeSettings.hideTopTabs) {
+            AppSpacingTokens.Small
+        } else {
+            homeTopPresetStyle.tabsToContentSpacing + floatingDockLift -
+                resolveHomeTabsToContentTighteningDp(appUiStyle, isLiquidGlassEnabled)
+        }).coerceAtLeast(AppSpacingTokens.None) +
         legacyTopChromeSafetyGap
     
     // Pixels
@@ -1993,6 +2008,7 @@ fun HomeScreen(
                                         start = AppSpacingTokens.Large,
                                         end = AppSpacingTokens.Large,
                                     ),
+                                    onOpenPluginSettings = onPluginsClick,
                                     articleContentPadding = PaddingValues(
                                         top = statusBarHeight + AppSpacingTokens.Small,
                                         bottom = homeListBottomPadding,
@@ -2013,7 +2029,12 @@ fun HomeScreen(
                                     onArticleOpenChanged = { subscriptionArticleOpen = it },
                                     onPinchEnd = { finalColumns ->
                                         coroutineScope.launch {
-                                            SettingsManager.setGridColumnCount(context, finalColumns)
+                                            // 窄屏（外屏/手机）与宽屏（内屏/平板）各写各的记忆
+                                            if (isCompactHomeFeedScreen(windowSizeClass.widthSizeClass)) {
+                                                SettingsManager.setGridColumnCountCompact(context, finalColumns)
+                                            } else {
+                                                SettingsManager.setGridColumnCount(context, finalColumns)
+                                            }
                                         }
                                         pinchPillDismissJob?.cancel()
                                         pinchPillDismissJob = coroutineScope.launch {
@@ -2224,7 +2245,12 @@ fun HomeScreen(
                                            },
                                            onGestureEnd = { finalColumns ->
                                                coroutineScope.launch {
-                                                   SettingsManager.setGridColumnCount(context, finalColumns)
+                                                   // 窄屏（外屏/手机）与宽屏（内屏/平板）各写各的记忆
+                                                   if (isCompactHomeFeedScreen(windowSizeClass.widthSizeClass)) {
+                                                       SettingsManager.setGridColumnCountCompact(context, finalColumns)
+                                                   } else {
+                                                       SettingsManager.setGridColumnCount(context, finalColumns)
+                                                   }
                                                }
                                                pinchPillDismissJob?.cancel()
                                                pinchPillDismissJob = coroutineScope.launch {
@@ -2391,7 +2417,8 @@ fun HomeScreen(
                                              refreshNewItemsKey = refreshNewItemsKey,
                                              revealedRefreshKey = recommendOldContentRevealKey,
                                              anchorBvid = recommendOldContentAnchorBvid,
-                                             oldContentStartIndex = recommendOldContentStartIndex
+                                             oldContentStartIndex = recommendOldContentStartIndex,
+                                             refreshTipVisible = homeSettings.homeRefreshTipVisible
                                          )
                                      ) {
                                          recommendOldContentAnchorBvid
@@ -2403,12 +2430,19 @@ fun HomeScreen(
                                              refreshNewItemsKey = refreshNewItemsKey,
                                              revealedRefreshKey = recommendOldContentRevealKey,
                                              anchorBvid = recommendOldContentAnchorBvid,
-                                             oldContentStartIndex = recommendOldContentStartIndex
+                                             oldContentStartIndex = recommendOldContentStartIndex,
+                                             refreshTipVisible = homeSettings.homeRefreshTipVisible
                                          )
                                      ) {
                                          recommendOldContentStartIndex
                                      } else {
                                          null
+                                     },
+                                     onOldContentDividerClick = {
+                                         coroutineScope.launch {
+                                             contentGridState.animateScrollToItem(0)
+                                         }
+                                         viewModel.refresh(category)
                                      },
                                      todayWatchEnabled = category == HomeCategory.RECOMMEND && todayWatchPluginEnabled,
                                      todayWatchMode = todayWatchMode,
@@ -2468,12 +2502,19 @@ fun HomeScreen(
         val isFeedScrollInProgress by remember(activeGridState) {
             derivedStateOf { activeGridState?.isScrollInProgress == true }
         }
-        SideEffect {
-            globalFeedScrollInProgress.value = isFeedScrollInProgress
+        if (isTopLevelActive) {
+            SideEffect {
+                globalFeedScrollInProgress.value = isFeedScrollInProgress
+            }
         }
-        DisposableEffect(Unit) {
-            onDispose {
+        DisposableEffect(isTopLevelActive) {
+            if (!isTopLevelActive) {
                 globalFeedScrollInProgress.value = false
+            }
+            onDispose {
+                if (isTopLevelActive) {
+                    globalFeedScrollInProgress.value = false
+                }
             }
         }
         val homeInteractionMotionBudget = resolveHomeInteractionMotionBudget(

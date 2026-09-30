@@ -23,24 +23,30 @@ class PlaybackProgressManager {
         private const val PREFS_NAME = "video_progress"
         private const val MIN_PROGRESS_TO_SAVE = 5000L // 5秒以上才保存
         private const val MAX_PERCENT_TO_RESTORE = 0.95f // 超过95%不恢复（已看完）
-        
+        // 有界化上限：每看一个视频最多写 2 个 key（cid 级 + bvid 级），4096 条覆盖极长的
+        // 观看历史；超过后按最旧淘汰，内存与磁盘 XML 都保持有界。
+        private const val MAX_CACHED_PROGRESS_ENTRIES = 4096
+
         @Volatile
         private var instance: PlaybackProgressManager? = null
-        
+
         fun getInstance(context: Context): PlaybackProgressManager {
             return instance ?: synchronized(this) {
-                instance ?: PlaybackProgressManager().also { 
-                    it.init(context) 
+                instance ?: PlaybackProgressManager().also {
+                    it.init(context)
                     instance = it
                 }
             }
         }
     }
-    
+
+    // savedAtMs 仅用于内存淘汰排序，不落盘；loadFromPrefs 里按加载顺序编号。
+    private data class ProgressEntry(val positionMs: Long, val savedAtMs: Long)
+
     private var prefs: SharedPreferences? = null
-    
+
     // [性能优化] 使用 ConcurrentHashMap 保障主线程在滑动渲染热路径上的无锁极速读取（O(1) Lock-free）
-    private val memoryCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val memoryCache = java.util.concurrent.ConcurrentHashMap<String, ProgressEntry>()
 
     private fun buildProgressKey(bvid: String, cid: Long): String {
         return if (cid > 0L) "$bvid#$cid" else bvid
@@ -71,10 +77,12 @@ class PlaybackProgressManager {
             return
         }
 
-        memoryCache[key] = positionMs
+        val savedAtMs = System.currentTimeMillis()
+        memoryCache[key] = ProgressEntry(positionMs, savedAtMs)
         if (cid > 0L) {
-            memoryCache[buildProgressKey(bvid, cid = 0L)] = positionMs
+            memoryCache[buildProgressKey(bvid, cid = 0L)] = ProgressEntry(positionMs, savedAtMs)
         }
+        evictOldestIfNeeded()
 
         prefs?.edit()?.apply {
             putLong(key, positionMs)
@@ -104,7 +112,7 @@ class PlaybackProgressManager {
     fun getCachedPosition(bvid: String, cid: Long): Long {
         if (bvid.isEmpty()) return 0L
         val key = buildProgressKey(bvid, cid)
-        return memoryCache[key]?.takeIf { it > 0L } ?: 0L
+        return memoryCache[key]?.positionMs?.takeIf { it > 0L } ?: 0L
     }
 
     fun getCachedPosition(bvid: String): Long {
@@ -166,10 +174,30 @@ class PlaybackProgressManager {
      * Load positions from SharedPreferences to memory cache
      */
     private fun loadFromPrefs() {
+        // savedAtMs 仅用于内存淘汰排序；磁盘条目无时间信息，按加载顺序编号即可。
+        var loadOrder = 0L
         prefs?.all?.forEach { (key, value) ->
             if (value is Long && value > 0) {
-                memoryCache[key] = value
+                memoryCache[key] = ProgressEntry(value, loadOrder++)
             }
         }
+    }
+
+    /** 超过 [MAX_CACHED_PROGRESS_ENTRIES] 时按最旧淘汰，内存与磁盘同步删除保持有界。 */
+    private fun evictOldestIfNeeded() {
+        val overflow = memoryCache.size - MAX_CACHED_PROGRESS_ENTRIES
+        if (overflow <= 0) return
+        val evicted = memoryCache.entries.asSequence()
+            .sortedBy { it.value.savedAtMs }
+            .take(overflow)
+            .map { it.key }
+            .toList()
+        val editor = prefs?.edit()
+        evicted.forEach { key ->
+            memoryCache.remove(key)
+            editor?.remove(key)
+        }
+        editor?.apply()
+        Logger.d(TAG, "Evicted ${evicted.size} oldest progress entries")
     }
 }

@@ -1134,6 +1134,12 @@ class MiniPlayerManager private constructor(private val context: Context) :
     
     var isMiniMode by mutableStateOf(false)
         private set
+
+    /**
+     * 迷你播放器在屏幕上的最新像素边界，由 MiniPlayerOverlay 回报，
+     * 供系统 PIP 的 sourceRectHint 做无缝过渡；无小窗时为 null。
+     */
+    var miniPlayerSourceBoundsPx by mutableStateOf<android.graphics.Rect?>(null)
     
     // 🚀 [新增] 导航抑制标志：在导航到视频页面期间不显示小窗
     var isNavigatingToVideo by mutableStateOf(false)
@@ -1817,13 +1823,16 @@ class MiniPlayerManager private constructor(private val context: Context) :
             val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(context)
             val audioFocusEnabled = SettingsManager.getAudioFocusEnabledSync(context)
 
+            // 响度均衡开启时注入 AGC 音频处理器（需重建播放会话才生效）
+            val renderersFactory = if (SettingsManager.getLoudnessNormalizationEnabledSync(context)) {
+                com.android.purebilibili.core.player.LoudnessAwareRenderersFactory(context)
+            } else {
+                HiResCompatibleRenderersFactory(context)
+            }.setExtensionRendererMode(
+                androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
+            )
             _player = ExoPlayer.Builder(context)
-                .setRenderersFactory(
-                    HiResCompatibleRenderersFactory(context)
-                        .setExtensionRendererMode(
-                            androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
-                        )
-                )
+                .setRenderersFactory(renderersFactory)
                 .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
                 .setAudioAttributes(
                     audioAttributes,

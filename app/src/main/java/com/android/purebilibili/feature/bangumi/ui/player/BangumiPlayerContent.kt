@@ -53,7 +53,10 @@ import com.android.purebilibili.feature.video.ui.components.VideoCommentMainList
 import com.android.purebilibili.feature.video.ui.components.SubReplySheet
 import com.android.purebilibili.feature.video.ui.components.CommentInputDialog
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
+import androidx.compose.ui.geometry.Rect
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewSourceAnchor
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -100,6 +103,8 @@ fun BangumiPlayerContent(
     var sendPending by remember(currentEpisode.id) { mutableStateOf(false) }
     var previewImages by remember(currentEpisode.id) { mutableStateOf<List<String>>(emptyList()) }
     var previewIndex by remember(currentEpisode.id) { mutableIntStateOf(0) }
+    var previewSourceRect by remember(currentEpisode.id) { mutableStateOf<ImagePreviewSourceAnchor?>(null) }
+    var previewTextContent by remember(currentEpisode.id) { mutableStateOf<ImagePreviewTextContent?>(null) }
 
     LaunchedEffect(currentEpisode.id, commentState.isSending, commentState.sendError) {
         if (sendPending && !commentState.isSending) {
@@ -614,9 +619,11 @@ fun BangumiPlayerContent(
                             onCommentUrlClick = { url -> onCommentUrlClick?.invoke(url) },
                             onTimestampClick = null,
                             maxTimestampMs = currentEpisode.duration.takeIf { it > 0L },
-                            onImagePreview = { images, index, _, _ ->
+                            onImagePreview = { images, index, rect, textContent ->
                                 previewImages = images
                                 previewIndex = index
+                                previewSourceRect = rect
+                                previewTextContent = textContent
                             }
                         )
                     } else {
@@ -692,9 +699,11 @@ fun BangumiPlayerContent(
         onReplyClick = ::openReplyComposer,
         onRootCommentClick = ::openRootCommentComposer,
         onUrlClick = { url -> onCommentUrlClick?.invoke(url) },
-        onImagePreview = { images, index, _, _ ->
+        onImagePreview = { images, index, rect, textContent ->
             previewImages = images
             previewIndex = index
+            previewSourceRect = rect
+            previewTextContent = textContent
         }
     )
 
@@ -702,6 +711,11 @@ fun BangumiPlayerContent(
         ImagePreviewDialog(
             images = previewImages,
             initialIndex = previewIndex,
+            sourceRect = previewSourceRect?.rect,
+            sourceRects = previewSourceRect?.galleryRects.orEmpty(),
+            sourceCornerRadiusDp = previewSourceRect?.cornerRadiusDp
+                ?: AppShapes.containerCornerDp(ContainerLevel.Field).value,
+            textContent = previewTextContent,
             onDismiss = { previewImages = emptyList() }
         )
     }

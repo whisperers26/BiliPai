@@ -64,6 +64,10 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -85,7 +89,9 @@ import com.android.purebilibili.core.ui.components.AppSmallFloatingActionButton
 import com.android.purebilibili.core.ui.components.AppLiquidGlassBackToTopButton
 import top.yukonga.miuix.kmp.blur.Backdrop
 import com.android.purebilibili.core.ui.AdaptivePullToRefreshBox
+import com.android.purebilibili.core.store.AppNavigationSettings
 import com.android.purebilibili.core.ui.LocalBottomBarContentPadding
+import com.android.purebilibili.core.ui.LocalBottomBarVisible
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.ui.LoadingAnimation
@@ -122,10 +128,10 @@ import com.android.purebilibili.feature.dynamic.components.resolveDynamicReportR
 import com.android.purebilibili.feature.dynamic.components.DynamicCommentSheet
 import com.android.purebilibili.feature.dynamic.components.RepostDialog
 import com.android.purebilibili.feature.dynamic.components.DynamicSubReplyPreviewHost
+import com.android.purebilibili.feature.home.LocalHomeFeedScrollInProgress
 import com.android.purebilibili.feature.home.LocalHomeScrollOffset
 import com.android.purebilibili.feature.home.components.BottomBarMatchedDockEdge
 import com.android.purebilibili.feature.home.components.BottomBarMatchedDockVisibility
-import com.android.purebilibili.feature.home.policy.resolveBottomBarChromeScrollOffset
 import com.android.purebilibili.core.util.animateScrollToTop
 import com.android.purebilibili.core.util.resolveScrollToTopPlan
 import kotlinx.coroutines.channels.Channel
@@ -257,7 +263,6 @@ fun DynamicScreen(
     val likeOverrides by viewModel.likeOverrides.collectAsStateWithLifecycle()
     var showRepostDialog by remember { mutableStateOf<String?>(null) }  // 存储要转发的动态ID
     var showPublishDialog by remember { mutableStateOf(false) }
-    var dynamicTopActionsCollapsed by rememberSaveable { mutableStateOf(false) }
     var editingDynamicId by remember { mutableStateOf<String?>(null) }
     var editingDraft by remember {
         mutableStateOf(com.android.purebilibili.data.model.response.DynamicPublishDraft(text = ""))
@@ -290,14 +295,19 @@ fun DynamicScreen(
 
     val dynamicVisibleTabIds by SettingsManager.getDynamicTabVisibleTabs(context)
         .collectAsStateWithLifecycle(initialValue = defaultDynamicTabVisibleIds)
+    val dynamicTabOrder by SettingsManager.getDynamicTabOrder(context)
+        .collectAsStateWithLifecycle(initialValue = emptyList())
     val dynamicAllTabHorizontalUserListVisible by SettingsManager
         .getDynamicAllTabHorizontalUserListVisible(context)
         .collectAsStateWithLifecycle(initialValue = false)
     val dynamicTopBarCollapseOnScroll by SettingsManager
         .getDynamicTopBarCollapseOnScroll(context)
         .collectAsStateWithLifecycle(initialValue = false)
-    val visibleTabs = remember(dynamicVisibleTabIds) {
-        resolveDynamicVisibleTabs(dynamicVisibleTabIds)
+    val dynamicTopActionsCollapsed by SettingsManager
+        .getDynamicTopActionsCollapsed(context)
+        .collectAsStateWithLifecycle(initialValue = false)
+    val visibleTabs = remember(dynamicVisibleTabIds, dynamicTabOrder) {
+        resolveDynamicVisibleTabs(dynamicVisibleTabIds, dynamicTabOrder)
     }
     val isUserTabVisible = remember(visibleTabs) {
         isDynamicUserTabVisible(visibleTabs)
@@ -390,6 +400,11 @@ fun DynamicScreen(
         null
     }
     val scope = rememberCoroutineScope()
+    val onDynamicTopActionsCollapsedChange: (Boolean) -> Unit = { collapsed ->
+        scope.launch {
+            SettingsManager.setDynamicTopActionsCollapsed(context, collapsed)
+        }
+    }
     val onDynamicTabSelected: (Int) -> Unit = { visibleIndex ->
         scope.launch {
             when (resolveDynamicTabReselectAction(displayedTabIndex, visibleIndex)) {
@@ -413,7 +428,23 @@ fun DynamicScreen(
 
     val density = LocalDensity.current
     val statusBarHeight = WindowInsets.statusBars.getTop(density).let { with(density) { it.toDp() } }
-    val dynamicListBottomPadding = LocalBottomBarContentPadding.current
+    val appNavigationSettings by SettingsManager.getAppNavigationSettings(context)
+        .collectAsStateWithLifecycle(initialValue = AppNavigationSettings())
+    val shouldAutoCollapseBottomBar = shouldAutoCollapseDynamicBottomBar(
+        visibilityMode = appNavigationSettings.bottomBarVisibilityMode
+    )
+    // 底栏隐藏/复原若改变 contentPadding，会触发不等高卡片重排；平板与折叠屏上抽搐最明显。
+    // 自动折叠期间钉住已预留的底部空间，底栏只做显隐、不拉动列表布局。
+    val liveListBottomPadding = LocalBottomBarContentPadding.current
+    val isBottomBarVisibleForPadding = LocalBottomBarVisible.current
+    var stickyListBottomPadding by remember { mutableStateOf(liveListBottomPadding) }
+    LaunchedEffect(liveListBottomPadding, isBottomBarVisibleForPadding, shouldAutoCollapseBottomBar) {
+        if (!shouldAutoCollapseBottomBar || isBottomBarVisibleForPadding) {
+            stickyListBottomPadding = liveListBottomPadding
+        }
+    }
+    val dynamicListBottomPadding =
+        if (shouldAutoCollapseBottomBar) stickyListBottomPadding else liveListBottomPadding
     val pullRefreshState = rememberPullToRefreshState()
 
     // GIF 图片加载器
@@ -634,15 +665,29 @@ fun DynamicScreen(
         }
     }
 
-    // 瀑布流中首个可见 item 会在不同 lane 间切换，不能用 index 推断滚动方向。
-    // 底栏显隐还会改变 scaffold 的 bottom contentPadding，触发不等高卡片重新分配，
-    // 造成平板端上下滑动时动态位置抽搐。因此瀑布流保持底栏稳定，仅普通列表自动隐藏。
-    val shouldAutoCollapseBottomBar =
-        dynamicFeedLayoutMode != SettingsManager.DynamicFeedLayoutMode.WATERFALL
-
-    // 监听列表滚动实现底栏自动隐藏/显示（仅普通列表）
-    var lastFirstVisibleItem by remember { mutableIntStateOf(0) }
-    var lastScrollOffset by remember { mutableIntStateOf(0) }
+    // 瀑布流 lane 会切换首个可见 item，index 不适合判断方向；改用 nested-scroll 增量。
+    val bottomBarScrollState = remember { mutableStateOf(DynamicBottomBarScrollState()) }
+    val currentActiveListState by rememberUpdatedState(activeListState)
+    val bottomBarScrollConnection = com.android.purebilibili.core.ui.rememberBottomBarScrollHideConnection(
+        chromeScrollOffset = bottomBarChromeScrollOffset,
+        autoHideEnabled = shouldAutoCollapseBottomBar,
+        isAtTop = {
+            val listState = currentActiveListState
+            listState != null &&
+                listState.firstVisibleItemIndex == 0 &&
+                listState.firstVisibleItemScrollOffset < DynamicBottomBarTopRevealPx
+        },
+        isActivePage = isCurrentPage,
+        onVisibilityIntent = { intent ->
+            when (intent) {
+                com.android.purebilibili.core.ui.BottomBarScrollHideIntent.SHOW ->
+                    setBottomBarVisible(true)
+                com.android.purebilibili.core.ui.BottomBarScrollHideIntent.HIDE ->
+                    setBottomBarVisible(false)
+            }
+        },
+        hideState = bottomBarScrollState,
+    )
 
     LaunchedEffect(filteredItems.size, activeLoading, displayedLogicalTab, isSelectedUserTabActive) {
         if (shouldRevealDynamicBottomBarForStaticContent(
@@ -652,55 +697,36 @@ fun DynamicScreen(
         ) {
             setBottomBarVisible(true)
             bottomBarChromeScrollOffset.value = 0f
-            // 数据刷新/分页后从真实布局位置重新建立基线，避免下一帧被误判为大幅下滑。
-            activeListState?.let { listState ->
-                lastFirstVisibleItem = listState.firstVisibleItemIndex
-                lastScrollOffset = listState.firstVisibleItemScrollOffset
-            }
+            bottomBarScrollState.value = DynamicBottomBarScrollState()
         }
     }
 
     LaunchedEffect(activeListState, shouldAutoCollapseBottomBar) {
-        val state = activeListState ?: return@LaunchedEffect
         if (!shouldAutoCollapseBottomBar) {
             setBottomBarVisible(true)
             bottomBarChromeScrollOffset.value = 0f
+            bottomBarScrollState.value = DynamicBottomBarScrollState()
         }
-        snapshotFlow {
-            Pair(state.firstVisibleItemIndex, state.firstVisibleItemScrollOffset)
-        }
-        .distinctUntilChanged()
-        .collect { (firstVisibleItem, scrollOffset) ->
-             // 顶部始终显示
-             if (shouldAutoCollapseBottomBar) {
-                 if (firstVisibleItem == 0 && scrollOffset < 100) {
-                     setBottomBarVisible(true)
-                 } else {
-                 val isScrollingDown = when {
-                     firstVisibleItem > lastFirstVisibleItem -> true
-                     firstVisibleItem < lastFirstVisibleItem -> false
-                     else -> scrollOffset > lastScrollOffset + 50 // 较小的阈值
-                 }
-                 val isScrollingUp = when {
-                     firstVisibleItem < lastFirstVisibleItem -> true
-                     firstVisibleItem > lastFirstVisibleItem -> false
-                     else -> scrollOffset < lastScrollOffset - 50
-                 }
+    }
 
-                 if (isScrollingDown) setBottomBarVisible(false)
-                 if (isScrollingUp) setBottomBarVisible(true)
-                 }
-             } else {
-                 // Waterfall keeps the navigation bar mounted, but the linked playback
-                 // strip still follows the same scroll position and can merge globally.
-                 setBottomBarVisible(true)
-             }
-             lastFirstVisibleItem = firstVisibleItem
-             lastScrollOffset = scrollOffset
-             bottomBarChromeScrollOffset.value = resolveBottomBarChromeScrollOffset(
-                 firstVisibleItem = firstVisibleItem,
-                 scrollOffset = scrollOffset
-             )
+    // 与推荐页共用「列表正在滑」信号，驱动底栏搜索胶囊展开/收起。
+    val globalFeedScrollInProgress = LocalHomeFeedScrollInProgress.current
+    val isListScrollInProgress by remember(activeListState) {
+        derivedStateOf { activeListState?.isScrollInProgress == true }
+    }
+    if (isCurrentPage) {
+        SideEffect {
+            globalFeedScrollInProgress.value = isListScrollInProgress
+        }
+    }
+    DisposableEffect(isCurrentPage) {
+        if (!isCurrentPage) {
+            globalFeedScrollInProgress.value = false
+        }
+        onDispose {
+            if (isCurrentPage) {
+                globalFeedScrollInProgress.value = false
+            }
         }
     }
 
@@ -709,6 +735,7 @@ fun DynamicScreen(
         onDispose {
             setBottomBarVisible(true)
             bottomBarChromeScrollOffset.value = 0f
+            bottomBarScrollState.value = DynamicBottomBarScrollState()
         }
     }
 
@@ -941,7 +968,7 @@ fun DynamicScreen(
                                         likedDynamics = likedDynamics,
                                         likeOverrides = likeOverrides,
                                         feedLayoutMode = dynamicFeedLayoutMode,
-                                        modifier = Modifier
+                                        modifier = Modifier.nestedScroll(bottomBarScrollConnection)
                                     )
                                 }
                             }
@@ -962,7 +989,7 @@ fun DynamicScreen(
                                     onDisplayModeChange = { viewModel.setDisplayMode(it) },
                                     onPublishClick = { showPublishDialog = true },
                                     actionDockCollapsed = dynamicTopActionsCollapsed,
-                                    onActionDockCollapsedChange = { dynamicTopActionsCollapsed = it },
+                                    onActionDockCollapsedChange = onDynamicTopActionsCollapsedChange,
                                     publishSkinDecoration = publishSkinDecoration,
                                     dockBackdrop = dynamicDockBackdrop,
                                     hazeState = dynamicTopBarHazeState,
@@ -1139,7 +1166,7 @@ fun DynamicScreen(
                                     likedDynamics = likedDynamics,
                                     likeOverrides = likeOverrides,
                                     feedLayoutMode = dynamicFeedLayoutMode,
-                                    modifier = Modifier
+                                    modifier = Modifier.nestedScroll(bottomBarScrollConnection)
                                 )
                             }
                         }
@@ -1166,7 +1193,7 @@ fun DynamicScreen(
                                     onDisplayModeChange = { viewModel.setDisplayMode(it) },
                                     onPublishClick = { showPublishDialog = true },
                                     actionDockCollapsed = dynamicTopActionsCollapsed,
-                                    onActionDockCollapsedChange = { dynamicTopActionsCollapsed = it },
+                                    onActionDockCollapsedChange = onDynamicTopActionsCollapsedChange,
                                     publishSkinDecoration = publishSkinDecoration,
                                     dockBackdrop = dynamicDockBackdrop,
                                     hazeState = dynamicTopBarHazeState,
@@ -1273,8 +1300,8 @@ fun DynamicScreen(
     showRepostDialog?.let { dynamicId ->
         RepostDialog(
             onDismiss = { showRepostDialog = null },
-            onRepost = { content: String, onComplete: (Boolean) -> Unit ->
-                viewModel.repostDynamic(dynamicId, content) { success, msg ->
+            onRepost = { content: String, alsoComment: Boolean, onComplete: (Boolean) -> Unit ->
+                viewModel.repostDynamic(dynamicId, content, alsoComment) { success, msg ->
                     android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                     if (success) showRepostDialog = null
                     onComplete(success)
@@ -1874,15 +1901,26 @@ private fun HorizontalUserList(
                             .alpha(if (user.isHidden) 0.5f else 1f)
                     ) {
                         Box {
+                            val hasUpdate = user.uid in uplistUpdateMids
                             Box(
                                 modifier = Modifier
                                     .size(AppSpacingTokens.TripleExtraLarge)
                                     .clip(CircleShape)
                                     .then(
-                                        if (isSelected)
-                                            Modifier.border(AppSpacingTokens.Micro, MaterialTheme.colorScheme.primary, CircleShape)
-                                        else
-                                            Modifier
+                                        when {
+                                            isSelected -> Modifier.border(
+                                                AppSpacingTokens.Micro,
+                                                MaterialTheme.colorScheme.primary,
+                                                CircleShape
+                                            )
+                                            // 有新动态的 UP：主题色圆环提示，比单独的小红点更显眼
+                                            hasUpdate -> Modifier.border(
+                                                2.dp,
+                                                MaterialTheme.colorScheme.primary,
+                                                CircleShape
+                                            )
+                                            else -> Modifier
+                                        }
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -1896,8 +1934,8 @@ private fun HorizontalUserList(
                                     contentScale = ContentScale.Crop
                                 )
                             }
-                            //  [新增] UP 未读红点（对齐 BiliPai up_panel 8px 红点）
-                            if (user.uid in uplistUpdateMids) {
+                            // UP 未读提示点：有新动态时显示主题色小圆点
+                            if (hasUpdate) {
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)

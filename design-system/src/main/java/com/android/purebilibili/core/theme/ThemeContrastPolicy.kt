@@ -94,7 +94,11 @@ internal fun resolveReadableThemeTextColor(
     } ?: candidate
 }
 
-fun enforceDynamicLightTextContrast(
+/**
+ * 浅色与深色模式通用的正文对比度兜底：候选文字与其底色不足 [ACCESSIBLE_TEXT_MIN_CONTRAST]
+ * 时，依序回退到可读的语义角色，避免自定义种子色/覆盖色产生不可读文本。
+ */
+fun enforceDynamicTextContrast(
     scheme: ColorScheme
 ): ColorScheme {
     val accentFallbacks = listOf(

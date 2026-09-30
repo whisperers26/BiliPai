@@ -63,3 +63,28 @@ fun parseOpmlSubscriptions(xml: String): List<ImportedSubscription> {
     walk(document.documentElement)
     return found.values.toList()
 }
+
+fun buildSubscriptionOpml(feeds: List<SavedSubscriptionFeed>): String {
+    val outlines = feeds.joinToString("\n") { feed ->
+        val title = escapeOpmlAttribute(feed.title.ifBlank { feed.url })
+        val url = escapeOpmlAttribute(feed.url)
+        "    <outline type=\"rss\" text=\"$title\" title=\"$title\" xmlUrl=\"$url\"/>"
+    }
+    return buildString {
+        appendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+        appendLine("<opml version=\"2.0\">")
+        appendLine("  <head>")
+        appendLine("    <title>BiliPai 订阅</title>")
+        appendLine("  </head>")
+        appendLine("  <body>")
+        if (outlines.isNotEmpty()) appendLine(outlines)
+        appendLine("  </body>")
+        appendLine("</opml>")
+    }
+}
+
+internal fun escapeOpmlAttribute(value: String): String =
+    value.replace("&", "&amp;")
+        .replace("\"", "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")

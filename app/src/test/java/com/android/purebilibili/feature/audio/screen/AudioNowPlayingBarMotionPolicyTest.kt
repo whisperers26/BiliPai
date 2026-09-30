@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.audio.screen
 
+import com.android.purebilibili.core.ui.transition.NowPlayingBarHandoffState
+import com.android.purebilibili.core.ui.transition.resolveNowPlayingBarReturnVisibility
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,32 +12,20 @@ class AudioNowPlayingBarMotionPolicyTest {
 
     @Test
     fun sourceHideRequiresTheRealSharedReturnOwner() {
-        assertTrue(
-            shouldHideAudioNowPlayingBarForSharedReturn(
-                isReturningFromDetail = true,
-                targetBvid = "BV123",
-                currentBvid = "BV123",
-                isSharedTransitionRunning = true,
-                isSharedTransitionSourceOwner = true,
-            )
+        val returning = NowPlayingBarHandoffState.Returning(
+            targetBvid = "BV123",
+            isSourceOwner = true,
         )
-        assertFalse(
-            shouldHideAudioNowPlayingBarForSharedReturn(
-                isReturningFromDetail = true,
-                targetBvid = "BV123",
-                currentBvid = "BV123",
-                isSharedTransitionRunning = false,
-                isSharedTransitionSourceOwner = true,
-            )
+        assertEquals(
+            0f,
+            resolveNowPlayingBarReturnVisibility(handoff = returning, currentBvid = "BV123"),
         )
-        assertFalse(
-            shouldHideAudioNowPlayingBarForSharedReturn(
-                isReturningFromDetail = true,
-                targetBvid = "BV123",
+        assertEquals(
+            1f,
+            resolveNowPlayingBarReturnVisibility(
+                handoff = NowPlayingBarHandoffState.Idle,
                 currentBvid = "BV123",
-                isSharedTransitionRunning = true,
-                isSharedTransitionSourceOwner = false,
-            )
+            ),
         )
     }
 
@@ -53,7 +43,7 @@ class AudioNowPlayingBarMotionPolicyTest {
             "app/src/main/java/com/android/purebilibili/feature/audio/screen/AudioNowPlayingBar.kt"
         )
         assertTrue(source.contains("onCompactClick"))
-        assertTrue(source.contains("isSharedTransitionSourceOwner"))
+        assertTrue(source.contains("handoff"))
         assertFalse(source.contains("landingProgress"))
         assertFalse(source.contains("AudioNowPlayingBarLandingEasing"))
     }

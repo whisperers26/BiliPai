@@ -240,6 +240,34 @@ class SearchMotionBudgetPolicyTest {
     }
 
     @Test
+    fun queryEdit_onResultsKeepsResultsChrome() {
+        assertTrue(
+            shouldKeepResultsOnQueryChange(
+                showResults = true,
+                newQuery = "129x"
+            )
+        )
+        assertTrue(
+            shouldKeepResultsOnQueryChange(
+                showResults = true,
+                newQuery = "12"
+            )
+        )
+        assertFalse(
+            shouldKeepResultsOnQueryChange(
+                showResults = true,
+                newQuery = ""
+            )
+        )
+        assertFalse(
+            shouldKeepResultsOnQueryChange(
+                showResults = false,
+                newQuery = "129"
+            )
+        )
+    }
+
+    @Test
     fun scrollingResults_shouldNotForceLowHeaderBlurBudget() {
         assertFalse(
             shouldForceLowBudgetSearchHeaderBlur(

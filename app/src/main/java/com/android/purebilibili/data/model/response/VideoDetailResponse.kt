@@ -171,7 +171,9 @@ data class UgcEpisode(
     val bvid: String = "",
     val cid: Long = 0,
     val title: String = "",
-    val arc: UgcEpisodeArc? = null
+    val arc: UgcEpisodeArc? = null,
+    // 分 P 列表：合集接口按集返回，弹窗内的分 P chips 依赖此字段
+    val pages: List<Page> = emptyList()
 )
 
 @Serializable

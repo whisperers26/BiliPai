@@ -23,6 +23,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
 import com.android.purebilibili.core.ui.AppTopBar
 import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
@@ -35,6 +37,7 @@ import com.android.purebilibili.data.repository.resolveCommentFraudLightMessage
 import com.android.purebilibili.data.repository.shouldShowCommentFraudResultDialog
 import com.android.purebilibili.feature.video.ui.components.CommentFraudResultDialog
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewSourceAnchor
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.feature.message.feed.MessageFeedError
 import com.android.purebilibili.feature.video.ui.components.CommentInputDialog
@@ -85,7 +88,7 @@ fun CommentDetailScreen(
 
     var previewImages by remember { mutableStateOf<List<String>>(emptyList()) }
     var previewInitialIndex by remember { mutableIntStateOf(0) }
-    var previewSourceRect by remember { mutableStateOf<Rect?>(null) }
+    var previewSourceRect by remember { mutableStateOf<ImagePreviewSourceAnchor?>(null) }
     var previewTextContent by remember { mutableStateOf<ImagePreviewTextContent?>(null) }
     var showImagePreview by remember { mutableStateOf(false) }
 
@@ -213,7 +216,10 @@ fun CommentDetailScreen(
                 ImagePreviewDialog(
                     images = previewImages,
                     initialIndex = previewInitialIndex,
-                    sourceRect = previewSourceRect,
+                    sourceRect = previewSourceRect?.rect,
+                    sourceRects = previewSourceRect?.galleryRects.orEmpty(),
+                    sourceCornerRadiusDp = previewSourceRect?.cornerRadiusDp
+                        ?: AppShapes.containerCornerDp(ContainerLevel.Field).value,
                     textContent = previewTextContent,
                     onDismiss = {
                         showImagePreview = false

@@ -21,9 +21,17 @@ internal val allDynamicTabSpecs: List<DynamicTabSpec> = listOf(
 internal val defaultDynamicTabVisibleIds: Set<String> = allDynamicTabSpecs.map { it.id }.toSet()
 
 internal fun resolveDynamicVisibleTabs(
-    visibleTabIds: Set<String>
+    visibleTabIds: Set<String>,
+    tabOrder: List<String> = emptyList()
 ): List<DynamicTabSpec> {
-    val visibleTabs = allDynamicTabSpecs.filter { it.id in visibleTabIds }
+    val visibleTabs = allDynamicTabSpecs
+        .filter { it.id in visibleTabIds }
+        .sortedWith(
+            compareBy(
+                { spec -> tabOrder.indexOf(spec.id).takeIf { it >= 0 } ?: tabOrder.size },
+                { it.logicalIndex }
+            )
+        )
     return if (visibleTabs.isNotEmpty()) {
         visibleTabs
     } else {

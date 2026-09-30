@@ -392,9 +392,15 @@ fun calculateWindowSizeClass(
 }
 
 /**
- * 🎯 响应式值选择器
+ * 📐 单列信息流（列表/会话/搜索结果）在大屏上的内容上限。
+ * 各列表页通过 [responsiveContentWidth] 套用，避免平板横屏整行拉伸。
+ */
+fun resolveSingleColumnFeedMaxWidth(): Dp = 840.dp
+
+/**
+ * 📐 响应式值选择器
  * 根据当前窗口尺寸选择合适的值
- * 
+ *
  * @param compact 紧凑模式值（手机）
  * @param medium 中等模式值（平板竖屏），默认使用 compact 值
  * @param expanded 展开模式值（平板横屏），默认使用 medium 值

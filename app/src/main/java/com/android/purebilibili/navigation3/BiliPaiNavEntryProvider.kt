@@ -65,6 +65,10 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
     entry<BiliPaiNavKey.WatchLaterSearch>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.Onboarding>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.Following>(swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.UpowerRank>(swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.UpowerRank.Companion>(swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.MemberGuard>(swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.MemberGuard.Companion>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.DownloadList>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.OfflineVideoPlayer>(
         transition = predictiveBackExcludedTransition,

@@ -4,22 +4,11 @@ import kotlin.math.roundToInt
 
 /**
  * The source bar is hidden only while the shared-transition host owns the
- * return handoff. A separate landing animation is intentionally not used:
+ * return handoff; that contract lives in
+ * [com.android.purebilibili.core.ui.transition.resolveNowPlayingBarReturnVisibility].
+ * A separate landing animation is intentionally not used:
  * the shared morph is the only geometry timeline.
  */
-internal fun shouldHideAudioNowPlayingBarForSharedReturn(
-    isReturningFromDetail: Boolean,
-    targetBvid: String?,
-    currentBvid: String,
-    isSharedTransitionRunning: Boolean,
-    isSharedTransitionSourceOwner: Boolean,
-): Boolean {
-    if (!isReturningFromDetail || !isSharedTransitionRunning || !isSharedTransitionSourceOwner) {
-        return false
-    }
-    if (currentBvid.isBlank()) return false
-    return targetBvid.isNullOrBlank() || targetBvid == currentBvid
-}
 
 internal fun canOpenAudioNowPlayingBarSource(
     layoutStable: Boolean,

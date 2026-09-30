@@ -17,6 +17,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
@@ -45,6 +49,8 @@ import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.appContentDialogWidth
 import com.android.purebilibili.core.ui.resolveAppContentDialogLayoutPolicy
 import com.android.purebilibili.core.ui.resolveAppContentDialogProperties
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
 import kotlin.math.round
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
@@ -84,7 +90,9 @@ fun <T> AppSingleChoicePreference(
     dialogTitle: String = title,
     presentation: AppSingleChoicePresentation = LocalAppSingleChoicePresentation.current,
 ) {
-    if (presentation == AppSingleChoicePresentation.WINDOW_POPUP) {
+    if (presentation == AppSingleChoicePresentation.WINDOW_POPUP &&
+        LocalAppUiStyle.current == AppUiStyle.MIUIX
+    ) {
         val selectedIndex = options.indexOfFirst { it.value == selectedValue }.coerceAtLeast(0)
         val dropdownItems = remember(options) {
             options.map { option ->
@@ -124,10 +132,13 @@ fun <T> AppSingleChoicePreference(
         return
     }
 
-    // 居中弹窗展示模式 (AppSingleChoicePresentation.CENTERED_DIALOG)
+    // MD3 预设或居中弹窗模式：统一样式渲染条目，保证列表间距与弹出样式无关。
+    // 「跟随选项弹出」时点击条目在锚点处展开 MD3 DropdownMenu。
 
     var dialogVisible by rememberSaveable { mutableStateOf(false) }
+    var menuExpanded by remember { mutableStateOf(false) }
     val selectedLabel = options.firstOrNull { it.value == selectedValue }?.label
+    val useWindowMenu = presentation == AppSingleChoicePresentation.WINDOW_POPUP
 
     Box(modifier = modifier.alpha(if (enabled) 1f else 0.6f)) {
         AppPreference(
@@ -135,9 +146,63 @@ fun <T> AppSingleChoicePreference(
             title = title,
             subtitle = subtitle,
             value = selectedLabel,
-            onClick = if (enabled) ({ dialogVisible = true }) else null,
+            onClick = when {
+                !enabled -> null
+                useWindowMenu -> ({ menuExpanded = true })
+                else -> ({ dialogVisible = true })
+            },
             iconTint = iconTint,
             showChevron = enabled,
+            // 跟随弹出的菜单锚定在行尾部（值区域）：点击的是行尾的当前值，
+            // 菜单在其下方展开，符合 M3「菜单锚定触发元素」的规范。
+            trailingContent = if (useWindowMenu) {
+                {
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                    ) {
+                        options.forEach { option ->
+                            val selected = option.value == selectedValue
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(
+                                            text = option.label,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                        )
+                                        option.description?.let { description ->
+                                            Text(
+                                                text = description,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                },
+                                leadingIcon = if (selected) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                } else {
+                                    null
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    if (shouldDispatchAppChoiceSelection(selectedValue, option.value)) {
+                                        onValueChange(option.value)
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+            } else {
+                null
+            },
         )
     }
 
@@ -171,7 +236,6 @@ fun <T> AppSingleChoiceDialog(
     val layoutPolicy = remember { resolveAppContentDialogLayoutPolicy(maxWidthDp = 420) }
     // Dialog 使用独立平台窗口；在进入窗口子组合前固定应用主题色，避免其默认色
     // 在“系统深色 + 应用手动浅色”时从窗口配置重新跟随系统。
-    val dialogContainerColor = AppSurfaceTokens.cardContainer()
     val dialogContentColor = MaterialTheme.colorScheme.onSurface
     val dialogSecondaryContentColor = MaterialTheme.colorScheme.onSurfaceVariant
     Dialog(
@@ -186,8 +250,9 @@ fun <T> AppSingleChoiceDialog(
                 .appContentDialogWidth(policy = layoutPolicy, wrapHeight = false)
                 .heightIn(max = maxDialogHeight),
             shape = AppShapes.container(ContainerLevel.Dialog),
-            containerColor = dialogContainerColor,
-            tonalElevation = 6.dp,
+            // 层级用更高一档容器色表达，不用 tonalElevation：elevation 会把
+            // surfaceTint 混进容器色，自定义亮种子下弹窗会被染成过饱和色。
+            containerColor = AppSurfaceTokens.surfaceContainerHigh(),
         ) {
             Column(modifier = Modifier.padding(vertical = 12.dp)) {
                 Text(
@@ -333,8 +398,8 @@ fun AppSliderDialog(
                 ),
             ),
             shape = AppShapes.container(ContainerLevel.Dialog),
-            containerColor = AppSurfaceTokens.cardContainer(),
-            tonalElevation = 6.dp,
+            // 与 AppSingleChoiceDialog 一致：容器色表达层级，不用 tonalElevation tint。
+            containerColor = AppSurfaceTokens.surfaceContainerHigh(),
         ) {
             Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
                 Text(

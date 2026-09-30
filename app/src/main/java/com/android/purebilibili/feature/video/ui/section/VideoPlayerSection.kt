@@ -850,6 +850,7 @@ private fun VideoPlayerSectionContent(
     val shouldUseAnime4kPipeline = anime4kOutputDecision.shouldUsePipeline
     val anime4kBypassReason = anime4kOutputDecision.bypassReason
     val latestAnime4kPipelineRequested by rememberUpdatedState(shouldUseAnime4kPipeline)
+    val latestFullscreenForOrientationRestore by rememberUpdatedState(isFullscreen)
     val latestAnime4kDisplayedFirstFrame by rememberUpdatedState(anime4kDisplayedFirstFrame)
     val videoOutputRouter = remember(playerState.player) { VideoOutputRouter(playerState.player) }
     DisposableEffect(videoOutputRouter) {
@@ -1334,9 +1335,13 @@ private fun VideoPlayerSectionContent(
         }
         AppScreenshotGestureBlockState.fullscreenPlayerLocked = shouldBlockAppScreenshot
         onDispose {
+            // 因退出全屏而 dispose 时不得恢复快照的横屏方向：退出路径刚写入
+            // PORTRAIT，恢复 SENSOR_LANDSCAPE 会让界面跳回横屏。只有仍在全屏内
+            // （用户仅关闭锁定）才回滚到锁定前的方向。
             if (
                 lockedActivity?.requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_LOCKED &&
-                previousRequestedOrientation != null
+                previousRequestedOrientation != null &&
+                latestFullscreenForOrientationRestore
             ) {
                 lockedActivity.applyPlayerRequestedOrientation(previousRequestedOrientation)
             }
@@ -1487,6 +1492,8 @@ private fun VideoPlayerSectionContent(
 
     // 进度手势相关状态
     var seekTargetTime by remember { mutableLongStateOf(0L) }
+    // 拖动 seek 时手指进入顶部角落逃生口时置真，松手即取消本次 seek
+    var seekCancelPending by remember { mutableStateOf(false) }
     var lastSeekHapticTargetMs by remember { mutableLongStateOf(0L) }
     var startPosition by remember { mutableLongStateOf(0L) }
     val currentSeekSessionCid = (uiState as? VideoPlaybackUiState.Success)?.info?.cid ?: 0L
@@ -2347,6 +2354,7 @@ private fun VideoPlayerSectionContent(
                                     playbackPositionMs = playerState.player.currentPosition
                                 )
                                 seekTargetTime = startPosition
+                                seekCancelPending = false
 
                                 val attributes = getActivity()?.window?.attributes
                                 val currentWindowBrightness = attributes?.screenBrightness ?: -1f
@@ -2381,7 +2389,10 @@ private fun VideoPlayerSectionContent(
                             }
                             if (completedGestureMode == VideoGestureMode.Seek) {
                                 val currentPosition = playerState.player.currentPosition
-                                if (shouldCommitGestureSeek(
+                                if (seekCancelPending) {
+                                    // 手指已拖入「松手取消」逃生口：丢弃本次手势 seek
+                                    sharedSeekSession = cancelPlaybackSeekInteraction(sharedSeekSession)
+                                } else if (shouldCommitGestureSeek(
                                         currentPositionMs = currentPosition,
                                         targetPositionMs = sharedSeekSession.sliderPositionMs
                                     )
@@ -2454,6 +2465,7 @@ private fun VideoPlayerSectionContent(
                             if (gestureMode == VideoGestureMode.Seek) {
                                 sharedSeekSession = cancelPlaybackSeekInteraction(sharedSeekSession)
                             }
+                            seekCancelPending = false
                             gestureMode = VideoGestureMode.None
                             dragStartX = -1f
                         },
@@ -2618,6 +2630,12 @@ private fun VideoPlayerSectionContent(
                                     )
                                     if (seekDelta != null) {
                                         seekTargetTime = (startPosition + seekDelta).coerceIn(0L, duration)
+                                        seekCancelPending = isInSeekCancelEscapeZone(
+                                            positionX = change.position.x,
+                                            positionY = change.position.y,
+                                            containerWidthPx = size.width.toFloat(),
+                                            containerHeightPx = size.height.toFloat()
+                                        )
                                         if (
                                             shouldTriggerSeekStepHaptic(
                                                 previousTargetMs = lastSeekHapticTargetMs,
@@ -4662,12 +4680,40 @@ private fun VideoPlayerSectionContent(
             }
         }
 
-        // Theme-native volume / brightness feedback (MD3 / iOS / MIUIX).
+        // 主题原生的音量/亮度反馈。
         GestureLevelOverlayHost(
             visible = shouldShowLevelIndicator,
             mode = gestureMode,
             percent = gesturePercent
         )
+
+        //  Seek 逃生口提示：拖动进度时手指进入顶部角落，松手取消进退
+        AnimatedVisibility(
+            visible = shouldShowSeekIndicator && seekCancelPending,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(top = 96.dp)
+                .zIndex(121f),
+            enter = fadeIn(
+                animationSpec = tween(gestureMotionSpec.orientationHintEnterFadeDurationMillis)
+            ),
+            exit = fadeOut(
+                animationSpec = tween(gestureMotionSpec.orientationHintExitDurationMillis)
+            )
+        ) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                shadowElevation = 4.dp
+            ) {
+                AppText(
+                    text = "松开手指，取消进退",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
 
         AnimatedVisibility(
             visible = orientationHintVisible && !isInPipMode,

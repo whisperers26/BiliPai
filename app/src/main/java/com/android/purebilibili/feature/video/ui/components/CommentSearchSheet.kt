@@ -58,15 +58,13 @@ import com.android.purebilibili.core.ui.resolveUserAvatarCornerMark
 import com.android.purebilibili.core.ui.AppModalBottomSheet
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
-import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
-import com.android.purebilibili.core.ui.components.AppLiquidAwareSearchField
+import com.android.purebilibili.core.ui.components.AppSearchField
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.blur.LocalFloatingChromeBackdrop
-import com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.feature.home.components.biliPaiFloatingDockShell
@@ -104,7 +102,6 @@ fun CommentSearchSheet(
     onSubReplyClick: (ReplyItem) -> Unit = {},
     onDismiss: () -> Unit,
     miuixBackdrop: Backdrop? = null,
-    liquidGlassEffectsEnabled: Boolean? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -146,9 +143,7 @@ fun CommentSearchSheet(
     }
 
     val listState = rememberLazyListState()
-    val liquidGlassEnabled = liquidGlassEffectsEnabled
-        ?: LocalAppThemeConfig.current.liquidGlassEnabled
-    val glassActive = liquidGlassEnabled && !isLowBlurBudgetForced()
+    val glassActive = false
     // The sheet and its controls must sample the same comment layer behind this modal.
     val sheetBackdrop = miuixBackdrop ?: LocalFloatingChromeBackdrop.current
     CompositionLocalProvider(LocalFloatingChromeBackdrop provides sheetBackdrop) {
@@ -201,7 +196,7 @@ fun CommentSearchSheet(
                 }
 
                 // 搜索输入框
-                AppLiquidAwareSearchField(
+                AppSearchField(
                     query = searchQuery,
                     onQueryChange = { searchQuery = it },
                     modifier = Modifier
@@ -209,10 +204,6 @@ fun CommentSearchSheet(
                         .padding(vertical = 6.dp),
                     placeholder = "搜索本视频评论内容或作者昵称...",
                     onClear = { searchQuery = "" },
-                    backdrop = sheetBackdrop,
-                    // The input captures the video layer for refraction; protect its text from
-                    // the sampled comments, independently of the sheet surface behind it.
-                    liquidContentContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
                     leadingIconHorizontalOffset = 8.dp,
                 )
 

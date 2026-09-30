@@ -83,6 +83,20 @@ internal fun applyDynamicCommentLike(
     )
 }
 
+internal fun isDynamicCommentHated(reply: ReplyItem): Boolean = reply.action == 2
+
+internal fun applyDynamicCommentHate(
+    reply: ReplyItem,
+    toHated: Boolean,
+): ReplyItem {
+    val currentlyHated = isDynamicCommentHated(reply)
+    if (currentlyHated == toHated) return reply
+    return reply.copy(
+        action = if (toHated) 2 else 0,
+        like = if (toHated && reply.action == 1) (reply.like - 1).coerceAtLeast(0) else reply.like,
+    )
+}
+
 internal fun applyDynamicCommentLikeInList(
     comments: List<ReplyItem>,
     rpid: Long,
@@ -102,6 +116,32 @@ internal fun applyDynamicCommentLikeInList(
             updated.copy(replies = applyDynamicCommentLikeInList(nested, rpid, toLiked))
         }
     }
+}
+
+internal fun applyDynamicCommentHateInList(
+    comments: List<ReplyItem>,
+    rpid: Long,
+    toHated: Boolean,
+): List<ReplyItem> {
+    if (rpid <= 0L) return comments
+    return comments.map { reply ->
+        val updated = if (reply.rpid == rpid) {
+            applyDynamicCommentHate(reply, toHated)
+        } else {
+            reply
+        }
+        val nested = updated.replies
+        if (nested.isNullOrEmpty()) updated
+        else updated.copy(replies = applyDynamicCommentHateInList(nested, rpid, toHated))
+    }
+}
+
+internal fun replaceDynamicCommentInList(
+    comments: List<ReplyItem>,
+    replacement: ReplyItem,
+): List<ReplyItem> = comments.map { reply ->
+    if (reply.rpid == replacement.rpid) replacement
+    else reply.copy(replies = reply.replies?.let { replaceDynamicCommentInList(it, replacement) })
 }
 
 private fun formatDynamicCommentCount(count: Int): String {

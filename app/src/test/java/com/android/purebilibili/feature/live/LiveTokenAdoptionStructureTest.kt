@@ -26,6 +26,10 @@ class LiveTokenAdoptionStructureTest {
         val sharedCard = File(liveRoot, "LiveRoomCard.kt").readText()
         assertTrue(sharedCard.contains("data class LiveRoomCardUiModel"))
         assertTrue(sharedCard.contains("internal fun LiveRoomCard("))
+        assertTrue(
+            sharedCard.contains("fontFeatureSettings = AppTypographyTokens.TabularNumerals"),
+            "直播观看数必须启用等宽数字",
+        )
         listOf("LiveListScreen.kt", "LiveFollowingScreen.kt", "LiveAreaDetailScreen.kt", "LiveSearchScreen.kt")
             .forEach { fileName ->
                 assertTrue(File(liveRoot, fileName).readText().contains("LiveRoomCard("))
@@ -88,6 +92,16 @@ class LiveTokenAdoptionStructureTest {
 
         assertTrue(summaryIndex >= 0)
         assertTrue(filterIndex in (summaryIndex + 1) until stateIndex)
+    }
+
+    @Test
+    fun live_area_detail_reserves_top_chrome_space_for_grid_and_skeleton() {
+        val source = File(liveRoot, "LiveAreaDetailScreen.kt").readText()
+
+        assertTrue(source.contains(
+            "val topContentPadding = innerPadding.calculateTopPadding() + AppSpacingTokens.Small"
+        ))
+        assertTrue(source.split("top = topContentPadding").size - 1 == 2)
     }
 
     @Test

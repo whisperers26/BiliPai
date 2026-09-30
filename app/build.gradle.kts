@@ -1,6 +1,8 @@
 plugins {
     id("com.android.application")
     // AGP 9+ provides built-in Kotlin; do not apply org.jetbrains.kotlin.android
+    // Baseline profile 插件（AGP 9 兼容线 1.5.0+），提供 :app:generateBaselineProfile 任务
+    alias(libs.plugins.androidx.baselineprofile)
     // Compose 编译器插件
     id("org.jetbrains.kotlin.plugin.compose")
     // JSON 序列化插件
@@ -368,8 +370,8 @@ composeCompiler {
 }
 
 dependencies {
-    val material3Version = "1.5.0-alpha25"
-    val material3AdaptiveVersion = "1.3.0-rc01"
+    val material3Version = "1.5.0-alpha29"
+    val material3AdaptiveVersion = "1.3.0"
     val media3Version = "1.10.1"
     val lifecycleVersion = "2.11.0"
     val roomVersion = "2.8.4"
@@ -380,6 +382,10 @@ dependencies {
     implementation(project(":plugin-sdk"))
     implementation(project(":design-system"))
     implementation(project(":danmaku-engine"))
+
+    // Baseline profile 生成模块：generateBaselineProfile 时在真机/托管设备上跑
+    // :baselineprofile 的宏基准并把产物合并进 release/dev 变体。
+    baselineProfile(project(":baselineprofile"))
 
     // --- 1. Compose UI ---
     // Material3 1.5.0-alpha25 is built against Compose 1.12.0-beta01. Use the
@@ -397,6 +403,7 @@ dependencies {
     implementation("androidx.compose.material3:material3:$material3Version")
     implementation("androidx.compose.material3:material3-window-size-class:$material3Version") // [新增] 窗口大小类
     implementation("androidx.compose.material3.adaptive:adaptive:$material3AdaptiveVersion")
+    implementation("androidx.compose.material3.adaptive:adaptive-layout:$material3AdaptiveVersion")
     implementation(libs.miuix.ui)
     implementation(libs.miuix.preference)
     implementation(libs.miuix.blur)

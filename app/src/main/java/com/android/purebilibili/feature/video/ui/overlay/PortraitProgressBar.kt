@@ -165,64 +165,69 @@ fun ThinWigglyProgressBar(
             .fillMaxHeight()
             .onSizeChanged { containerWidth = it.width.toFloat() }
             .pointerInput(duration) {
-                detectHorizontalDragGestures(
-                    onDragStart = { offset ->
-                        val targetPositionMs = resolveSeekPositionFromTouch(
-                            touchX = offset.x,
-                            containerWidthPx = size.width.toFloat(),
-                            durationMs = duration
-                        )
-                        dragTargetPositionMs = targetPositionMs
-                        currentOnSeekStart()
-                        currentOnSeekDragStart(targetPositionMs)
-                    },
-                    onDragEnd = {
-                        val committedProgress = if (duration > 0L) {
-                            dragTargetPositionMs.toFloat() / duration.toFloat()
-                        } else {
-                            0f
-                        }
-                        currentOnSeek(committedProgress.coerceIn(0f, 1f))
-                    },
-                    onDragCancel = {
-                        currentOnSeekDragCancel()
-                    },
-                    onHorizontalDrag = { change, _ ->
-                        change.consume()
-                        val targetPositionMs = resolveSeekPositionFromTouch(
-                            touchX = change.position.x,
-                            containerWidthPx = size.width.toFloat(),
-                            durationMs = duration
-                        )
-                        dragTargetPositionMs = targetPositionMs
-                        currentOnSeekDragUpdate(targetPositionMs)
-                    }
-                )
-            }
-            // 也支持点击跳转
-            .pointerInput(duration) {
-                detectTapGestures(
-                    onPress = { offset ->
-                        val targetPositionMs = resolveSeekPositionFromTouch(
-                            touchX = offset.x,
-                            containerWidthPx = size.width.toFloat(),
-                            durationMs = duration
-                        )
-                        dragTargetPositionMs = targetPositionMs
-                        currentOnSeekStart()
-                        currentOnSeekDragStart(targetPositionMs)
-                        val released = tryAwaitRelease()
-                        if (released) {
-                            currentOnSeekDragUpdate(targetPositionMs)
+                var dragInProgress = false
+                try {
+                    detectHorizontalDragGestures(
+                        onDragStart = { offset ->
+                            dragInProgress = true
+                            val targetPositionMs = resolveSeekPositionFromTouch(
+                                touchX = offset.x,
+                                containerWidthPx = size.width.toFloat(),
+                                durationMs = duration
+                            )
+                            dragTargetPositionMs = targetPositionMs
+                            currentOnSeekStart()
+                            currentOnSeekDragStart(targetPositionMs)
+                        },
+                        onDragEnd = {
+                            dragInProgress = false
                             val committedProgress = if (duration > 0L) {
-                                targetPositionMs.toFloat() / duration.toFloat()
+                                dragTargetPositionMs.toFloat() / duration.toFloat()
                             } else {
                                 0f
                             }
                             currentOnSeek(committedProgress.coerceIn(0f, 1f))
-                        } else {
-                            currentOnSeekDragCancel()
+                        },
+                        onDragCancel = {
+                            if (dragInProgress) {
+                                dragInProgress = false
+                                currentOnSeekDragCancel()
+                            }
+                        },
+                        onHorizontalDrag = { change, _ ->
+                            change.consume()
+                            val targetPositionMs = resolveSeekPositionFromTouch(
+                                touchX = change.position.x,
+                                containerWidthPx = size.width.toFloat(),
+                                durationMs = duration
+                            )
+                            dragTargetPositionMs = targetPositionMs
+                            currentOnSeekDragUpdate(targetPositionMs)
                         }
+                    )
+                } finally {
+                    if (dragInProgress) currentOnSeekDragCancel()
+                }
+            }
+            // 也支持点击跳转
+            .pointerInput(duration) {
+                detectTapGestures(
+                    onTap = { offset ->
+                        val targetPositionMs = resolveSeekPositionFromTouch(
+                            touchX = offset.x,
+                            containerWidthPx = size.width.toFloat(),
+                            durationMs = duration
+                        )
+                        dragTargetPositionMs = targetPositionMs
+                        currentOnSeekStart()
+                        currentOnSeekDragStart(targetPositionMs)
+                        currentOnSeekDragUpdate(targetPositionMs)
+                        val committedProgress = if (duration > 0L) {
+                            targetPositionMs.toFloat() / duration.toFloat()
+                        } else {
+                            0f
+                        }
+                        currentOnSeek(committedProgress.coerceIn(0f, 1f))
                     }
                 ) 
             }

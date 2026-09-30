@@ -30,11 +30,25 @@ internal object BiliSubtitleLyricsPolicy {
                     maxOf(cue.startMs, sec.startMs) < minOf(cue.endMs, sec.endMs)
             }?.content?.trim()
 
+            // AI 逐字字幕：把词级时间戳转成逐字 span，供逐字高亮渲染
+            val spans = cue.words
+                .filter { it.text.isNotBlank() && it.endMs > it.startMs }
+                .map { word ->
+                    LyricSpan(
+                        text = word.text,
+                        startTimeMs = word.startMs,
+                        endTimeMs = word.endMs
+                    )
+                }
+                .takeIf { it.isNotEmpty() }
+                ?: distributeTextEvenly(cue.content.trim(), cue.startMs, cue.endMs)
+
             LyricLine(
                 startTimeMs = cue.startMs,
                 endTimeMs = cue.endMs,
                 text = cue.content.trim(),
-                translations = listOfNotNull(translation?.takeIf { it.isNotEmpty() })
+                translations = listOfNotNull(translation?.takeIf { it.isNotEmpty() }),
+                spans = spans
             )
         }
 
@@ -69,6 +83,75 @@ internal object BiliSubtitleLyricsPolicy {
         }
         return null
     }
+
+    /**
+     * 带质量评估的取舍：两边都有时，用两条时间轴的对齐度判断搜索歌词是否可信。
+     * 搜索歌词若整体漂移大或行覆盖低（常见于串歌、Live 版、时长不符），
+     * 则回退到与播放时间轴天然一致的 B 站字幕，避免高亮错位。
+     */
+    fun resolveEffectiveLyricsWithAlignment(
+        musicLyrics: LyricDocument?,
+        subtitleLyrics: LyricDocument?
+    ): LyricDocument? {
+        val music = musicLyrics?.takeIf { it.lines.isNotEmpty() } ?: return resolveEffectiveLyrics(null, subtitleLyrics)
+        val subtitle = subtitleLyrics?.takeIf { it.lines.isNotEmpty() }
+            ?: return resolveEffectiveLyrics(music, null)
+
+        val alignment = scoreTimelineAlignment(
+            reference = subtitle,
+            candidate = music
+        )
+        if (alignment < LYRIC_ALIGNMENT_MINIMUM_SCORE) return subtitle
+        // 对齐可信：把搜索歌词的行/词时间轴映射到字幕轴，消除整体漂移与伸缩
+        return LyricsWordAlignmentPolicy.align(music, subtitle)
+    }
+
+    /**
+     * 无词级时间戳的行（普通 CC 字幕）按字符数把行时长均匀切分成 span，
+     * 与逐字歌词共用同一套高亮渲染。
+     */
+    private fun distributeTextEvenly(text: String, startMs: Long, endMs: Long): List<LyricSpan> {
+        if (text.isBlank()) return emptyList()
+        val durationMs = (endMs - startMs).coerceAtLeast(0L)
+        if (durationMs <= 0L) return emptyList()
+        val stepMs = durationMs.toDouble() / text.length
+        var cursor = startMs.toDouble()
+        return text.map { character ->
+            val spanStart = cursor
+            cursor += stepMs
+            LyricSpan(
+                text = character.toString(),
+                startTimeMs = spanStart.toLong(),
+                endTimeMs = cursor.toLong()
+            )
+        }
+    }
+
+    /** 搜索歌词时间轴相对字幕时间轴的对齐分数，1 = 完全贴合，0 = 完全错位。 */
+    fun scoreTimelineAlignment(
+        reference: LyricDocument,
+        candidate: LyricDocument
+    ): Double {
+        val referenceStarts = reference.lines.map { it.startTimeMs }.sorted()
+        if (referenceStarts.isEmpty() || candidate.lines.isEmpty()) return 0.0
+        val candidateStarts = candidate.lines.map { it.startTimeMs }.sorted()
+        val toleranceMs = 1_500L
+        val offsets = mutableListOf<Long>()
+        referenceStarts.forEach { start ->
+            val nearest = candidateStarts.minByOrNull { kotlin.math.abs(it - start) } ?: return@forEach
+            val offset = nearest - start
+            if (kotlin.math.abs(offset) <= toleranceMs) offsets += offset
+        }
+        if (offsets.isEmpty()) return 0.0
+        val coverage = offsets.size.toDouble() / referenceStarts.size.toDouble()
+        // 覆盖率为主（行是否对得上），紧密度为辅（整体漂移是否小）
+        val compactness = 1.0 - (
+            offsets.map { kotlin.math.abs(it) }.average() / toleranceMs.toDouble()
+            ).coerceIn(0.0, 1.0)
+        return (coverage * 0.75 + compactness * 0.25).coerceIn(0.0, 1.0)
+    }
+
+    private const val LYRIC_ALIGNMENT_MINIMUM_SCORE = 0.45
 
     /**
      * 获取当前歌词/字幕来源的可读标签（用于设置面板或调试展示）。

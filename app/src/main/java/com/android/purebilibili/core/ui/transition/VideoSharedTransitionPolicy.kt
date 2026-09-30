@@ -708,6 +708,15 @@ internal fun videoSharedElementReturnSpringSpec(
 }
 
 /**
+ * 返回 morph 时长/缓动的单一事实来源：bounds spec（下方）与详情 progress
+ * 时钟（VideoDetailTransitionHost）必须共用这里，杜绝两处手写漂移。
+ */
+internal fun videoSharedElementReturnMorphDurationMillis(durationMillis: Int): Int =
+    resolveVideoHeroMotionSpec(durationMillis).enterDurationMillis
+
+internal fun videoSharedElementReturnMorphEasing(): Easing = LinearEasing
+
+/**
  * 返回 morph 固定时长 tween（Linear）：
  * - 可 seek：预测拖动 progress 与 bounds 进度一致
  * - 可打断：OPENING 中途返回可从当前 fraction 反转
@@ -719,8 +728,16 @@ internal fun videoSharedElementReturnTweenSpec(
 ): FiniteAnimationSpec<Rect> {
     val hero = resolveVideoHeroMotionSpec(durationMillis)
     return tween(
-        durationMillis = if (interactive) hero.enterDurationMillis else hero.returnDurationMillis,
-        easing = if (interactive) hero.predictiveSeekSpec else hero.returnSpatialSpec,
+        durationMillis = if (interactive) {
+            videoSharedElementReturnMorphDurationMillis(durationMillis)
+        } else {
+            hero.returnDurationMillis
+        },
+        easing = if (interactive) {
+            videoSharedElementReturnMorphEasing()
+        } else {
+            hero.returnSpatialSpec
+        },
     )
 }
 
@@ -768,10 +785,12 @@ internal fun resolveVideoMetadataSharedBoundsDurationMillis(
     if (!motion.enabled) return 0
     return (motion.durationMillis * VIDEO_METADATA_SHARED_BOUNDS_RATIO)
         .roundToInt()
-        .coerceIn(
-            VIDEO_METADATA_SHARED_BOUNDS_MIN_MILLIS,
-            VIDEO_METADATA_SHARED_BOUNDS_MAX_MILLIS
+        // 下界跟随主时长：reduced-motion 等场景主时长本身可能低于固定下限，
+        // 否则标题/UP 会比详情壳更晚落位。
+        .coerceAtLeast(
+            minOf(VIDEO_METADATA_SHARED_BOUNDS_MIN_MILLIS, motion.durationMillis)
         )
+        .coerceAtMost(VIDEO_METADATA_SHARED_BOUNDS_MAX_MILLIS)
 }
 
 internal fun resolveHomeVideoSharedTransitionCornerSpec(

@@ -105,4 +105,62 @@ class VideoCardOnlineCountStoreTest {
         assertEquals(1, requestCount)
         assertEquals("2.1万+", store.observe("BV1inflight", 2L).value)
     }
+
+    @Test
+    fun refreshIfNeeded_evictsOldestEntryBeyondCapacityAndRefetches() = runTest {
+        var nowMs = 1_000L
+        val requestCounts = mutableMapOf<String, Int>()
+        val store = VideoCardOnlineCountStore(
+            fetchOnlineCount = { bvid, _ ->
+                requestCounts[bvid] = (requestCounts[bvid] ?: 0) + 1
+                "1.2万+"
+            },
+            nowMs = { nowMs },
+            ttlMs = 60_000L,
+            maxEntries = 2
+        )
+
+        store.refreshIfNeeded("BV1a", 1L)
+        nowMs += 1
+        store.refreshIfNeeded("BV1b", 2L)
+        nowMs += 1
+        // 第 3 条触发清理，按最旧 fetchedAtMs 淘汰 BV1a。
+        store.refreshIfNeeded("BV1c", 3L)
+
+        assertEquals("1.2万+", store.observe("BV1c", 3L).value)
+        nowMs += 1
+        store.refreshIfNeeded("BV1a", 1L)
+        assertEquals(2, requestCounts["BV1a"])
+        assertEquals(1, requestCounts["BV1b"])
+        assertEquals(1, requestCounts["BV1c"])
+    }
+
+    @Test
+    fun refreshIfNeeded_sweepsStaleEntriesFirstWhenOverCapacity() = runTest {
+        var nowMs = 1_000L
+        val requestCounts = mutableMapOf<String, Int>()
+        val store = VideoCardOnlineCountStore(
+            fetchOnlineCount = { bvid, _ ->
+                requestCounts[bvid] = (requestCounts[bvid] ?: 0) + 1
+                "3.4万+"
+            },
+            nowMs = { nowMs },
+            ttlMs = 60_000L,
+            maxEntries = 2
+        )
+
+        store.refreshIfNeeded("BV1old", 1L)
+        nowMs += 61_000L
+        store.refreshIfNeeded("BV1mid", 2L)
+        nowMs += 61_000L
+        // BV1old 与 BV1mid 均已过 TTL，插入第 3 条后应先清过期条目而不是按新旧淘汰。
+        store.refreshIfNeeded("BV1new", 3L)
+
+        nowMs += 1
+        store.refreshIfNeeded("BV1old", 1L)
+        store.refreshIfNeeded("BV1mid", 2L)
+        assertEquals(2, requestCounts["BV1old"])
+        assertEquals(2, requestCounts["BV1mid"])
+        assertEquals(1, requestCounts["BV1new"])
+    }
 }

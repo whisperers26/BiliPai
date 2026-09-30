@@ -48,24 +48,41 @@ class AdaptiveListComponentPolicyTest {
     }
 
     @Test
-    fun `miuix style should use denser list row spacing`() {
+    fun `miuix style should align list row spacing with miuix inside margin default`() {
         val spec = resolveAdaptiveListRowVisualSpec(AppUiStyle.MIUIX)
 
         assertEquals(16, spec.insideHorizontalPaddingDp)
-        assertEquals(14, spec.insideVerticalPaddingDp)
+        assertEquals(16, spec.insideVerticalPaddingDp)
         assertEquals(14, spec.trailingIconSizeDp)
         assertEquals(6, spec.trailingSpacingDp)
     }
 
     @Test
-    fun `material3 style should keep roomier shared list row spacing`() {
+    fun `material3 style should align list row spacing with md3 list item padding`() {
         val spec = resolveAdaptiveListRowVisualSpec(AppUiStyle.MATERIAL3)
 
-        assertEquals(18, spec.insideHorizontalPaddingDp)
+        assertEquals(16, spec.insideHorizontalPaddingDp)
         assertEquals(16, spec.insideVerticalPaddingDp)
         assertEquals(16, spec.trailingIconSizeDp)
         assertEquals(8, spec.trailingSpacingDp)
         assertEquals(48, spec.minTouchTargetHeightDp)
+    }
+
+    @Test
+    fun `cupertino fallback row consumes the shared row spec instead of hardcoded padding`() {
+        val source = listOf(
+            java.io.File("src/main/java/com/android/purebilibili/core/ui/components/AdaptivePreferenceComponents.kt"),
+            java.io.File("../design-system/src/main/java/com/android/purebilibili/core/ui/components/AdaptivePreferenceComponents.kt"),
+        ).first { it.exists() }.readText()
+
+        // 回退 Row 不得再硬编码 16/14 之类的私有间距，必须统一走 rowSpec。
+        assertFalse(
+            source.contains("padding(horizontal = 16.dp, vertical = 14.dp)"),
+            "fallback row still hardcodes legacy 16/14 padding",
+        )
+        assertTrue(
+            source.contains("padding(horizontal = rowSpec.insideHorizontalPaddingDp.dp, vertical = rowSpec.insideVerticalPaddingDp.dp)"),
+        )
     }
 
     @Test

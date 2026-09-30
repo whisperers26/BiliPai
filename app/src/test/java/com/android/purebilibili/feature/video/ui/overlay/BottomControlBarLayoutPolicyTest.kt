@@ -76,6 +76,17 @@ class BottomControlBarLayoutPolicyTest {
     }
 
     @Test
+    fun compactPhone_tightensEdgePaddingAndProgressGap() {
+        val classic = resolveBottomControlBarLayoutPolicy(widthDp = 393, compact = false)
+        val compact = resolveBottomControlBarLayoutPolicy(widthDp = 393, compact = true)
+
+        assertEquals(12, classic.horizontalPaddingDp)
+        assertEquals(8, classic.progressSpacingDp)
+        assertEquals(5, compact.horizontalPaddingDp)
+        assertEquals(3, compact.progressSpacingDp)
+    }
+
+    @Test
     fun bottomEdgeProgress_removesBottomGapFromWholeControlBar() {
         assertEquals(
             0,

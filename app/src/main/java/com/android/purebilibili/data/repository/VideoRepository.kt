@@ -252,6 +252,8 @@ object VideoRepository {
     }
     
     private suspend fun ensureBuvid3FromSpi() {
+        // 会话备份为异步恢复，先等它完成再判断 buvid 是否缺失，避免启动窗口内多打一次 SPI。
+        TokenManager.awaitRestore()
         if (buvidInitialized) return
         try {
             com.android.purebilibili.core.util.Logger.d("VideoRepo", " Fetching buvid3 from SPI API...")
@@ -807,6 +809,8 @@ object VideoRepository {
     private suspend fun fetchMergedMobileFeed(idx: Int): Result<List<VideoItem>> {
         try {
             // app 取流依赖 buvid 会话, 缺失时先通过 SPI 获取
+            // 先等会话备份异步恢复完成，避免启动窗口内误判 buvid 缺失而多打一次 SPI。
+            TokenManager.awaitRestore()
             if (TokenManager.buvid3Cache.isNullOrEmpty()) {
                 ensureBuvid3FromSpi()
             }
@@ -2344,6 +2348,7 @@ object VideoRepository {
             -62002 -> "视频已设为私密"
             -62004 -> "视频正在审核中"
             -62012 -> "视频已下架"
+            87008 -> "当前视频可能是专属视频，可能需包月充电观看"
             -400 -> "请求参数错误"
             -101 -> "未登录，请先登录"
             -352 -> "请求频率过高，请稍后再试"

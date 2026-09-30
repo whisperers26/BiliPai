@@ -314,7 +314,7 @@ private fun DropdownSelector(
                 onClick = { expanded = true },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                AppText(value.ifEmpty { "选择..." })
+                AppText(value.ifEmpty { "选择…" })
             }
             AppDropdownMenu(
                 expanded = expanded,

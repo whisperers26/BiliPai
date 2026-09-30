@@ -42,6 +42,30 @@ class BangumiResumePolicyTest {
     }
 
     @Test
+    fun `bangumi heartbeat allows pgc episode without bvid when epid and sid present`() {
+        assertTrue(
+            shouldSendBangumiPlaybackHeartbeat(
+                isPlaying = true,
+                bvid = "",
+                cid = 1122L,
+                currentPositionMs = 1000L,
+                epid = 42L,
+                sid = 7L
+            )
+        )
+        assertFalse(
+            shouldSendBangumiPlaybackHeartbeat(
+                isPlaying = true,
+                bvid = "",
+                cid = 1122L,
+                currentPositionMs = 1000L,
+                epid = 42L,
+                sid = 0L
+            )
+        )
+    }
+
+    @Test
     fun `bangumi detail request prefers episode id from pgc history`() {
         val request = resolveBangumiDetailRequest(seasonId = 114514L, epId = 1919810L)
 

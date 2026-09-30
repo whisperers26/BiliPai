@@ -6,6 +6,7 @@ import com.android.purebilibili.data.model.response.FavoriteData
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.repository.FavoriteRequestException
 import java.io.IOException
+import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
@@ -249,4 +250,24 @@ internal fun shouldApplyFavoriteFolderResult(
     return requestGeneration == currentGeneration &&
         requestedMediaId == currentMediaId &&
         requestedOrder == currentOrder
+}
+
+/** 收藏夹 pager 逐步滚动最多展示的中间页数；更远的跨度先跳到窗口起点再动画落地。 */
+internal const val FAVORITE_FOLDER_SWITCH_MAX_TRAVERSED_PAGES = 4
+
+/**
+ * Near folder hops keep progressive traversal. Distant hops pre-jump so the
+ * pager only animates the final [FAVORITE_FOLDER_SWITCH_MAX_TRAVERSED_PAGES] pages
+ * and long folder gaps do not cruise every intermediate folder.
+ */
+internal fun resolveFavoriteFolderSwitchPreJumpPage(
+    currentPage: Int,
+    targetPage: Int,
+    maxTraversedPages: Int = FAVORITE_FOLDER_SWITCH_MAX_TRAVERSED_PAGES
+): Int? {
+    val traversedWindow = maxTraversedPages.coerceAtLeast(1)
+    val distance = abs(targetPage - currentPage)
+    if (distance <= traversedWindow) return null
+    val direction = if (targetPage >= currentPage) 1 else -1
+    return targetPage - direction * traversedWindow
 }

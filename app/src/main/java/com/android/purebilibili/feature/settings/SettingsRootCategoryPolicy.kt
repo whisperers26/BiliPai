@@ -10,7 +10,7 @@ enum class SettingsRootCategory(
 ) {
     APPEARANCE_THEME(
         title = "外观与主题",
-        subtitle = "调整界面风格、颜色、字体、大小和图标",
+        subtitle = "调整界面风格、颜色、字体、显示大小和图标",
         searchTarget = SettingsSearchTarget.INTERFACE_THEME,
     ),
     PLAYBACK_QUALITY(

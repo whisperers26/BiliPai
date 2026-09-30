@@ -53,6 +53,7 @@ data class LiveLandscapeChatOverlayMetrics(
 enum class LiveRequestedOrientationMode {
     Unspecified,
     SensorLandscape,
+    SensorPortrait,
     Portrait,
 }
 
@@ -63,10 +64,12 @@ enum class LiveRequestedOrientationMode {
 fun resolveLiveRequestedOrientationMode(
     displayContext: AppDisplayContext,
     isFullscreen: Boolean,
+    isPortraitLive: Boolean = false,
 ): LiveRequestedOrientationMode {
     return when {
         displayContext.usesInWindowFullscreen -> LiveRequestedOrientationMode.Unspecified
         !shouldUsePhonePlayerOrientation(displayContext) -> LiveRequestedOrientationMode.Unspecified
+        isFullscreen && isPortraitLive -> LiveRequestedOrientationMode.SensorPortrait
         isFullscreen -> LiveRequestedOrientationMode.SensorLandscape
         else -> LiveRequestedOrientationMode.Portrait
     }
@@ -77,10 +80,12 @@ fun resolveLiveRequestedOrientationMode(
     isFullscreen: Boolean,
     isFoldableCoverWindow: Boolean = false,
     usesInWindowFullscreen: Boolean = false,
+    isPortraitLive: Boolean = false,
 ): LiveRequestedOrientationMode {
     return when {
         usesInWindowFullscreen -> LiveRequestedOrientationMode.Unspecified
         isTabletDevice && !isFoldableCoverWindow -> LiveRequestedOrientationMode.Unspecified
+        isFullscreen && isPortraitLive -> LiveRequestedOrientationMode.SensorPortrait
         isFullscreen -> LiveRequestedOrientationMode.SensorLandscape
         else -> LiveRequestedOrientationMode.Portrait
     }
@@ -94,7 +99,8 @@ fun resolveLiveRoomLayoutMode(
 ): LiveRoomLayoutMode {
     return if (isTablet) {
         if (isFullscreen) {
-            LiveRoomLayoutMode.LandscapeOverlay
+            if (!isLandscape && isPortraitLive) LiveRoomLayoutMode.PortraitVerticalOverlay
+            else LiveRoomLayoutMode.LandscapeOverlay
         } else if (isLandscape) {
             LiveRoomLayoutMode.LandscapeSplit
         } else if (isPortraitLive) {
@@ -103,7 +109,9 @@ fun resolveLiveRoomLayoutMode(
             LiveRoomLayoutMode.PortraitPanel
         }
     } else {
-        if (isLandscape || isFullscreen) {
+        if (isFullscreen && !isLandscape && isPortraitLive) {
+            LiveRoomLayoutMode.PortraitVerticalOverlay
+        } else if (isLandscape || isFullscreen) {
             LiveRoomLayoutMode.LandscapeOverlay
         } else if (isPortraitLive) {
             LiveRoomLayoutMode.PortraitVerticalOverlay
@@ -116,9 +124,10 @@ fun resolveLiveRoomLayoutMode(
 fun shouldShowLiveChatToggle(
     layoutMode: LiveRoomLayoutMode
 ): Boolean {
-    // LandscapeSplit keeps the desktop-style right chat column always on.
+    // LandscapeSplit 的聊天列改为跟随用户开关，需提供切换按钮。
     return layoutMode == LiveRoomLayoutMode.PortraitVerticalOverlay ||
-        layoutMode == LiveRoomLayoutMode.LandscapeOverlay
+        layoutMode == LiveRoomLayoutMode.LandscapeOverlay ||
+        layoutMode == LiveRoomLayoutMode.LandscapeSplit
 }
 
 fun defaultLiveInteractionPanelVisible(): Boolean = false
@@ -127,9 +136,9 @@ fun shouldShowLiveSplitChatPanel(
     layoutMode: LiveRoomLayoutMode,
     isInteractionPanelVisible: Boolean
 ): Boolean {
-    @Suppress("UNUSED_PARAMETER")
-    val ignored = isInteractionPanelVisible
-    return layoutMode == LiveRoomLayoutMode.LandscapeSplit
+    // 分栏聊天列跟随用户开关：退出全屏回到分栏布局时不再自动弹出聊天列
+    // （否则大屏设备退出横屏会看到视频被压缩、四周露出暗背景）。
+    return layoutMode == LiveRoomLayoutMode.LandscapeSplit && isInteractionPanelVisible
 }
 
 /** PiliPlus desktop: video ~56–70% width, remaining chat column capped at 400dp. */

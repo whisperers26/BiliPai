@@ -10,7 +10,7 @@
 | 场景 | 推荐方式 |
 | --- | --- |
 | 只想过滤推荐流、屏蔽关键词或处理弹幕 | 使用 [JSON / `.bp` 规则插件](../../docs/PLUGIN_DEVELOPMENT.md) |
-| 只想做首页顶部、搜索框、底栏饰面等 UI 美化 | 使用数据型 `.bpskin` 皮肤包 |
+| 只想做首页、底栏、个人页背景及部分动效 | 使用数据型 `.bpskin` 皮肤包 |
 | 需要写 Kotlin 排序逻辑、推荐算法、播放器或弹幕扩展 | 使用本 SDK 打包 `.bpplugin` |
 | 需要完整 UI、深度接入宿主生命周期或立即运行 | 暂时使用源码级原生插件，参考 [原生插件开发](../../docs/NATIVE_PLUGIN_DEVELOPMENT.md) |
 
@@ -161,7 +161,7 @@ SDK 还定义了播放器和弹幕接口，供后续宿主执行能力开放时�
 
 当前外部 Dex 尚不执行，这些接口主要用于提前适配 API 和包格式。需要马上落地运行的播放器/弹幕能力，请先走源码级原生插件。
 
-> UI 美化请不要打包成 `.bpplugin`。首页顶部氛围、搜索框和底栏饰面走 `.bpskin` 资源包；`.bpskin` 不执行代码，也不能替换底栏液态玻璃、指示器或滑动色散链路。可参考 [`plugins/samples/winter-cloud-skin`](../samples/winter-cloud-skin) 打包一个可导入的冬日云朵皮肤；插件中心也可以直接选择单主题目录 ZIP 或内层 `_package.zip`，或用 [`plugins/tools/bilibili_skin_to_bpskin.py`](../tools/bilibili_skin_to_bpskin.py) 将本地 `KimmyXYC/bilibili-skin` 主题目录转换为仅本地使用的 `.bpskin`。
+> 界面皮肤使用数据型 `.bpskin`，不执行插件代码。包格式、资源字段和导入方式见 [BPSkin 开发规范](../../docs/BPSKIN_DEVELOPMENT.md)。示例：[冬日云朵](../samples/winter-cloud-skin/README.md)、[蓝雪女仆](../samples/blue-snow-maid-skin/README.md)。
 
 ## `.bpplugin` 包格式
 

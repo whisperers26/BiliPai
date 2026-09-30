@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -142,7 +143,8 @@ private fun LivePlayerIconButton(
  * 3. 非竖向直播：中间 1/3 上下滑切换全屏
  * 4. 单击显示/隐藏控制器
  * 5. 非竖向直播：双击暂停/播放；竖向直播：轻点清屏，长按更多
- * 6. 全屏锁定/解锁、截图
+ * 6. 竖向直播左右滑动关闭/恢复滚动弹幕
+ * 7. 全屏锁定/解锁、截图
  */
 
 // 手势分区
@@ -243,6 +245,7 @@ fun LivePlayerControls(
     var centerDragAccumulator by remember { mutableFloatStateOf(0f) }
     val latestPlayPause by rememberUpdatedState(onPlayPause)
     val latestToggleFullscreen by rememberUpdatedState(onToggleFullscreen)
+    val latestToggleDanmaku by rememberUpdatedState(onToggleDanmaku)
     val latestPortraitTap by rememberUpdatedState(onPortraitTap)
     val latestOpenPortraitMore by rememberUpdatedState(onOpenPortraitMore)
     val latestOnLike by rememberUpdatedState(onLike)
@@ -276,6 +279,27 @@ fun LivePlayerControls(
                                     { latestOpenPortraitMore() }
                                 } else null,
                             )
+                        }
+                        .pointerInput(usePortraitControls, isDanmakuEnabled, isClearScreen) {
+                            if (usePortraitControls) {
+                                var horizontalDrag = 0f
+                                detectHorizontalDragGestures(
+                                    onDragStart = { horizontalDrag = 0f },
+                                    onHorizontalDrag = { change, dragAmount ->
+                                        horizontalDrag += dragAmount
+                                        change.consume()
+                                    },
+                                    onDragEnd = {
+                                        val threshold = size.width * 0.16f
+                                        if (!isClearScreen && horizontalDrag <= -threshold && isDanmakuEnabled) {
+                                            latestToggleDanmaku()
+                                        } else if (!isClearScreen && horizontalDrag >= threshold && !isDanmakuEnabled) {
+                                            latestToggleDanmaku()
+                                        }
+                                    },
+                                    onDragCancel = { horizontalDrag = 0f },
+                                )
+                            }
                         }
                         .pointerInput(gesturePolicy.centerDragFullscreen, isClearScreen) {
                             val screenHeight = size.height.toFloat()

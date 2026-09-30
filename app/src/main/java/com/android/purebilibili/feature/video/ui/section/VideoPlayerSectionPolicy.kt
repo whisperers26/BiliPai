@@ -670,6 +670,25 @@ internal fun resolveRelativeSeekTargetPosition(
     }
 }
 
+/**
+ * Seek 拖动的「松手取消」逃生口：手指拖入屏幕顶部左/右两个角落区域时取消本次 seek。
+ * 角落取顶部 1/8 高度 × 左右各 1/8 宽度，与进度条拖动的常用轨迹（屏幕中部）不重叠。
+ */
+internal const val VIDEO_PLAYER_SEEK_CANCEL_EDGE_FRACTION = 0.125f
+
+internal fun isInSeekCancelEscapeZone(
+    positionX: Float,
+    positionY: Float,
+    containerWidthPx: Float,
+    containerHeightPx: Float,
+): Boolean {
+    if (containerWidthPx <= 0f || containerHeightPx <= 0f) return false
+    val edgeX = containerWidthPx * VIDEO_PLAYER_SEEK_CANCEL_EDGE_FRACTION
+    val topY = containerHeightPx * VIDEO_PLAYER_SEEK_CANCEL_EDGE_FRACTION
+    val inCornerColumn = positionX <= edgeX || positionX >= containerWidthPx - edgeX
+    return positionY <= topY && inCornerColumn
+}
+
 internal fun shouldCommitGestureSeek(
     currentPositionMs: Long,
     targetPositionMs: Long,

@@ -140,6 +140,29 @@ class SearchModelsParsingTest {
     }
 
     @Test
+    fun decodeSearchTypeResponse_acceptsBlankAndNumericTypeIds() {
+        val payload = """
+            {
+              "code": 0,
+              "data": {
+                "result": [
+                  { "id": 1, "typeid": 24 },
+                  { "id": 2, "typeid": "36" },
+                  { "id": 3 },
+                  { "id": 4, "typeid": 12 },
+                  { "id": 5, "typeid": "" }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val items = json.decodeFromString<SearchTypeResponse>(payload)
+            .data?.result.orEmpty()
+
+        assertEquals(listOf(24, 36, 0, 12, 0), items.map { it.typeId })
+    }
+
+    @Test
     fun decodeSearchArticleResponse_cleansHtmlAndProtocolRelativeImages() {
         val payload = """
             {

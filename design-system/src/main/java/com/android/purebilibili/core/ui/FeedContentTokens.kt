@@ -11,6 +11,9 @@ import com.android.purebilibili.core.theme.LocalAppUiStyle
 
 object AppTypographyTokens {
     val ZeroLetterSpacing = 0.sp
+
+    /** 等宽数字（tabular figures），用于统计数、时长等会刷新的数字，避免宽度抖动。 */
+    const val TabularNumerals = "tnum"
 }
 
 /** Typography roles shared by feed cards regardless of their visual composition. */
@@ -53,9 +56,14 @@ fun feedContentTypography(
     return FeedContentTypography(
         title = titleStyle,
         author = author.copy(lineHeight = author.fontSize * 1.5f),
-        statistic = if (isMiuix) MaterialTheme.typography.labelMedium
-            else MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+        statistic = (if (isMiuix) MaterialTheme.typography.labelMedium
+            else MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp))
+            .copy(fontFeatureSettings = AppTypographyTokens.TabularNumerals),
         coverBadge = (if (isMiuix) MaterialTheme.typography.labelMedium
-            else MaterialTheme.typography.labelSmall).copy(fontWeight = FontWeight.Medium),
+            else MaterialTheme.typography.labelSmall)
+            .copy(
+                fontWeight = FontWeight.Medium,
+                fontFeatureSettings = AppTypographyTokens.TabularNumerals,
+            ),
     )
 }

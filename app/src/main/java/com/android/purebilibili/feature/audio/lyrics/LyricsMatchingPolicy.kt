@@ -141,7 +141,7 @@ private fun stripVideoNoise(value: String): String {
     return value
         .replace(
             Regex(
-                "(?i)(?:4k|8k|\\d{3,4}p|hdr|official|music video|video|audio|lyrics?|lyric video|mv|live|cover|remix|官方|现场版|完整版|高音质|歌词版|片段|舞台版)"
+                "(?i)(?:4k|8k|\\d{3,4}p|hdr|official|music video|video|audio|lyrics?|lyric video|mv|live|cover|remix|官方|现场版|完整版|高音质|歌词版|片段|舞台版|纯音乐|伴奏|伴奏版|卡拉ok|karaoke|instrumental|piano|独奏|翻唱|自存|无损|flac|hi-res|重制版|翻自)"
             ),
             " "
         )
@@ -219,6 +219,14 @@ private fun normalizeLyricMatchText(
 private fun stringSimilarity(left: String, right: String): Double {
     if (left == right) return 1.0
     if (left.isEmpty() || right.isEmpty()) return 0.0
+    return maxOf(
+        lcsSimilarity(left, right),
+        bigramDiceSimilarity(left, right)
+    )
+}
+
+/** 最长公共子序列占比：容忍插入语/后缀差异。 */
+private fun lcsSimilarity(left: String, right: String): Double {
     val previous = IntArray(right.length + 1)
     val current = IntArray(right.length + 1)
     left.forEach { leftChar ->
@@ -233,4 +241,27 @@ private fun stringSimilarity(left: String, right: String): Double {
         current.fill(0)
     }
     return previous[right.length].toDouble() / maxOf(left.length, right.length).toDouble()
+}
+
+/** 字符二元组 Dice 系数：对「长标题 vs 短歌名」的长度惩罚更宽容。 */
+private fun bigramDiceSimilarity(left: String, right: String): Double {
+    if (left.length < 2 || right.length < 2) {
+        return if (left == right) 1.0 else 0.0
+    }
+    fun bigrams(value: String): Map<String, Int> {
+        val counts = mutableMapOf<String, Int>()
+        for (index in 0 until value.length - 1) {
+            val bigram = value.substring(index, index + 2)
+            counts[bigram] = (counts[bigram] ?: 0) + 1
+        }
+        return counts
+    }
+    val leftCounts = bigrams(left)
+    val rightCounts = bigrams(right)
+    var overlap = 0
+    leftCounts.forEach { (bigram, count) ->
+        overlap += minOf(count, rightCounts[bigram] ?: 0)
+    }
+    val total = (left.length - 1) + (right.length - 1)
+    return if (total == 0) 0.0 else 2.0 * overlap / total
 }

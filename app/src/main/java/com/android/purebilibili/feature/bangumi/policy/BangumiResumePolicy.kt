@@ -83,10 +83,13 @@ internal fun shouldSendBangumiPlaybackHeartbeat(
     isPlaying: Boolean,
     bvid: String,
     cid: Long,
-    currentPositionMs: Long
+    currentPositionMs: Long,
+    epid: Long = 0L,
+    sid: Long = 0L
 ): Boolean {
+    // 部分番剧集没有 bvid；只要 epid+sid 齐全即可上报观看历史（对齐 PiliPlus 的 epid/sid 心跳）
     return isPlaying &&
-        bvid.isNotBlank() &&
+        (bvid.isNotBlank() || (epid > 0L && sid > 0L)) &&
         cid > 0L &&
         currentPositionMs >= 0L
 }

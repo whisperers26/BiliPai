@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.dynamic.components
 
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.getLinkAnnotations
+androidx.compose.ui.graphics.Color
 import com.android.purebilibili.data.model.response.DynamicDesc
 import com.android.purebilibili.data.model.response.RichTextNode
 import kotlin.test.Test
@@ -11,6 +13,15 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DynamicRichTextPolicyTest {
+
+private fun AnnotatedString.firstLinkTagMatching(predicate: (String) -> Boolean): String? =
+    getLinkAnnotations(0, length)
+        .mapNotNull { (it.item as? LinkAnnotation.Clickable)?.tag }
+        .firstOrNull(predicate)
+
+private fun AnnotatedString.firstLinkTag(prefix: String): String? =
+    firstLinkTagMatching { it.startsWith(prefix) }
+
 
     @Test
     fun resolveDynamicDescForImages_hidesStandaloneImagePlaceholderWhenMediaExists() {
@@ -79,9 +90,36 @@ class DynamicRichTextPolicyTest {
         assertNotNull(resolved)
         assertEquals("正文", resolved.text)
         val richNodeText = resolved.rich_text_nodes.joinToString(separator = "") { it.text }
-        assertEquals("正文\n", richNodeText)
+        assertEquals("正文", richNodeText)
         assertFalse(richNodeText.contains("[图片]"))
         assertTrue(shouldRenderDynamicRichText(resolved))
+    }
+
+    @Test
+    fun normalizeDynamicBodyText_trimsEdgeNewlinesOnly() {
+        assertEquals("正文", normalizeDynamicBodyText("正文\n\n"))
+        assertEquals("正文", normalizeDynamicBodyText("\n正文"))
+        assertEquals("第一行\n\n第二行", normalizeDynamicBodyText("第一行\n\n第二行"))
+    }
+
+    @Test
+    fun resolveDynamicDescForImages_trimsTrailingNewlinesEvenWithoutPlaceholders() {
+        val resolved = resolveDynamicDescForImages(
+            desc = DynamicDesc(
+                text = "「芙蓉」篇\n\n",
+                rich_text_nodes = listOf(
+                    RichTextNode(type = "TEXT", text = "「芙蓉」篇\n"),
+                    RichTextNode(type = "TEXT", text = "\n"),
+                )
+            ),
+            hasImages = true
+        )
+
+        assertEquals("「芙蓉」篇", resolved.text)
+        assertEquals(
+            "「芙蓉」篇",
+            resolved.rich_text_nodes.joinToString(separator = "") { it.text }.trimEnd()
+        )
     }
 
     @Test
@@ -107,14 +145,10 @@ class DynamicRichTextPolicyTest {
             textColor = Color.Black
         )
 
-        val annotation = annotated.getStringAnnotations(
-            tag = DYNAMIC_RICH_TEXT_URL_TAG,
-            start = 0,
-            end = annotated.length
-        ).firstOrNull()
+        val annotation = annotated.firstLinkTag(DYNAMIC_RICH_TEXT_LINK_URL_PREFIX)?.removePrefix(DYNAMIC_RICH_TEXT_LINK_URL_PREFIX)
 
         assertNotNull(annotation)
-        assertEquals("https://t.bilibili.com/1015637114125025318", annotation.item)
+        assertEquals("https://t.bilibili.com/1015637114125025318", annotation)
         assertEquals("https://b23.tv/cm-yaoyue-0-3jgPM iPhone16系列至高直降千元起", annotated.text)
     }
 
@@ -134,13 +168,9 @@ class DynamicRichTextPolicyTest {
             textColor = Color.Black,
         )
 
-        val annotation = annotated.getStringAnnotations(
-            tag = DYNAMIC_RICH_TEXT_URL_TAG,
-            start = 0,
-            end = annotated.length,
-        ).single()
+        val annotation = annotated.firstLinkTag(DYNAMIC_RICH_TEXT_LINK_URL_PREFIX)?.removePrefix(DYNAMIC_RICH_TEXT_LINK_URL_PREFIX)
 
-        assertEquals("https://www.bilibili.com/video/BV1xx411c7mD/", annotation.item)
+        assertEquals("https://www.bilibili.com/video/BV1xx411c7mD/", annotation)
         assertEquals("视频标题", annotated.text)
         assertEquals(Color.Blue, annotated.spanStyles.single().item.color)
     }
@@ -161,13 +191,9 @@ class DynamicRichTextPolicyTest {
             textColor = Color.Black,
         )
 
-        val annotation = annotated.getStringAnnotations(
-            tag = DYNAMIC_RICH_TEXT_VOTE_TAG,
-            start = 0,
-            end = annotated.length,
-        ).single()
+        val annotation = annotated.firstLinkTag(DYNAMIC_RICH_TEXT_LINK_VOTE_PREFIX)?.removePrefix(DYNAMIC_RICH_TEXT_LINK_VOTE_PREFIX)
 
-        assertEquals("3925886", annotation.item)
+        assertEquals("3925886", annotation)
         assertEquals(Color.Blue, annotated.spanStyles.single().item.color)
     }
 
@@ -183,16 +209,13 @@ class DynamicRichTextPolicyTest {
             textColor = Color.Black
         )
 
-        val annotation = annotated.getStringAnnotations(
-            tag = DYNAMIC_RICH_TEXT_URL_TAG,
-            start = 0,
-            end = annotated.length
-        ).firstOrNull()
+        val annotation = annotated.firstLinkTag(DYNAMIC_RICH_TEXT_LINK_URL_PREFIX)?.removePrefix(DYNAMIC_RICH_TEXT_LINK_URL_PREFIX)
 
         assertNotNull(annotation)
-        assertEquals("https://b23.tv/cm-yaoyue-0-3jgPM", annotation.item)
-        assertEquals(0, annotation.start)
-        assertEquals("https://b23.tv/cm-yaoyue-0-3jgPM".length, annotation.end)
+        assertEquals("https://b23.tv/cm-yaoyue-0-3jgPM", annotation)
+        val linkRange = annotated.getLinkAnnotations(0, annotated.length).single()
+        assertEquals(0, linkRange.start)
+        assertEquals("https://b23.tv/cm-yaoyue-0-3jgPM".length, linkRange.end)
     }
 
     @Test
@@ -275,11 +298,7 @@ class DynamicRichTextPolicyTest {
             textColor = Color.Black
         )
 
-        val annotation = annotated.getStringAnnotations(
-            tag = DYNAMIC_RICH_TEXT_USER_TAG,
-            start = 0,
-            end = annotated.length
-        ).firstOrNull()
+        val annotation = annotated.firstLinkTag(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX)?.removePrefix(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX)
 
         assertNotNull(annotation)
         assertEquals("946974", annotation.item)
@@ -305,11 +324,7 @@ class DynamicRichTextPolicyTest {
             textColor = Color.Black,
         )
 
-        val annotation = annotated.getStringAnnotations(
-            tag = DYNAMIC_RICH_TEXT_TOPIC_TAG,
-            start = 0,
-            end = annotated.length,
-        ).single()
+        val annotation = annotated.firstLinkTag(DYNAMIC_RICH_TEXT_LINK_TOPIC_ID_PREFIX)?.removePrefix(DYNAMIC_RICH_TEXT_LINK_TOPIC_ID_PREFIX)
 
         assertEquals("1314000", annotation.item)
         assertEquals("#新机来了!#", annotated.text.substring(annotation.start, annotation.end))
@@ -348,11 +363,7 @@ class DynamicRichTextPolicyTest {
             textColor = Color.Black,
         )
 
-        val annotation = annotated.getStringAnnotations(
-            tag = DYNAMIC_RICH_TEXT_USER_TAG,
-            start = 0,
-            end = annotated.length,
-        ).single()
+        val annotation = annotated.firstLinkTag(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX)?.removePrefix(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX)
 
         assertEquals("前面的完整正文 @影视飓风 后续内容", annotated.text)
         assertEquals("946974", annotation.item)
@@ -374,11 +385,9 @@ class DynamicRichTextPolicyTest {
         )
 
         assertTrue(
-            annotated.getStringAnnotations(
-                tag = DYNAMIC_RICH_TEXT_USER_TAG,
-                start = 0,
-                end = annotated.length
-            ).isEmpty()
+            annotated
+                .firstLinkTag(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX)
+                .let { it == null }
         )
         assertEquals("@匿名用户", annotated.text)
     }
@@ -602,12 +611,9 @@ class DynamicRichTextPolicyTest {
             desc = resolvedDesc,
             primaryColor = Color.Blue,
             textColor = Color.Black,
-        ).getStringAnnotations(
-            tag = DYNAMIC_RICH_TEXT_USER_TAG,
-            start = 0,
-            end = resolvedDesc.text.length,
-        ).single()
-        assertEquals("12345", annotation.item)
+        ).firstLinkTag(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX)
+            ?.removePrefix(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX)
+        assertEquals("12345", annotation)
     }
 
     @Test
@@ -629,14 +635,12 @@ class DynamicRichTextPolicyTest {
             primaryColor = Color.Blue,
             textColor = Color.Black,
         )
-        val annotation = richAnnotated.getStringAnnotations(
-            tag = DYNAMIC_RICH_TEXT_USER_TAG,
-            start = 0,
-            end = resolved.text.length,
-        ).single()
+        val annotation = richAnnotated
+            .firstLinkTag(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX)
+            ?.removePrefix(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX)
 
         assertEquals("前文 @影视飓风 后文", richAnnotated.text)
-        assertEquals("946974", annotation.item)
+        assertEquals("946974", annotation)
     }
 
     @Test

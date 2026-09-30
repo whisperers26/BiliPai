@@ -177,14 +177,14 @@ class SettingsRootCategoryContentStructureTest {
             File("app/src/main/java/com/android/purebilibili/feature/settings/ui/SettingsSections.kt"),
             File("src/main/java/com/android/purebilibili/feature/settings/ui/SettingsSections.kt")
         ).first { it.exists() }.readText().replace("\r\n", "\n")
-        val navigationSection = source
-            .substringAfter("internal fun SettingsRootCategoryNavigationSection(")
-            .substringBefore("internal fun SettingsRootCategoryListSection(")
+        val listSection = source
+            .substringAfter("internal fun SettingsRootCategoryListSection(")
+            .substringBefore("@Composable\nprivate fun SettingsRootCategoryRow(")
         val categoryRow = source
             .substringAfter("private fun SettingsRootCategoryRow(")
-            .substringBefore("internal fun SettingsAboutHomeSection(")
+            .substringBefore("@Composable\ninternal fun SettingsDetailGroup(")
 
-        assertFalse(navigationSection.contains("maxLines = 2"))
+        assertFalse(listSection.contains("maxLines = 2"))
         assertFalse(categoryRow.contains("maxLines = 2"))
     }
 
@@ -458,9 +458,13 @@ class SettingsRootCategoryContentStructureTest {
             File("app/src/main/java/com/android/purebilibili/feature/settings/ui/SettingsSections.kt"),
             File("src/main/java/com/android/purebilibili/feature/settings/ui/SettingsSections.kt")
         ).first { it.exists() }.readText().replace("\r\n", "\n")
+        val copySource = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/settings/SettingsDestinationCopy.kt"),
+            File("src/main/java/com/android/purebilibili/feature/settings/SettingsDestinationCopy.kt")
+        ).first { it.exists() }.readText().replace("\r\n", "\n")
 
-        assertTrue(source.contains("title = \"首页样式与壁纸\""))
-        assertTrue(source.contains("value = \"设置自动横屏、亮度音量手势和全屏返回方式\""))
+        assertTrue(copySource.contains("title = \"首页样式与推荐卡片\""))
+        assertTrue(copySource.contains("title = \"全屏与手势\""))
         assertTrue(source.contains("value = \"出现黑屏、卡顿或画质切换失败时用于排查问题\""))
     }
 
@@ -473,7 +477,7 @@ class SettingsRootCategoryContentStructureTest {
 
         val pinnedCardBlock = source
             .substringAfter("fun ReleaseChannelPinnedCard(")
-            .substringBefore("@Composable\nfun SettingsSubpageEntrySection(")
+            .substringBefore("@Composable\nfun FeedApiSection(")
 
         assertTrue(pinnedCardBlock.contains("modifier = Modifier.fillMaxWidth()"))
         assertTrue(pinnedCardBlock.contains("modifier = Modifier.weight(1f)"))

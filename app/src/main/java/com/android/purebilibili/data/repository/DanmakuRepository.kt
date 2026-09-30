@@ -979,18 +979,30 @@ object DanmakuRepository {
                 return@withContext Result.failure(Exception("无可用弹幕服务器"))
             }
             
-            // 2. 选择最佳服务器 (优先 wss, 默认 443 端口)
-            val bestHost = hosts.find { it.wss_port == 443 } 
-                ?: hosts.find { it.wss_port != 0 }
-                ?: hosts.first()
-                
-            val port = if (bestHost.wss_port != 0) bestHost.wss_port else bestHost.ws_port
-            val schema = if (bestHost.wss_port != 0) "wss" else "ws"
-            val webSocketUrl = "$schema://${bestHost.host}:$port/sub"
-            
-            com.android.purebilibili.core.util.Logger.d("DanmakuRepo", "🔗 Connecting to Live Danmaku: $webSocketUrl")
-            
-            if (webSocketUrl.isNotEmpty()) {
+            // Try the secure 443 endpoint first, then the remaining secure endpoints and
+            // finally plain WebSocket endpoints returned by the live service.
+            val orderedHosts = hosts.sortedWith(
+                compareBy<com.android.purebilibili.data.model.response.LiveDanmuHost> {
+                    when {
+                        it.wss_port == 443 -> 0
+                        it.wss_port != 0 -> 1
+                        it.ws_port != 0 -> 2
+                        else -> 3
+                    }
+                }
+            )
+            val webSocketUrls = orderedHosts.mapNotNull { host ->
+                val port = if (host.wss_port != 0) host.wss_port else host.ws_port
+                if (host.host.isBlank() || port == 0) null
+                else "${if (host.wss_port != 0) "wss" else "ws"}://${host.host}:$port/sub"
+            }.distinct()
+
+            com.android.purebilibili.core.util.Logger.d(
+                "DanmakuRepo",
+                "🔗 Connecting to live danmaku with ${webSocketUrls.size} server candidates"
+            )
+
+            if (webSocketUrls.isNotEmpty()) {
             val client = com.android.purebilibili.core.network.socket.LiveDanmakuClient(scope) // Removed onMessage and onPopularity as they are not defined in the original context
             
             // uid 与 token 必须同一账号；账号状态不完整时退回游客 uid=0，避免认证后强制断连
@@ -998,7 +1010,7 @@ object DanmakuRepository {
             val uid = if (hasSess) (com.android.purebilibili.core.store.TokenManager.midCache ?: 0L) else 0L
             com.android.purebilibili.core.util.Logger.d("DanmakuRepo", "🔌 Connecting with UID: $uid")
             
-            client.connect(webSocketUrl, token, realRoomId, uid)
+            client.connect(webSocketUrls, token, realRoomId, uid)
             // liveDanmakuClient = client // liveDanmakuClient is not defined in the original context
             Result.success(client)
         } else {

@@ -31,6 +31,9 @@ internal data class ContinuousPlayerHostLayout(
     val contentTopInset: Dp = 0.dp,
 )
 
+// 视口宽度 override 的量化步长：消费方策略全部断点式，量化后过渡期状态稳定。
+private const val VIEWPORT_WIDTH_OVERRIDE_QUANTIZE_STEP_DP = 16
+
 internal data class ContinuousPlayerFullscreenExtras(
     val danmakuComposerVisible: Boolean,
     val onDismissDanmakuComposer: () -> Unit,
@@ -261,7 +264,13 @@ internal fun PortraitInlineVideoPlayerHost(
                 isVerticalVideo = isVerticalVideo,
                 isPortraitFullscreen = isPortraitFullscreen,
                 viewportWidthDpOverride = if (animatedViewportWidth.isSpecified) {
-                    animatedViewportWidth.value.roundToInt().coerceAtLeast(1)
+                    // 消费方（播放器 UI/控制栏布局策略）全部是断点式档位；
+                    // 连续动画宽度若逐帧直传，会让 VideoPlayerSectionState 每帧
+                    // 失去 equals，过渡期间整段 section 反复重组。量化成 16dp 桶，
+                    // 档位切换点之外完全稳定。
+                    ((animatedViewportWidth.value.roundToInt() /
+                        VIEWPORT_WIDTH_OVERRIDE_QUANTIZE_STEP_DP) *
+                        VIEWPORT_WIDTH_OVERRIDE_QUANTIZE_STEP_DP).coerceAtLeast(1)
                 } else {
                     null
                 },

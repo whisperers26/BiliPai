@@ -581,6 +581,7 @@ sealed class VideoPlaybackUiState {
         val isFollowing: Boolean = false,
         val isFavorited: Boolean = false,
         val isLiked: Boolean = false,
+        val isDisliked: Boolean = false,
         val coinCount: Int = 0,
         val emoteMap: Map<String, String> = emptyMap(),
         val isInWatchLater: Boolean = false,  //  稍后再看状态
@@ -624,7 +625,9 @@ sealed class VideoPlaybackUiState {
         val subtitlePrimaryCues: List<SubtitleCue> = emptyList(),
         val subtitleSecondaryCues: List<SubtitleCue> = emptyList(),
         val ownerFollowerCount: Int? = null,
-        val ownerVideoCount: Int? = null
+        val ownerVideoCount: Int? = null,
+        // SponsorBlock 空降片段生成的标题徽标（如“赞助/恰饭”），空串表示不展示
+        val sponsorVideoLabel: String = ""
     ) : VideoPlaybackUiState() {
         val cdnCount: Int get() = allVideoUrls.size.coerceAtLeast(1)
         val currentCdnLabel: String get() = "线路${currentCdnIndex + 1}"
@@ -1364,6 +1367,13 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     
     // State
     private val _uiState = MutableStateFlow<VideoPlaybackUiState>(VideoPlaybackUiState.Loading.Initial)
+
+    private fun updateSponsorVideoLabel(segments: List<com.android.purebilibili.data.model.response.SponsorSegment>) {
+        val label = segments.resolveSponsorVideoLabel()
+        val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
+        if (current.sponsorVideoLabel == label) return
+        _uiState.value = current.copy(sponsorVideoLabel = label)
+    }
     val uiState = _uiState.asStateFlow()
 
     private val _subjectSnapshot = MutableStateFlow<VideoSubjectSnapshot?>(null)
@@ -5212,6 +5222,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             val favoriteDeferred = async { com.android.purebilibili.data.repository.ActionRepository.checkFavoriteStatus(aid) }
             val watchLaterDeferred = async { com.android.purebilibili.data.repository.ActionRepository.checkWatchLaterStatus(aid) }
             val likeDeferred = async { com.android.purebilibili.data.repository.ActionRepository.checkLikeStatus(aid) }
+            val dislikeDeferred = async { com.android.purebilibili.data.repository.ActionRepository.checkDislikeStatus(aid) }
             val coinDeferred = async { com.android.purebilibili.data.repository.ActionRepository.checkCoinStatus(aid) }
             val vipDeferred = async {
                 if (com.android.purebilibili.data.repository.VideoRepository.isPlaybackVip()) {
@@ -5228,6 +5239,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             val fetchedFavorite = favoriteDeferred.await()
             val fetchedWatchLater = watchLaterDeferred.await()
             val fetchedLike = likeDeferred.await()
+            val fetchedDislike = dislikeDeferred.await()
             val fetchedCoinCount = coinDeferred.await()
             val fetchedVip = vipDeferred.await()
 
@@ -5252,6 +5264,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         isFavorited = success.isFavorited || fetchedFavorite,
                         isInWatchLater = success.isInWatchLater || fetchedWatchLater,
                         isLiked = success.isLiked || fetchedLike,
+                        isDisliked = success.isDisliked || fetchedDislike,
                         coinCount = maxOf(success.coinCount, fetchedCoinCount),
                         followingMids = mergedFollowingMids
                     )
@@ -7748,6 +7761,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                                         plugin.onVideoLoad(loadedBvid, loadedCid)
                                         if (plugin is com.android.purebilibili.feature.plugin.SponsorBlockPlugin) {
                                             _sponsorProgressMarkers.value = plugin.getProgressMarkers()
+                                            updateSponsorVideoLabel(plugin.getSegments())
                                         }
                                     } catch (e: Exception) {
                                         Logger.e("PlayerVM", "Plugin ${plugin.name} onVideoLoad failed", e)
@@ -8435,6 +8449,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         } ?: return
         val indexRange = parseCdnByteRange(track.segmentBase?.indexRange) ?: return
         val context = appContext ?: return
+        // 蜂窝网络下不做后台整段预取：跳看的视频每跳一次就会预取一批新分段，
+        // 是「流量机制太激进」反馈的主要来源。正常播放的随播缓存不受影响。
+        if (!NetworkUtils.isWifi(context)) return
         val candidates = current.allVideoUrls.ifEmpty { listOf(current.playUrl) }
             .filter { it.isNotBlank() }
         if (candidates.isEmpty()) return

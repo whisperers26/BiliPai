@@ -772,6 +772,63 @@ object ActionRepository {
             }
         }
     }
+
+    /**
+     *  点踩/取消点踩视频（App 端接口，65007=已踩过、65005=未点踩过视为幂等成功）
+     */
+    suspend fun dislikeVideo(aid: Long, dislike: Boolean): Result<Boolean> {
+        return withContext(Dispatchers.IO) {
+            try {
+                if (TokenManager.sessDataCache.isNullOrEmpty()) {
+                    return@withContext Result.failure(Exception("请先登录"))
+                }
+
+                val csrf = TokenManager.csrfCache ?: ""
+                if (csrf.isEmpty()) {
+                    return@withContext Result.failure(Exception("请先登录"))
+                }
+                val dislikeAction = if (dislike) 0 else 1
+                val response = api.dislikeVideo(
+                    aid = aid,
+                    dislike = dislikeAction,
+                    csrf = csrf,
+                    accessKey = TokenManager.accessTokenCache
+                )
+                com.android.purebilibili.core.util.Logger.d("ActionRepository", " dislikeVideo: aid=$aid, dislike=$dislike, code=${response.code}")
+
+                when {
+                    response.code == 0 || response.code == 65007 || response.code == 65005 ->
+                        Result.success(dislike)
+                    response.code == -101 -> Result.failure(
+                        Exception("视频点踩需要 APP 鉴权，请先在登录页完成高画质（TV）鉴权登录")
+                    )
+                    else -> Result.failure(Exception(response.message.ifEmpty { "点踩失败: ${response.code}" }))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ActionRepository", "dislikeVideo failed", e)
+                Result.failure(e)
+            }
+        }
+    }
+
+    /**
+     *  检查是否已点踩（复用 archive/relation 的 dislike 字段）
+     */
+    suspend fun checkDislikeStatus(aid: Long): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = api.getVideoRelation(aid = aid)
+                if (response.code == 0) {
+                    response.data?.dislike ?: false
+                } else {
+                    false
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ActionRepository", "checkDislikeStatus failed", e)
+                false
+            }
+        }
+    }
     
     /**
      *  投币

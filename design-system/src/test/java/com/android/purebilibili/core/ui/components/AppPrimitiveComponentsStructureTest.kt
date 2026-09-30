@@ -25,6 +25,7 @@ class AppPrimitiveComponentsStructureTest {
         val source = loadSource()
 
         assertTrue(source.contains("fun AppButton("))
+        assertTrue(source.contains("resolveAppButtonContentPadding("))
         assertTrue(source.contains("colors: ButtonColors"))
         assertTrue(source.contains("fun AppTextButton("))
         assertTrue(source.contains("AppUiStyle.MIUIX -> AppMiuixButton("))

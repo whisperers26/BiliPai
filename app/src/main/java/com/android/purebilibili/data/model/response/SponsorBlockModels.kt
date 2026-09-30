@@ -34,6 +34,22 @@ object SponsorCategory {
         INTRO, OUTRO, PREVIEW, PADDING, FILLER, MUSIC_OFFTOPIC
     )
     
+    /** PiliPlus 同款标题徽标文案（完整 title），仅用于视频详情标题前缀。 */
+    fun getSponsorVideoLabelTitle(category: String): String = when (category) {
+        SPONSOR -> "赞助/恰饭"
+        SELFPROMO -> "无偿/自我推广"
+        EXCLUSIVE_ACCESS -> "独家访问/抢先体验"
+        INTERACTION -> "三连/互动提醒"
+        POI_HIGHLIGHT -> "精彩时刻/重点"
+        INTRO -> "过场/开场动画"
+        OUTRO -> "鸣谢/结束画面"
+        PREVIEW -> "回顾/概要"
+        PADDING -> "填充内容/前黑/后黑"
+        FILLER -> "离题闲聊/玩笑"
+        MUSIC_OFFTOPIC -> "音乐:非音乐部分"
+        else -> getCategoryName(category)
+    }
+
     fun getCategoryName(category: String): String = when (category) {
         SPONSOR -> "广告/恰饭"
         SELFPROMO -> "自我推广"
@@ -48,6 +64,17 @@ object SponsorCategory {
         MUSIC_OFFTOPIC -> "音乐：非音乐部分"
         else -> category
     }
+}
+
+/**
+ * 视频标题前的赞助/恰饭徽标文案：按出现顺序取视频空降片段的去重类别 title，用 "/" 连接。
+ * 无片段时返回空串，表示不展示徽标。
+ */
+fun List<SponsorSegment>.resolveSponsorVideoLabel(): String {
+    if (isEmpty()) return ""
+    val titles = LinkedHashSet<String>()
+    forEach { segment -> titles += SponsorCategory.getSponsorVideoLabelTitle(segment.category) }
+    return titles.joinToString("/")
 }
 
 /**

@@ -1,6 +1,8 @@
 // 文件路径: feature/video/ui/components/VideoSettingsPanel.kt
 package com.android.purebilibili.feature.video.ui.components
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.motion.folmeExpandEnterTransition
+import com.android.purebilibili.core.ui.motion.folmeExpandExitTransition
 import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
@@ -1242,8 +1244,8 @@ fun VideoSettingsPanel(
                     // 仅当开启时显示秒数选项
                     AnimatedVisibility(
                         visible = doubleTapSeekEnabled,
-                        enter = expandVertically() + fadeIn(),
-                        exit = shrinkVertically() + fadeOut()
+                        enter = folmeExpandEnterTransition(useMiuixNonGlassPresentation),
+                        exit = folmeExpandExitTransition(useMiuixNonGlassPresentation)
                     ) {
                         Column(modifier = Modifier.padding(horizontal = customSectionHorizontalPadding)) {
                             Spacer(modifier = Modifier.height(customTitleToOptionsGap))

@@ -177,6 +177,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.net.URI
 import java.net.URLEncoder
@@ -867,6 +868,9 @@ open class MainActivity : AppCompatActivity() {
     private var hasCompletedInitialResume = false
     private var splashFlyoutEnabledAtCreate = false
     private var splashExitCallbackTriggered = false
+
+    /** TTFD 是否已上报（只上报一次）。 */
+    private var ttfdReported = false
     private var systemInDarkThemeSnapshot by mutableStateOf(false)
     private var runtimeJankStats: JankStats? = null
     private val runtimeVisualGuardSession = Any()
@@ -1333,6 +1337,7 @@ open class MainActivity : AppCompatActivity() {
             val colorSpec = appThemeSettings.colorSpec
             val themeColorIndex = appThemeSettings.themeColorIndex
             val appFontSizePreset = appThemeSettings.appFontSizePreset
+            val appFontWeightPreset = appThemeSettings.appFontWeightPreset
             val appFontFileName = appThemeSettings.appFontFileName
             val appUiScalePreset = appThemeSettings.appUiScalePreset
             val appDpiOverridePercent = appThemeSettings.appDpiOverridePercent
@@ -1483,6 +1488,7 @@ open class MainActivity : AppCompatActivity() {
                 colorStyle = colorStyle,
                 colorSpec = colorSpec,
                 fontSizePreset = appFontSizePreset,
+                appFontWeightPreset = appFontWeightPreset,
                 appFontFileName = appFontFileName,
                 appIconStyle = appThemeSettings.appIconStyle,
                 appListItemStyle = appThemeSettings.appListItemStyle,
@@ -1717,10 +1723,14 @@ open class MainActivity : AppCompatActivity() {
                             )
                         }
                     }
-                    //  小窗播放器覆盖层 (非 PiP 模式下显示)
-                    if (playbackOverlayState.showMiniPlayerOverlay) {
+                    //  小窗播放器覆盖层 (非 PiP 模式下显示；PIP 期间保持挂载但内容
+                    //  为空占位，避免退出 PIP 时重放飞入动画)
+                    if (playbackOverlayState.showMiniPlayerOverlay ||
+                        playbackOverlayState.showDedicatedPipPlayer
+                    ) {
                         MiniPlayerOverlay(
                             miniPlayerManager = miniPlayerManager,
+                            suppressContentForPip = playbackOverlayState.showDedicatedPipPlayer,
                             onPictureInPictureClick = if (
                                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
                                 miniPlayerManager.shouldEnterPip()
@@ -2283,9 +2293,25 @@ open class MainActivity : AppCompatActivity() {
         super.onStop()
     }
 
+    /**
+     * 📈 向系统上报 TTFD：以首屏（首页）数据就绪为准，最多等 5 秒兜底。
+     * 供 Perfetto trace、宏基准 TTFD 断言与 Play Vitals 启动指标使用；只在首次 resume 后上报一次。
+     */
+    private fun maybeReportFullyDrawn() {
+        if (ttfdReported) return
+        ttfdReported = true
+        lifecycleScope.launch {
+            withTimeoutOrNull(5_000L) {
+                while (!VideoRepository.isHomeDataReady()) delay(50)
+            }
+            runCatching { reportFullyDrawn() }
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         if (startupRecoveryRedirected) return
+        maybeReportFullyDrawn()
         refreshAndroid17HandoffAvailability()
         refreshSystemThemeSnapshot(reason = "resume")
         miniPlayerManager.clearUserLeaveHint()
@@ -2374,6 +2400,10 @@ open class MainActivity : AppCompatActivity() {
                             player = miniPlayerManager.player
                         )
                     )
+                    // 从小窗当前位置无缝收缩进 PIP，而不是从全屏默认收缩
+                    .apply {
+                        miniPlayerManager.miniPlayerSourceBoundsPx?.let { setSourceRectHint(it) }
+                    }
                 
                 // Android 12+: 启用自动进入和无缝调整
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -2411,6 +2441,7 @@ open class MainActivity : AppCompatActivity() {
                     )
                 )
                 .apply {
+                    miniPlayerManager.miniPlayerSourceBoundsPx?.let { setSourceRectHint(it) }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         setSeamlessResizeEnabled(true)
                     }

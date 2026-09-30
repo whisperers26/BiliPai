@@ -7,17 +7,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.feature.home.components.BottomBarMatchedReusableLiquidDock
 import com.android.purebilibili.feature.home.components.resolveFloatingDockGeometryScale
 import top.yukonga.miuix.kmp.blur.Backdrop
 
-/**
- * Standard search field that shares the floating Dock geometry while liquid glass is enabled.
- * The caller owns the horizontal inset so adjacent search and segmented rows can share one edge.
- */
+/** Native search input with an optional liquid glass surface behind it. */
 @Composable
 fun AppLiquidAwareSearchField(
     query: String,
@@ -49,6 +46,7 @@ fun AppLiquidAwareSearchField(
         AppSearchField(
             query = query,
             onQueryChange = onQueryChange,
+            modifier = Modifier.fillMaxWidth(),
             placeholder = placeholder,
             onSearch = onSearch,
             onClear = onClear,
@@ -61,13 +59,6 @@ fun AppLiquidAwareSearchField(
             } else {
                 Color.Unspecified
             },
-            shapeOverride = CircleShape.takeIf { liquidChromeActive },
-            heightOverride = if (liquidChromeActive) {
-                AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp.dp
-            } else {
-                null
-            },
-            modifier = Modifier.fillMaxWidth(),
         )
     }
 }

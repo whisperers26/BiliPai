@@ -65,6 +65,9 @@ class LiveDanmakuClient(
     
     // 当前连接参数
     private var currentHostUrl: String = ""
+    private var initialHostUrls: List<String> = emptyList()
+    private var initialHostIndex: Int = 0
+    private var hasConnectedOnce: Boolean = false
     private var currentAuthBody: String = ""
     private var suppressReconnect: Boolean = false
 
@@ -88,6 +91,7 @@ class LiveDanmakuClient(
         override fun onOpen(webSocket: WebSocket, response: Response) {
             Log.d(TAG, "🟢 WebSocket Connected: $currentHostUrl")
             _isConnected.set(true)
+            hasConnectedOnce = true
             retryCount = 0 // 重置重连计数
             suppressReconnect = false
             connectionHealth = markLiveDanmakuConnected(connectionHealth, clockMs())
@@ -139,6 +143,13 @@ class LiveDanmakuClient(
      * @param roomId 真实房间 ID
      */
     fun connect(url: String, token: String, roomId: Long, uid: Long = 0) {
+        connect(listOf(url), token, roomId, uid)
+    }
+
+    /** Tries each server from the API response until one opens, then reconnects that host normally. */
+    fun connect(urls: List<String>, token: String, roomId: Long, uid: Long = 0) {
+        val candidates = urls.filter(String::isNotBlank).distinct()
+        if (candidates.isEmpty()) return
         // 构建认证包 JSON
         val authJson = JSONObject().apply {
             put("uid", uid) // 使用传入的真实 UID (未登录为 0)
@@ -149,7 +160,10 @@ class LiveDanmakuClient(
             put("key", token)
         }
         
-        this.currentHostUrl = url
+        this.initialHostUrls = candidates
+        this.initialHostIndex = 0
+        this.hasConnectedOnce = false
+        this.currentHostUrl = candidates.first()
         this.currentAuthBody = authJson.toString()
 
         reconnectJob?.cancel()
@@ -277,7 +291,15 @@ class LiveDanmakuClient(
      */
     private fun scheduleReconnect() {
         if (reconnectJob?.isActive == true) return
-        
+
+        if (!hasConnectedOnce && initialHostIndex + 1 < initialHostUrls.size) {
+            initialHostIndex += 1
+            currentHostUrl = initialHostUrls[initialHostIndex]
+            Log.w(TAG, "Initial server failed; trying $currentHostUrl")
+            internalConnect()
+            return
+        }
+
         reconnectJob = scope.launch {
             val delayMs = min(1000.0 * 2.0.pow(retryCount), MAX_RETRY_DELAY.toDouble()).toLong()
             Log.d(TAG, "🔄 Reconnecting in ${delayMs}ms (Attempt ${retryCount + 1})...")

@@ -147,6 +147,17 @@ class FeedDocumentParserTest {
         assertEquals(listOf("https://a.example/feed", "https://b.example/atom.xml"), imported.map { it.url })
         assertEquals("甲站", imported.first().title)
         assertEquals(2, parseSubscriptionImport("https://a.example/rss\nhttps://b.example/atom.xml\nnot-a-url").size)
+
+        val opml = buildSubscriptionOpml(
+            listOf(
+                SavedSubscriptionFeed(id = "1", title = "甲\"站\"<&>", url = "https://a.example/feed?a=1&b=2"),
+                SavedSubscriptionFeed(id = "2", title = "", url = "https://b.example/atom.xml", enabled = false),
+            ),
+        )
+        val roundTrip = parseSubscriptionImport(opml)
+        assertEquals(listOf("https://a.example/feed?a=1&b=2", "https://b.example/atom.xml"), roundTrip.map { it.url })
+        assertEquals("甲\"站\"<&>", roundTrip.first().title)
+        assertEquals("https://b.example/atom.xml", roundTrip.last().title)
     }
 
     @Test

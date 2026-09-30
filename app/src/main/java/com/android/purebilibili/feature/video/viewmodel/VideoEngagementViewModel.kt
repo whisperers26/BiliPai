@@ -31,6 +31,7 @@ data class VideoEngagementSeed(
     val isFollowing: Boolean = false,
     val isFavorited: Boolean = false,
     val isLiked: Boolean = false,
+    val isDisliked: Boolean = false,
     val likeCount: Int = 0,
     val coinCount: Int = 0,
     val favoriteCount: Int = 0,
@@ -45,6 +46,7 @@ data class VideoEngagementUiState(
     val isFollowing: Boolean = false,
     val isFavorited: Boolean = false,
     val isLiked: Boolean = false,
+    val isDisliked: Boolean = false,
     val likeCount: Int = 0,
     val coinCount: Int = 0,
     val favoriteCount: Int = 0,
@@ -93,6 +95,7 @@ private val DefaultVideoCoinBalanceLoader = VideoCoinBalanceLoader {
 interface VideoEngagementActions {
     suspend fun toggleFollow(mid: Long, currentlyFollowing: Boolean): Result<Boolean>
     suspend fun toggleLike(aid: Long, currentlyLiked: Boolean, bvid: String): Result<Boolean>
+    suspend fun toggleDislike(aid: Long, currentlyDisliked: Boolean, bvid: String): Result<Boolean>
     suspend fun toggleFavorite(aid: Long, currentlyFavorited: Boolean, bvid: String): Result<Boolean>
     suspend fun toggleWatchLater(aid: Long, currentlyInWatchLater: Boolean, bvid: String): Result<Boolean>
     suspend fun doCoin(aid: Long, count: Int, alsoLike: Boolean, bvid: String): Result<Boolean>
@@ -107,6 +110,9 @@ private class DefaultVideoEngagementActions(
 
     override suspend fun toggleLike(aid: Long, currentlyLiked: Boolean, bvid: String) =
         useCase.toggleLike(aid, currentlyLiked, bvid)
+
+    override suspend fun toggleDislike(aid: Long, currentlyDisliked: Boolean, bvid: String) =
+        useCase.toggleDislike(aid, currentlyDisliked, bvid)
 
     override suspend fun toggleFavorite(aid: Long, currentlyFavorited: Boolean, bvid: String) =
         useCase.toggleFavorite(aid, currentlyFavorited, bvid)
@@ -136,6 +142,7 @@ class VideoEngagementViewModel(
         FOLLOWING,
         FAVORITE,
         LIKE,
+        DISLIKE,
         COIN,
         WATCH_LATER,
         FOLLOWING_MIDS
@@ -158,6 +165,7 @@ class VideoEngagementViewModel(
             isFollowing = seed.isFollowing,
             isFavorited = seed.isFavorited,
             isLiked = seed.isLiked,
+            isDisliked = seed.isDisliked,
             likeCount = seed.likeCount,
             coinCount = seed.coinCount,
             favoriteCount = seed.favoriteCount,
@@ -175,6 +183,7 @@ class VideoEngagementViewModel(
                 isFavorited = if (VideoEngagementField.FAVORITE in locallyModifiedFields) current.isFavorited else seed.isFavorited,
                 favoriteCount = if (VideoEngagementField.FAVORITE in locallyModifiedFields) current.favoriteCount else seed.favoriteCount,
                 isLiked = if (VideoEngagementField.LIKE in locallyModifiedFields) current.isLiked else seed.isLiked,
+                isDisliked = if (VideoEngagementField.DISLIKE in locallyModifiedFields) current.isDisliked else seed.isDisliked,
                 likeCount = if (VideoEngagementField.LIKE in locallyModifiedFields) current.likeCount else seed.likeCount,
                 coinCount = if (VideoEngagementField.COIN in locallyModifiedFields) current.coinCount else seed.coinCount,
                 isInWatchLater = if (VideoEngagementField.WATCH_LATER in locallyModifiedFields) current.isInWatchLater else seed.isInWatchLater,
@@ -243,11 +252,14 @@ class VideoEngagementViewModel(
             actions.toggleLike(targetAid, wasLiked, targetBvid)
                 .onSuccess { liked ->
                     if (_uiState.value.subject?.generation != state.subject?.generation) return@onSuccess
-                    locallyModifiedFields = locallyModifiedFields + VideoEngagementField.LIKE
+                    locallyModifiedFields = locallyModifiedFields + VideoEngagementField.LIKE +
+                        if (liked) setOf(VideoEngagementField.DISLIKE) else emptySet()
                     _uiState.update { current ->
                         if (current.subject?.generation != state.subject?.generation) current
                         else current.copy(
                             isLiked = liked,
+                            // 点赞与点踩互斥：点赞时本地静默清除点踩（对齐 PiliPlus）
+                            isDisliked = if (liked) false else current.isDisliked,
                             likeCount = (current.likeCount + if (liked == current.isLiked) 0 else if (liked) 1 else -1)
                                 .coerceAtLeast(0),
                             likeBurstVisible = liked
@@ -259,6 +271,40 @@ class VideoEngagementViewModel(
                         if (liked && easterEggEnabled) EasterEggs.getLikeMessage()
                         else if (liked) "已点赞" else "已取消点赞"
                     )
+                }
+                .onFailure { emitMessage(it.message ?: "操作失败") }
+        }
+    }
+
+    fun toggleDislike(
+        aid: Long? = null,
+        bvid: String? = null,
+        currentlyDisliked: Boolean? = null
+    ) {
+        val state = _uiState.value
+        val targetAid = aid ?: state.subject?.aid ?: return
+        val targetBvid = bvid ?: state.subject?.bvid ?: return
+        val wasDisliked = currentlyDisliked ?: state.isDisliked
+        viewModelScope.launch {
+            actions.toggleDislike(targetAid, wasDisliked, targetBvid)
+                .onSuccess { disliked ->
+                    if (_uiState.value.subject?.generation != state.subject?.generation) return@onSuccess
+                    locallyModifiedFields = locallyModifiedFields + VideoEngagementField.DISLIKE +
+                        if (disliked) setOf(VideoEngagementField.LIKE) else emptySet()
+                    _uiState.update { current ->
+                        if (current.subject?.generation != state.subject?.generation) current
+                        else current.copy(
+                            isDisliked = disliked,
+                            // 点踩与点赞互斥：点踩时本地静默取消点赞（对齐 PiliPlus）
+                            isLiked = if (disliked) false else current.isLiked,
+                            likeCount = if (disliked && current.isLiked) {
+                                (current.likeCount - 1).coerceAtLeast(0)
+                            } else {
+                                current.likeCount
+                            }
+                        )
+                    }
+                    emitMessage(if (disliked) "已点踩" else "已取消点踩")
                 }
                 .onFailure { emitMessage(it.message ?: "操作失败") }
         }
@@ -318,12 +364,13 @@ class VideoEngagementViewModel(
                 .onSuccess {
                     if (_uiState.value.subject?.generation != subject.generation) return@onSuccess
                     locallyModifiedFields = locallyModifiedFields + VideoEngagementField.COIN +
-                        if (alsoLike) setOf(VideoEngagementField.LIKE) else emptySet()
+                        if (alsoLike) setOf(VideoEngagementField.LIKE, VideoEngagementField.DISLIKE) else emptySet()
                     _uiState.update { current ->
                         if (current.subject?.generation != subject.generation) current
                         else current.copy(
                             coinCount = minOf(current.coinCount + count, 2),
-                            isLiked = current.isLiked || alsoLike
+                            isLiked = current.isLiked || alsoLike,
+                            isDisliked = if (alsoLike) false else current.isDisliked
                         )
                     }
                     val easterEggEnabled = appContext?.let(SettingsManager::isEasterEggEnabledSync) == true
@@ -362,6 +409,8 @@ class VideoEngagementViewModel(
                         if (current.subject?.generation != state.subject?.generation) current
                         else current.copy(
                             isLiked = visual.isLiked,
+                            // 三连含点赞，点踩态随之清除（对齐 PiliPlus）
+                            isDisliked = if (visual.isLiked) false else current.isDisliked,
                             likeCount = (
                                 current.likeCount +
                                     if (visual.isLiked == current.isLiked) 0 else if (visual.isLiked) 1 else -1
@@ -376,7 +425,10 @@ class VideoEngagementViewModel(
                         )
                     }
                     locallyModifiedFields = locallyModifiedFields + buildSet {
-                        if (result.likeSuccess) add(VideoEngagementField.LIKE)
+                        if (result.likeSuccess) {
+                            add(VideoEngagementField.LIKE)
+                            add(VideoEngagementField.DISLIKE)
+                        }
                         if (result.coinSuccess) add(VideoEngagementField.COIN)
                         if (result.favoriteSuccess) add(VideoEngagementField.FAVORITE)
                     }
@@ -437,6 +489,7 @@ internal fun VideoPlaybackUiState.Success.toEngagementSeed(): VideoEngagementSee
         isFollowing = isFollowing,
         isFavorited = isFavorited,
         isLiked = isLiked,
+        isDisliked = isDisliked,
         likeCount = info.stat.like,
         coinCount = coinCount,
         favoriteCount = info.stat.favorite,
@@ -453,6 +506,7 @@ internal fun VideoPlaybackUiState.Success.withEngagementUiState(
         isFollowing = engagement.isFollowing,
         isFavorited = engagement.isFavorited,
         isLiked = engagement.isLiked,
+        isDisliked = engagement.isDisliked,
         coinCount = engagement.coinCount,
         isInWatchLater = engagement.isInWatchLater,
         followingMids = engagement.followingMids,

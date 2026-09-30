@@ -209,7 +209,8 @@ object DynamicModulesFlexibleSerializer : KSerializer<DynamicModules> {
                         module_stat = parsed.module_stat ?: merged.module_stat,
                         module_fold = parsed.module_fold ?: merged.module_fold,
                         module_tag = parsed.module_tag ?: merged.module_tag,
-                        module_dispute = parsed.module_dispute ?: merged.module_dispute
+                        module_dispute = parsed.module_dispute ?: merged.module_dispute,
+                        module_interaction = parsed.module_interaction ?: merged.module_interaction
                     )
 
                     val moduleType = obj["module_type"]?.jsonPrimitive?.contentOrNull.orEmpty()
@@ -790,7 +791,21 @@ data class DynamicModules(
     // 置顶标记（text == "置顶" 时置顶）
     val module_tag: DynamicTagModule? = null,
     // 违规/风险提示条
-    val module_dispute: DynamicDisputeModule? = null
+    val module_dispute: DynamicDisputeModule? = null,
+    // 互动条（UP主点赞/相关评论提示）
+    val module_interaction: DynamicInteractionModule? = null
+)
+
+@Serializable
+data class DynamicInteractionModule(
+    val items: List<DynamicInteractionItem> = emptyList()
+)
+
+@Serializable
+data class DynamicInteractionItem(
+    /** 1 = 相关评论（评论图标），其他值 = UP主点赞等（点赞图标）。 */
+    val type: Int = 0,
+    val desc: DynamicDesc? = null
 )
 
 @Serializable
@@ -929,6 +944,9 @@ data class DynamicAuthorModule(
     val pub_time: String = "", // "昨天 18:00"
     @Serializable(with = FlexibleLongSerializer::class)
     val pub_ts: Long = 0, // 时间戳
+    // 动作描述："投稿了视频" / "发布了图文" / "直播中" 等
+    @SerialName("pub_action")
+    val pub_action: String = "",
     @Serializable(with = FlexibleBooleanSerializer::class)
     val following: Boolean? = null,
     val official_verify: DynamicOfficialVerify? = null,
@@ -1065,7 +1083,32 @@ data class DynamicAdditionalVote(
 data class DynamicAdditionalMatch(
     val title: String = "",
     val sub_title: String = "",
-    val jump_url: String = ""
+    val jump_url: String = "",
+    @SerialName("match_info")
+    val matchInfo: DynamicMatchInfo? = null
+)
+
+@Serializable
+data class DynamicMatchInfo(
+    val title: String = "",
+    @Serializable(with = FlexibleStringSerializer::class)
+    val sub_title: String = "",
+    @SerialName("center_top")
+    val centerTop: List<String> = emptyList(),
+    @SerialName("center_bottom")
+    val centerBottom: String = "",
+    @SerialName("left_team")
+    val leftTeam: DynamicMatchTeam? = null,
+    @SerialName("right_team")
+    val rightTeam: DynamicMatchTeam? = null
+)
+
+@Serializable
+data class DynamicMatchTeam(
+    val name: String = "",
+    val pic: String = "",
+    val score: String = "",
+    val id: Long = 0
 )
 
 @Serializable

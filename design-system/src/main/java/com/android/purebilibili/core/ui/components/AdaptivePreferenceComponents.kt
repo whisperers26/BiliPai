@@ -5,9 +5,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Clear
@@ -24,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,11 +43,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.input.ImeAction
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.theme.LocalDynamicColorActive
@@ -206,17 +202,19 @@ internal fun resolveAdaptiveListRowVisualSpec(
     liquidGlassEnabled: Boolean = true,
 ): AdaptiveListRowVisualSpec {
     val chromeTokens = resolveAndroidNativeChromeTokens(uiStyle)
+    // 两种预设统一到各自官方规格的最小公分母：Miuix BasicComponentDefaults.InsideMargin
+    // 与 M3 ListItem 默认水平内边距均为 16dp，避免出现"自成一派"的第三方间距。
     return if (uiStyle == AppUiStyle.MIUIX) {
         AdaptiveListRowVisualSpec(
             insideHorizontalPaddingDp = 16,
-            insideVerticalPaddingDp = 14,
+            insideVerticalPaddingDp = 16,
             trailingIconSizeDp = 14,
             trailingSpacingDp = 6,
             minTouchTargetHeightDp = 48
         )
     } else {
         AdaptiveListRowVisualSpec(
-            insideHorizontalPaddingDp = 18,
+            insideHorizontalPaddingDp = 16,
             insideVerticalPaddingDp = 16,
             trailingIconSizeDp = 16,
             trailingSpacingDp = 8,
@@ -875,7 +873,7 @@ fun AdaptiveSliderPreferenceRenderer(
             }
         }
         Spacer(modifier = Modifier.height(12.dp))
-        Slider(
+        AppSlider(
             value = value,
             onValueChange = onValueChange,
             valueRange = valueRange,
@@ -1358,7 +1356,7 @@ internal fun AdaptivePreferenceContent(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = onClick != null) { onClick?.invoke() }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = rowSpec.insideHorizontalPaddingDp.dp, vertical = rowSpec.insideVerticalPaddingDp.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = if (centered) Arrangement.Center else Arrangement.Start
     ) {
@@ -1569,16 +1567,14 @@ fun AdaptivePreferenceGridItemRenderer(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun AdaptiveSearchFieldRenderer(
     query: String,
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "搜索",
     containerColor: Color = Color.Unspecified,
-    shapeOverride: Shape? = null,
-    heightOverride: Dp? = null,
     forceExpandedInput: Boolean = false,
-    topBarChrome: Boolean = false,
     onSearch: () -> Unit = {},
     onClear: () -> Unit = { onQueryChange("") },
     showClearAction: Boolean = true,
@@ -1588,249 +1584,91 @@ fun AdaptiveSearchFieldRenderer(
     leadingIconHorizontalOffset: Dp = 0.dp,
 ) {
     val uiStyle = LocalAppUiStyle.current
-    val colorScheme = MaterialTheme.colorScheme
-    val visualSpec = rememberAdaptiveListComponentVisualSpec()
-    val searchBarCornerRadius = visualSpec.searchBarCornerRadiusDp.dp
-    val searchBarShape = shapeOverride ?: RoundedCornerShape(searchBarCornerRadius)
-    val resolvedContainerColor = resolveAdaptiveSearchBarContainerOverride(
-        requestedColor = containerColor,
-        defaultColor = resolveAdaptiveSearchBarContainerColor(
-            uiStyle = uiStyle,
-            colorScheme = colorScheme,
-            globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
-        ),
-    )
-    val resolvedHeight = heightOverride ?: visualSpec.searchBarHeightDp.dp
+    val miuixContainerColor = if (containerColor == Color.Unspecified) {
+        MiuixTheme.colorScheme.surfaceContainerHigh
+    } else {
+        containerColor
+    }
+    val resolvedFocusRequester = focusRequester ?: remember { FocusRequester() }
+    LaunchedEffect(resolvedFocusRequester, autoFocusEnabled) {
+        if (autoFocusEnabled) {
+            delay(80)
+            runCatching { resolvedFocusRequester.requestFocus() }
+        }
+    }
+    val fieldModifier = modifier
+        .fillMaxWidth()
+        .focusRequester(resolvedFocusRequester)
 
-    if (forceExpandedInput) {
-        val fallbackFocusRequester = remember { FocusRequester() }
-        val resolvedFocusRequester = focusRequester ?: fallbackFocusRequester
-        LaunchedEffect(resolvedFocusRequester, autoFocusEnabled) {
-            if (autoFocusEnabled) {
-                delay(80)
-                runCatching { resolvedFocusRequester.requestFocus() }
+    if (uiStyle == AppUiStyle.MIUIX) {
+        MiuixAdaptiveSearchBar(
+            query = query,
+            onQueryChange = onQueryChange,
+            modifier = fieldModifier,
+            placeholder = placeholder,
+            containerColor = miuixContainerColor,
+            height = rememberAdaptiveListComponentVisualSpec().searchBarHeightDp.dp,
+            forceExpandedInput = forceExpandedInput,
+            onSearch = onSearch,
+            interactionSource = interactionSource,
+        )
+    } else {
+        // 现行 SearchBar API：TextFieldState 驱动文本，SearchBarState 驱动展开。
+        // 与外部 query: String 状态双向同步，外部写（如清除按钮）与内部输入互不回环。
+        val searchBarState = rememberSearchBarState()
+        val textFieldState = rememberTextFieldState(initialText = query)
+        LaunchedEffect(textFieldState) {
+            snapshotFlow { textFieldState.text }
+                .collect { text ->
+                    val updated = text.toString()
+                    if (updated != query) {
+                        onQueryChange(updated)
+                    }
+                }
+        }
+        LaunchedEffect(query) {
+            val current = textFieldState.text.toString()
+            if (current != query) {
+                textFieldState.edit { replace(0, length, query) }
             }
         }
-        val focusModifier = Modifier.focusRequester(resolvedFocusRequester)
-        if (shouldUseNativeMiuixSearchBar(uiStyle) && leadingIconHorizontalOffset == 0.dp) {
-            MiuixAdaptiveSearchBar(
-                query = query,
-                onQueryChange = onQueryChange,
-                modifier = modifier.then(focusModifier),
-                placeholder = placeholder,
-                containerColor = resolvedContainerColor,
-                height = resolvedHeight,
-                forceExpandedInput = true,
-                onSearch = onSearch,
-                interactionSource = interactionSource,
-            )
-            return
-        }
-        // 顶栏固定高度不能用 OutlinedTextField：默认 contentPadding 会把字裁掉（平板尤其明显）。
-        // 用 BasicTextField + 可选聚焦描边，保证 44–56dp 内文字完整可见。
-        if (topBarChrome) {
-            val textStyle = MaterialTheme.typography.bodyLarge
-            val resolvedInteraction = interactionSource ?: remember { MutableInteractionSource() }
-            val isFocused by resolvedInteraction.collectIsFocusedAsState()
-            val fieldShape = searchBarShape
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                modifier = modifier
-                    .fillMaxWidth()
-                    .height(resolvedHeight)
-                    .clip(fieldShape)
-                    .background(resolvedContainerColor, fieldShape)
-                    .then(
-                        if (isFocused) {
-                            Modifier.border(
-                                width = 1.5.dp,
-                                color = MaterialTheme.colorScheme.primary,
-                                shape = fieldShape,
-                            )
-                        } else {
-                            Modifier
-                        }
-                    )
-                    .then(focusModifier),
-                textStyle = textStyle.copy(color = MaterialTheme.colorScheme.onSurface),
-                singleLine = true,
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-                interactionSource = resolvedInteraction,
-                decorationBox = { innerTextField ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 12.dp),
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.CenterStart,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            if (query.isEmpty()) {
-                                Text(
-                                    text = placeholder,
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    style = textStyle,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            innerTextField()
-                        }
-                        if (showClearAction && query.isNotEmpty()) {
-                            IconButton(
-                                onClick = onClear,
-                                modifier = Modifier.size(28.dp),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Clear,
-                                    contentDescription = "Clear",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        }
-                    }
-                },
-            )
-            return
-        }
-        val textStyle = MaterialTheme.typography.bodyMedium
-        val sizeModifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = resolvedHeight)
-        OutlinedTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            modifier = modifier
-                .then(sizeModifier)
-                .then(focusModifier),
+        SearchBarDefaults.InputField(
+            textFieldState = textFieldState,
+            searchBarState = searchBarState,
+            onSearch = { onSearch() },
+            modifier = fieldModifier,
             placeholder = {
-                Text(
-                    text = placeholder,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    style = textStyle,
-                )
+                Text(placeholder)
             },
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Default.Search,
+                    Icons.Default.Search,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.padding(start = leadingIconHorizontalOffset),
                 )
             },
             trailingIcon = if (showClearAction && query.isNotEmpty()) {
                 {
                     IconButton(onClick = onClear) {
-                        Icon(
-                            imageVector = Icons.Default.Clear,
-                            contentDescription = "Clear",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp),
-                        )
+                        Icon(Icons.Default.Clear, contentDescription = "清除搜索内容")
                     }
                 }
+            } else null,
+            colors = if (containerColor == Color.Unspecified) {
+                SearchBarDefaults.inputFieldColors()
             } else {
-                null
-            },
-            singleLine = true,
-            textStyle = textStyle.copy(
-                color = MaterialTheme.colorScheme.onSurface,
-            ),
-            shape = searchBarShape,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent,
-                disabledBorderColor = Color.Transparent,
-                focusedContainerColor = resolvedContainerColor,
-                unfocusedContainerColor = resolvedContainerColor,
-                disabledContainerColor = resolvedContainerColor,
-            ),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-            interactionSource = interactionSource,
-        )
-        return
-    }
-
-    if (shouldUseNativeMiuixSearchBar(uiStyle) && leadingIconHorizontalOffset == 0.dp) {
-        MiuixAdaptiveSearchBar(
-            query = query,
-            onQueryChange = onQueryChange,
-            modifier = modifier,
-            placeholder = placeholder,
-            containerColor = resolvedContainerColor,
-            height = resolvedHeight,
-            forceExpandedInput = forceExpandedInput,
-            onSearch = { onSearch() },
-            interactionSource = interactionSource,
-        )
-        return
-    }
-
-    BasicTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(resolvedHeight)
-            .clip(searchBarShape)
-            .background(resolvedContainerColor, searchBarShape),
-        textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-        singleLine = true,
-        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-        interactionSource = interactionSource,
-        decorationBox = { innerTextField ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .padding(start = leadingIconHorizontalOffset)
-                        .size(18.dp)
+                SearchBarDefaults.inputFieldColors(
+                    focusedContainerColor = containerColor,
+                    unfocusedContainerColor = containerColor,
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.weight(1f)) {
-                    if (query.isEmpty()) {
-                        Text(
-                            text = placeholder,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    innerTextField()
-                }
-                if (showClearAction && query.isNotEmpty()) {
-                    IconButton(
-                        onClick = onClear,
-                        modifier = Modifier.size(20.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Clear,
-                            contentDescription = "Clear",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-        }
-    )
+            },
+            interactionSource = interactionSource,
+        )
+    }
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun AppSearchEntry(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1838,41 +1676,50 @@ fun AppSearchEntry(
     containerColor: Color = Color.Unspecified,
 ) {
     val uiStyle = LocalAppUiStyle.current
-    val colorScheme = MaterialTheme.colorScheme
-    val visualSpec = rememberAdaptiveListVisualCapabilities().componentSpec
-    val resolvedContainerColor = resolveAdaptiveSearchBarContainerOverride(
-        requestedColor = containerColor,
-        defaultColor = resolveAdaptiveSearchBarContainerColor(
-            uiStyle = uiStyle,
-            colorScheme = colorScheme,
-            globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current,
-        ),
-    )
-    val contentColor = AppSurfaceTokens.searchContent()
-    val cornerRadius = visualSpec.searchBarCornerRadiusDp.dp
-    val searchIcon = Icons.Default.Search
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .defaultMinSize(minHeight = visualSpec.searchBarHeightDp.dp)
-            .clip(RoundedCornerShape(cornerRadius))
-            .background(resolvedContainerColor)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = searchIcon,
-            contentDescription = null,
-            tint = contentColor,
-            modifier = Modifier.size(18.dp),
+    val miuixContainerColor = if (containerColor == Color.Unspecified) {
+        MiuixTheme.colorScheme.surfaceContainerHigh
+    } else {
+        containerColor
+    }
+    if (uiStyle == AppUiStyle.MIUIX) {
+        InputField(
+            query = "",
+            onQueryChange = {},
+            onSearch = { onClick() },
+            expanded = false,
+            onExpandedChange = { if (it) onClick() },
+            modifier = modifier.fillMaxWidth(),
+            label = placeholder,
+            color = miuixContainerColor,
         )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = placeholder,
-            style = MaterialTheme.typography.bodyMedium,
-            color = contentColor,
+    } else {
+        // 现行 SearchBar API：静态入口无文本，点击/聚焦触发展开时导航并立即收起。
+        val searchBarState = rememberSearchBarState()
+        val textFieldState = rememberTextFieldState(initialText = "")
+        LaunchedEffect(searchBarState, onClick) {
+            snapshotFlow { searchBarState.currentValue }
+                .collect { value ->
+                    if (value == SearchBarValue.Expanded) {
+                        onClick()
+                        searchBarState.animateToCollapsed()
+                    }
+                }
+        }
+        SearchBarDefaults.InputField(
+            textFieldState = textFieldState,
+            searchBarState = searchBarState,
+            onSearch = { onClick() },
+            modifier = modifier.fillMaxWidth(),
+            placeholder = { Text(placeholder) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            colors = if (containerColor == Color.Unspecified) {
+                SearchBarDefaults.inputFieldColors()
+            } else {
+                SearchBarDefaults.inputFieldColors(
+                    focusedContainerColor = containerColor,
+                    unfocusedContainerColor = containerColor,
+                )
+            },
         )
     }
 }

@@ -249,7 +249,7 @@ fun IconSettingsContent(
                             .clip(AppShapes.container(ContainerLevel.Dialog))
                             .clickable {
                                 if (!isSelected) {
-                                    Toast.makeText(context, "正在切换图标...", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "正在切换图标…", Toast.LENGTH_SHORT).show()
                                     viewModel.setAppIcon(option.key)
                                 }
                             }

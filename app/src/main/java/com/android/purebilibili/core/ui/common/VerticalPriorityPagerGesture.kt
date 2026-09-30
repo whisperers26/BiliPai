@@ -69,10 +69,10 @@ internal fun resolveVerticalPriorityPagerGestureDirection(
             PagerGestureDirection.UNDECIDED
         }
     }
-    if (verticalDistance >= horizontalDistance) return PagerGestureDirection.VERTICAL
 
-    // A slightly horizontal diagonal gets a short grace distance to clarify intent. Clear
-    // horizontal and vertical gestures do not pay this extra threshold.
+    // 竖向与斜向共用同一条意图宽限距离：手指落下时的自然竖向漂移若立即锁死
+    // VERTICAL，横滑切页会在手势开头就被吞掉（不可逆），表现为「左右滑切不动
+    // 评论」。超过宽限后，非横向主导的位移一律归属竖向内容。
     val ambiguousDirectionSlop = systemTouchSlop *
         ambiguousDirectionSlopMultiplier.coerceAtLeast(1f)
     return if (totalDistanceSquared < ambiguousDirectionSlop * ambiguousDirectionSlop) {

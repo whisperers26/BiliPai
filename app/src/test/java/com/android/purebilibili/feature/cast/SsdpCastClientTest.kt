@@ -9,6 +9,12 @@ import org.junit.Test
 class SsdpCastClientTest {
 
     @Test
+    fun `cast poll interval drops to background cadence only while backgrounded`() {
+        assertEquals(1_000L, resolveCastPlaybackPollIntervalMs(isInBackground = false))
+        assertEquals(5_000L, resolveCastPlaybackPollIntervalMs(isInBackground = true))
+    }
+
+    @Test
     fun `parseAvTransportEndpoint resolves relative control URL`() {
         val descriptionXml = """
             <?xml version="1.0"?>

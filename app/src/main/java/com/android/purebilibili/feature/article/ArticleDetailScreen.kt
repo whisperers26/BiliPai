@@ -72,6 +72,7 @@ private data class ArticleImagePreviewRequest(
     val images: List<String>,
     val initialIndex: Int,
     val sourceRect: Rect?,
+    val sourceRects: Map<Int, Rect>,
     val sourceCornerRadiusDp: Float
 )
 
@@ -218,6 +219,16 @@ private fun ArticleDetailContent(
     val bodyImageSourceRects = remember(article.blocks) {
         mutableStateMapOf<Int, Rect>()
     }
+    fun currentPreviewSourceRects(): Map<Int, Rect> = buildMap {
+        if (hasBannerImage) bannerSourceRect?.let { put(0, it) }
+        var pageIndex = bodyImageIndexOffset
+        article.blocks.forEachIndexed { blockIndex, block ->
+            if (block is ArticleContentBlock.Image) {
+                bodyImageSourceRects[blockIndex]?.let { put(pageIndex, it) }
+                pageIndex++
+            }
+        }
+    }
     var imagePreviewRequest by remember(article.bannerUrl, article.blocks) {
         mutableStateOf<ArticleImagePreviewRequest?>(null)
     }
@@ -232,6 +243,7 @@ private fun ArticleDetailContent(
                 images = previewImages,
                 initialIndex = 0,
                 sourceRect = bannerSourceRect,
+                sourceRects = currentPreviewSourceRects(),
                 sourceCornerRadiusDp = ARTICLE_BANNER_CORNER_RADIUS_DP
             )
         }
@@ -343,28 +355,63 @@ private fun ArticleDetailContent(
         itemsIndexed(article.blocks, key = { index, _ -> index }) { index, block ->
             when (block) {
                 is ArticleContentBlock.Heading -> {
-                    AppText(
-                        text = block.text,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    if (block.spans.isEmpty()) {
+                        AppText(
+                            text = block.text,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    } else {
+                        AppText(
+                            text = buildArticleAnnotatedString(
+                                spans = block.spans,
+                                defaultColor = MaterialTheme.colorScheme.onSurface,
+                                baseFontSize = MaterialTheme.typography.titleLarge.fontSize
+                            ),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
 
                 is ArticleContentBlock.Paragraph -> {
-                    AppText(
-                        text = block.text,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    if (block.spans.isEmpty()) {
+                        AppText(
+                            text = block.text,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    } else {
+                        AppText(
+                            text = buildArticleAnnotatedString(
+                                spans = block.spans,
+                                defaultColor = MaterialTheme.colorScheme.onSurface,
+                                baseFontSize = MaterialTheme.typography.bodyLarge.fontSize
+                            ),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
                 }
 
                 is ArticleContentBlock.Quote -> {
-                    AppText(
-                        text = block.text,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 12.dp)
-                    )
+                    if (block.spans.isEmpty()) {
+                        AppText(
+                            text = block.text,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 12.dp)
+                        )
+                    } else {
+                        AppText(
+                            text = buildArticleAnnotatedString(
+                                spans = block.spans,
+                                defaultColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                baseFontSize = MaterialTheme.typography.bodyLarge.fontSize
+                            ),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(start = 12.dp)
+                        )
+                    }
                 }
 
                 is ArticleContentBlock.ListBlock -> {
@@ -427,6 +474,7 @@ private fun ArticleDetailContent(
                                     images = previewImages,
                                     initialIndex = payload.initialIndex + bodyImageIndexOffset,
                                     sourceRect = bodyImageSourceRects[index],
+                                    sourceRects = currentPreviewSourceRects(),
                                     sourceCornerRadiusDp = ARTICLE_BODY_IMAGE_CORNER_RADIUS_DP
                                 )
                             },
@@ -442,6 +490,7 @@ private fun ArticleDetailContent(
             images = request.images,
             initialIndex = request.initialIndex,
             sourceRect = request.sourceRect,
+            sourceRects = request.sourceRects,
             sourceCornerRadiusDp = request.sourceCornerRadiusDp,
             onDismiss = { imagePreviewRequest = null }
         )

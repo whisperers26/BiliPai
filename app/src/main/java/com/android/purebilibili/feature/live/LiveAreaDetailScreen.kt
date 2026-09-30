@@ -245,6 +245,7 @@ fun LiveAreaDetailScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
         val liveAreaBackdrop = rememberLayerBackdrop()
+        val topContentPadding = innerPadding.calculateTopPadding() + AppSpacingTokens.Small
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -262,13 +263,19 @@ fun LiveAreaDetailScreen(
                     contentPadding = PaddingValues(
                         start = metrics.safeSpaceDp.dp,
                         end = metrics.safeSpaceDp.dp,
-                        top = AppSpacingTokens.Small,
+                        top = topContentPadding,
                         bottom = LocalBottomBarContentPadding.current,
                     ),
                     spacing = metrics.cardSpaceDp.dp,
                 )
-                error != null -> LiveAreaDetailState(error.orEmpty(), Modifier.weight(1f))
-                rooms.isEmpty() -> LiveAreaDetailState("暂无该标签直播", Modifier.weight(1f))
+                error != null -> LiveAreaDetailState(
+                    error.orEmpty(),
+                    Modifier.weight(1f).padding(top = innerPadding.calculateTopPadding()),
+                )
+                rooms.isEmpty() -> LiveAreaDetailState(
+                    "暂无该标签直播",
+                    Modifier.weight(1f).padding(top = innerPadding.calculateTopPadding()),
+                )
                 else -> LazyVerticalGrid(
                     columns = GridCells.Fixed(gridColumns),
                     state = gridState,
@@ -279,7 +286,7 @@ fun LiveAreaDetailScreen(
                     contentPadding = PaddingValues(
                         start = metrics.safeSpaceDp.dp,
                         end = metrics.safeSpaceDp.dp,
-                        top = AppSpacingTokens.Small,
+                        top = topContentPadding,
                         bottom = LocalBottomBarContentPadding.current,
                     ),
                     horizontalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp),

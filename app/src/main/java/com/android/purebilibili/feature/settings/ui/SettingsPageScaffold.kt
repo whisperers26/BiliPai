@@ -167,6 +167,8 @@ internal fun SettingsPageScaffold(
         hasBackdrop = true,
     ) && !lowBlurBudget
     val fadeActive = appThemeConfig.progressiveTopFadeEnabled && !headerBlurEnabled
+    // Keep this backdrop in the scaffold chrome. The scroll content is its source,
+    // so passing it into a search dock inside that content would create a render-layer cycle.
     val backdrop = if (progressiveBlurEnabled) rememberLayerBackdrop() else null
     val hazeState = if (
         headerBlurEnabled && !lowBlurBudget &&

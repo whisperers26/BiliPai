@@ -58,6 +58,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import com.android.purebilibili.core.util.responsiveContentWidth
 // [重构] 使用提取的可复用组件
 import com.android.purebilibili.feature.bangumi.ui.detail.RatingRow
+import com.android.purebilibili.feature.bangumi.ui.detail.rememberBangumiEpisodeProgressLookup
 import com.android.purebilibili.feature.bangumi.ui.detail.FollowButton
 import com.android.purebilibili.feature.bangumi.ui.detail.SeasonSelector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -569,6 +570,7 @@ private fun TabletBangumiDetailContent(
                      items(displayedEpisodes, key = { it.id }) { episode ->
                          EpisodeChip(
                                 episode = episode,
+                                progressFraction = rememberBangumiEpisodeProgressLookup()(episode),
                                 onClick = { onEpisodeClick(episode) }
                          )
                      }
@@ -589,6 +591,7 @@ private fun TabletBangumiDetailContent(
                          items(section.episodes.orEmpty(), key = { it.id }) { episode ->
                              EpisodeChip(
                                  episode = episode,
+                                 progressFraction = rememberBangumiEpisodeProgressLookup()(episode),
                                  onClick = { onEpisodeClick(episode) }
                              )
                          }
@@ -1002,9 +1005,15 @@ private fun MobileBangumiDetailContent(
                 )
             }
             
-            // 简介
+            // 简介（折叠：默认 3 行省略，点击展开/收起）
             if (detail.evaluate.isNotEmpty()) {
                 item {
+                    var isEvaluateExpanded by remember(detail.seasonId) {
+                        mutableStateOf(false)
+                    }
+                    var isEvaluateOverflowing by remember(detail.seasonId) {
+                        mutableStateOf(false)
+                    }
                     Column(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
@@ -1017,7 +1026,15 @@ private fun MobileBangumiDetailContent(
                         AppText(
                             text = detail.evaluate,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyMedium
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = if (isEvaluateExpanded) Int.MAX_VALUE else 3,
+                            overflow = TextOverflow.Ellipsis,
+                            onTextLayout = { isEvaluateOverflowing = it.hasVisualOverflow },
+                            modifier = Modifier.clickable(
+                                enabled = isEvaluateOverflowing || isEvaluateExpanded
+                            ) {
+                                isEvaluateExpanded = !isEvaluateExpanded
+                            }
                         )
                     }
                 }
@@ -1168,10 +1185,11 @@ private fun MobileBangumiDetailContent(
                         items(previewEpisodes, key = { it.id }) { episode ->
                             EpisodeChip(
                                 episode = episode,
+                                progressFraction = rememberBangumiEpisodeProgressLookup()(episode),
                                 onClick = { onEpisodeClick(episode) }
                             )
                         }
-                        
+
                         // 更多按钮
                         if (detail.episodes.size > 6) {
                             item {
@@ -1467,6 +1485,7 @@ private fun BangumiSectionPreview(
             items(episodes.take(20), key = { it.id }) { episode ->
                 EpisodeChip(
                     episode = episode,
+                    progressFraction = rememberBangumiEpisodeProgressLookup()(episode),
                     onClick = { onEpisodeClick(episode) }
                 )
             }
@@ -1524,6 +1543,7 @@ private fun BangumiFollowStatusDialog(
 @Composable
 private fun EpisodeChip(
     episode: BangumiEpisode,
+    progressFraction: Float? = null,
     onClick: () -> Unit
 ) {
     //  带封面图的设计，集数和标题在同一行
@@ -1563,6 +1583,24 @@ private fun EpisodeChip(
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
                             color = badgeColors.contentColor,
                             style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+
+                // 单集观看进度条
+                if (progressFraction != null && progressFraction > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(2.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
+                                .fillMaxHeight()
+                                .background(MaterialTheme.colorScheme.primary)
                         )
                     }
                 }
@@ -1774,6 +1812,7 @@ private fun EpisodeSelectionSheet(
                     val episode = displayEpisodes[index]
                     EpisodeListItem(
                         episode = episode,
+                        progressFraction = rememberBangumiEpisodeProgressLookup()(episode),
                         onClick = { onEpisodeClick(episode) }
                     )
                 }
@@ -1788,6 +1827,7 @@ private fun EpisodeSelectionSheet(
 @Composable
 private fun EpisodeListItem(
     episode: BangumiEpisode,
+    progressFraction: Float? = null,
     onClick: () -> Unit
 ) {
     Row(
@@ -1810,7 +1850,25 @@ private fun EpisodeListItem(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
-            
+
+            // 单集观看进度条
+            if (progressFraction != null && progressFraction > 0f) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
+                            .fillMaxHeight()
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
+            }
+
             // VIP 角标
             if (episode.badge.isNotEmpty()) {
                 val badgeColors = resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
@@ -1837,15 +1895,26 @@ private fun EpisodeListItem(
         Column(
             modifier = Modifier.weight(1f)
         ) {
-            // 集数
-            AppText(
-                text = "第${episode.title}话",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
-            )
-            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // 集数
+                AppText(
+                    text = "第${episode.title}话",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (episode.duration > 0L) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    AppText(
+                        text = FormatUtils.formatDuration((episode.duration / 1000L).toInt()),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             // 标题
             if (episode.longTitle.isNotEmpty()) {
                 AppText(

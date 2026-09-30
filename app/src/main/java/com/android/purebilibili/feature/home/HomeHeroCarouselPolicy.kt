@@ -164,10 +164,20 @@ internal fun resolveHomeHeroCarouselCardTransform(
 ): HomeHeroCarouselCardTransform {
     val clampedOffset = pageOffset.coerceIn(-1f, 1f)
     val distance = kotlin.math.abs(clampedOffset)
-    val baseScale = 1f - distance * 0.04f
+    val baseScale = 1f - distance * 0.10f
     val pressMultiplier = 1f - pressedProgress.coerceIn(0f, 1f) * 0.02f
     val scale = baseScale * pressMultiplier
-    val alpha = 1f - distance * 0.08f
+    val alpha = (1f - distance * 0.20f).coerceAtLeast(0.35f)
+
+    // Cover-flow 折角：侧卡绕自身内缘向中心旋转，配合透视相机构成弧形展台。
+    val rotationY = (-clampedOffset * 26f).coerceIn(-40f, 40f)
+    val pivotFractionX = when {
+        clampedOffset < 0f -> 0f // 右侧卡绕左缘（内缘）旋转
+        clampedOffset > 0f -> 1f // 左侧卡绕右缘（内缘）旋转
+        else -> 0.5f
+    }
+    // 向中心聚拢：pageOffset>0 为左邻卡（右移），<0 为右邻卡（左移）。
+    val translationXFraction = kotlin.math.sign(clampedOffset) * 0.04f * distance
 
     // Parallax: inner content shifts opposite to gesture by 8% of card width for tactile depth.
     // Content scale: expands content by 16% at max offset so bounds never expose behind parallax shift.
@@ -183,13 +193,13 @@ internal fun resolveHomeHeroCarouselCardTransform(
         (1f - pressedProgress.coerceIn(0f, 1f) * 0.3f)) * 0.35f
 
     return HomeHeroCarouselCardTransform(
-        rotationY = 0f,
+        rotationY = rotationY,
         rotationZ = 0f,
         scale = scale,
         alpha = alpha,
-        cameraDistanceMultiplier = 8f,
-        translationXFraction = 0f,
-        pivotFractionX = 0.5f,
+        cameraDistanceMultiplier = 10f,
+        translationXFraction = translationXFraction,
+        pivotFractionX = pivotFractionX,
         zIndex = 1f - distance * 0.01f,
         contentParallaxFraction = contentParallaxFraction,
         contentScale = contentScale,

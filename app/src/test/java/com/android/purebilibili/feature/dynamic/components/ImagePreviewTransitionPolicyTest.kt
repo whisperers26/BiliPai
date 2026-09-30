@@ -78,6 +78,44 @@ class ImagePreviewTransitionPolicyTest {
     }
 
     @Test
+    fun resolveImagePreviewPresentedCornerRadius_lerpsCircularSourceWithoutOvershoot() {
+        // 圆形源（头像）：半径等于短边一半，回位过程中圆角始终被钳在 [0, source] 区间
+        val circleRadius = 40f
+        for (progress in listOf(0f, 0.25f, 0.5f, 0.75f, 1f)) {
+            val corner = resolveImagePreviewPresentedCornerRadiusDp(
+                visualProgress = progress,
+                verticalDragProgress = 0f,
+                hasSourceRect = true,
+                sourceCornerRadiusDp = circleRadius,
+            )
+            assertTrue(corner >= 0f && corner <= circleRadius, "corner out of range at $progress: $corner")
+        }
+        assertEquals(0f, resolveImagePreviewPresentedCornerRadiusDp(
+            visualProgress = 1f,
+            verticalDragProgress = 0f,
+            hasSourceRect = true,
+            sourceCornerRadiusDp = circleRadius,
+        ))
+        assertEquals(circleRadius, resolveImagePreviewPresentedCornerRadiusDp(
+            visualProgress = 0f,
+            verticalDragProgress = 0f,
+            hasSourceRect = true,
+            sourceCornerRadiusDp = circleRadius,
+        ))
+    }
+
+    @Test
+    fun resolveImagePreviewPresentedCornerRadius_verticalDragNeverGoesBelowMorphCorner() {
+        val corner = resolveImagePreviewPresentedCornerRadiusDp(
+            visualProgress = 1f,
+            verticalDragProgress = 0.6f,
+            hasSourceRect = true,
+            sourceCornerRadiusDp = 10f,
+        )
+        assertTrue(corner > 0f, "dragging back from fullscreen should reveal source corner")
+    }
+
+    @Test
     fun resolveImagePreviewTransitionFrame_usesZeroCornerWhenNoSourceRect() {
         val frame = resolveImagePreviewTransitionFrame(
             rawProgress = 0.5f,

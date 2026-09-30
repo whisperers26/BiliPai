@@ -59,6 +59,7 @@ import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppWindowAction
 import com.android.purebilibili.core.ui.rememberAppCommentIcon
 import com.android.purebilibili.feature.live.LiveDanmakuItem
+import com.android.purebilibili.feature.live.LiveChatMessage
 import com.android.purebilibili.feature.live.LiveStatusPalette
 import com.android.purebilibili.feature.live.rememberLiveChromePalette
 import com.android.purebilibili.feature.live.resolveLiveMedalBadgeVisualSpec
@@ -84,7 +85,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 internal fun LivePortraitChatStream(
-    messages: List<LiveDanmakuItem>,
+    messages: List<LiveChatMessage>,
     danmakuSequence: Long = 0L,
     superChatCount: Int = 0,
     onOpenSuperChat: (() -> Unit)? = null,
@@ -180,21 +181,42 @@ internal fun LivePortraitChatStream(
                 ),
                 contentPadding = PaddingValues(vertical = AppSpacingTokens.ExtraSmall)
             ) {
-                items(
-                    items = messages,
-                    key = { item ->
-                        if (item.idStr.isNotBlank()) item.idStr
-                        else "${item.uid}_${item.text}_${item.reportTs}_${System.identityHashCode(item)}"
-                    }
-                ) { item ->
+                items(items = messages, key = { it.sequence }) { message ->
                     LivePortraitDanmakuBubble(
-                        item = item,
+                        item = message.item,
                         hazeState = hazeState,
                         onUserClick = onUserClick,
                         onAtUser = onAtUser,
                         onBlockUser = onBlockUser,
                         onReportDanmaku = onReportDanmaku,
+                        onOpenSuperChat = { onOpenSuperChat?.invoke() },
                         onMenuVisibilityChange = { isAnyMenuOpen = it }
+                    )
+                }
+            }
+        }
+
+        if (messages.isNotEmpty() && onOpenHistory != null) {
+            AppSurface(
+                onClick = onOpenHistory,
+                shape = AppShapes.container(ContainerLevel.Pill),
+                color = LiveStatusPalette.MediaScrim.copy(alpha = 0.68f),
+                contentColor = LiveStatusPalette.MediaContent,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = AppSpacingTokens.ExtraSmall, top = AppSpacingTokens.ExtraSmall)
+                    .semantics { contentDescription = "查看完整聊天记录" },
+            ) {
+                Box(
+                    modifier = Modifier
+                        .heightIn(min = 32.dp)
+                        .padding(horizontal = AppSpacingTokens.Small),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppText(
+                        text = "完整聊天",
+                        color = LiveStatusPalette.MediaContent,
+                        style = MaterialTheme.typography.labelSmall,
                     )
                 }
             }
@@ -292,7 +314,7 @@ internal fun LivePortraitChatPreview(
     onReportDanmaku: (LiveDanmakuItem) -> Unit = {},
 ) {
     LivePortraitChatStream(
-        messages = messages,
+        messages = messages.mapIndexed { index, item -> LiveChatMessage(index.toLong(), item) },
         superChatCount = superChatCount,
         onOpenSuperChat = onOpenSuperChat,
         onUserClick = onUserClick,
@@ -314,10 +336,15 @@ private fun LivePortraitDanmakuBubble(
     onAtUser: (LiveDanmakuItem) -> Unit,
     onBlockUser: (LiveDanmakuItem) -> Unit,
     onReportDanmaku: (LiveDanmakuItem) -> Unit,
+    onOpenSuperChat: () -> Unit,
     onMenuVisibilityChange: (Boolean) -> Unit,
 ) {
     if (item.isSuperChat) {
-        LivePortraitSuperChatBubble(item = item, hazeState = hazeState)
+        LivePortraitSuperChatBubble(
+            item = item,
+            hazeState = hazeState,
+            onClick = onOpenSuperChat,
+        )
         return
     }
     if (!shouldRenderLiveDanmaku(item.text, item.emoticonUrl)) {
@@ -511,13 +538,16 @@ private fun LivePortraitMedalBadge(
 @Composable
 private fun LivePortraitSuperChatBubble(
     item: LiveDanmakuItem,
-    hazeState: HazeState?
+    hazeState: HazeState?,
+    onClick: () -> Unit,
 ) {
     val bg = resolveLiveSuperChatColor(item.superChatBackgroundColor)
     AppSurface(
         color = bg.copy(alpha = 0.88f),
         shape = AppShapes.container(ContainerLevel.Card),
-        modifier = Modifier.padding(vertical = 2.dp)
+        modifier = Modifier
+            .padding(vertical = 2.dp)
+            .clickable(onClickLabel = "查看醒目留言", onClick = onClick)
     ) {
         Column(
             modifier = Modifier.padding(horizontal = AppSpacingTokens.Medium, vertical = AppSpacingTokens.Small),

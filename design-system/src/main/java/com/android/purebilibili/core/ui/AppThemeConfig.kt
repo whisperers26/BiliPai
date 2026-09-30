@@ -4,6 +4,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.blur.BlurIntensity
@@ -53,10 +56,24 @@ fun resolveAppChromeMaterial(
 
 val LocalAppThemeConfig = staticCompositionLocalOf { AppThemeConfig() }
 
+private object DisabledAppHapticFeedback : HapticFeedback {
+    override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) = Unit
+}
+
 @Composable
 fun ProvideAppThemeConfig(
     config: AppThemeConfig,
     content: @Composable () -> Unit,
 ) {
-    CompositionLocalProvider(LocalAppThemeConfig provides config, content = content)
+    CompositionLocalProvider(LocalAppThemeConfig provides config) {
+        val platformHaptic = LocalHapticFeedback.current
+        CompositionLocalProvider(
+            LocalHapticFeedback provides if (config.hapticFeedbackEnabled) {
+                platformHaptic
+            } else {
+                DisabledAppHapticFeedback
+            },
+            content = content,
+        )
+    }
 }

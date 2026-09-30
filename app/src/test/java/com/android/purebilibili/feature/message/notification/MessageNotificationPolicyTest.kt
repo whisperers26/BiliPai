@@ -42,6 +42,15 @@ class MessageNotificationPolicyTest {
     }
 
     @Test
+    fun residentPollDropsToIdleFloorOnlyWhenScreenOffAndDischarging() {
+        assertEquals(60_000L, resolveResidentPollDelayMs(MessageNotificationMode.MORE_TIMELY, screenOn = true, charging = false))
+        assertEquals(60_000L, resolveResidentPollDelayMs(MessageNotificationMode.MORE_TIMELY, screenOn = false, charging = true))
+        assertEquals(120_000L, resolveResidentPollDelayMs(MessageNotificationMode.POWER_SAVING, screenOn = true, charging = true))
+        assertEquals(RESIDENT_IDLE_POLL_MS, resolveResidentPollDelayMs(MessageNotificationMode.MORE_TIMELY, screenOn = false, charging = false))
+        assertEquals(RESIDENT_IDLE_POLL_MS, resolveResidentPollDelayMs(MessageNotificationMode.POWER_SAVING, screenOn = false, charging = false))
+    }
+
+    @Test
     fun privateMessagesRespectReadStateMutingSenderAndSessionIdentity() {
         val message = SessionItem(talker_id = 9, unread_count = 1, last_msg = SessionMessage(sender_uid = 9, msg_key = 100))
         val sessions = listOf(

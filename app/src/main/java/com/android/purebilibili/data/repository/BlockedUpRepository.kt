@@ -282,6 +282,21 @@ class BlockedUpRepository(
     context: Context,
     private val api: BilibiliApi = NetworkModule.api
 ) {
+    companion object {
+        @Volatile
+        private var sharedInstance: BlockedUpRepository? = null
+
+        /**
+         * 列表项（评论/相关视频）滚动组合用的共享实例：每项新建仓库会重复打开
+         * 数据库帮助类，fling 时是新 item 首次组合的主要开销。
+         */
+        fun getInstance(context: Context): BlockedUpRepository =
+            sharedInstance ?: synchronized(this) {
+                sharedInstance ?: BlockedUpRepository(context.applicationContext)
+                    .also { sharedInstance = it }
+            }
+    }
+
     private val blockedUpDao = AppDatabase.getDatabase(context).blockedUpDao()
 
     fun getAllBlockedUps(): Flow<List<BlockedUp>> = blockedUpDao.getAllBlockedUps()

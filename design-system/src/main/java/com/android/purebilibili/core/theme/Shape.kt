@@ -12,7 +12,20 @@ import androidx.compose.ui.unit.dp
  */
 val LocalCornerRadiusScale = staticCompositionLocalOf { 1f }
 
-val Md3Shapes = Shapes()
+/**
+ * Material 3 形状槽位,与 [resolveAndroidNativeChromeTokens] 的容器 24dp / 胶囊 28dp 对齐:
+ * - large 16→24:内容卡与 chrome 容器共用同一套圆角语言;
+ * - medium 12→16:中层容器(视频详情语义形状、代码块等)跟随 expressive 尺度;
+ * - small/extraSmall 保持官方默认,避免输入框、芯片等紧凑控件观感回退;
+ * - extraLarge 28 与胶囊 token 一致。
+ */
+val Md3Shapes = Shapes(
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(28.dp)
+)
 
 val MiuixAlignedShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),

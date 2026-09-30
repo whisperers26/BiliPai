@@ -197,7 +197,11 @@ internal fun AicuScreen(
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).imePadding(), contentAlignment = Alignment.TopCenter) {
-            Column(Modifier.widthIn(max = 840.dp).fillMaxSize()) {
+            Column(
+                Modifier
+                    .widthIn(max = com.android.purebilibili.core.util.resolveSingleColumnFeedMaxWidth())
+                    .fillMaxSize()
+            ) {
                 if (state.consent == AicuConsentState.CHECKING) {
                     Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { AdaptiveLoadingIndicator() }
                 } else if (state.consent == AicuConsentState.ERROR) {
@@ -327,7 +331,7 @@ private fun AicuCategoryTabs(category: AicuCategory, liquidEnabled: Boolean, onS
                 tapPressRefractionEnabled = true,
             )
         } else {
-            AppNativeTabRow(options, category, onSelectionChange = onSelect, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            AppNativeTabRow(options, category, onSelectionChange = onSelect, indicatorPresentation = AppTabRowIndicatorPresentation.TONAL_PILL, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 scrollable = maxWidth < 360.dp || fontScale > 1.3f, allowLabelOverflow = true, minTabWidth = 96.dp)
         }
     }

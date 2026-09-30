@@ -93,6 +93,13 @@ internal fun shouldShowCreatorTeamSection(info: ViewInfo): Boolean {
     return info.staff.isNotEmpty()
 }
 
+/** 恰饭徽标超过该字数时改为标题上方独立一行，避免挤压标题。 */
+private const val SPONSOR_LABEL_INLINE_MAX_LENGTH = 10
+
+internal fun shouldStackSponsorLabelAboveTitle(label: String): Boolean {
+    return label.length > SPONSOR_LABEL_INLINE_MAX_LENGTH
+}
+
 internal fun shouldEmphasizePrecisePublishTime(
     partitionName: String,
     title: String
@@ -128,7 +135,8 @@ internal fun resolvePublishTimeRowText(
         )
         "发布时间 $relativeText  ·  $preciseText"
     } else {
-        "发布于 $relativeText"
+        // PiliPlus 直接展示格式化时间，不加“发布于”前缀
+        relativeText
     }
 }
 

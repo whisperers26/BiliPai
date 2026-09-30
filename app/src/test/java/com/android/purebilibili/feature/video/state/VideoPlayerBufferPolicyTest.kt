@@ -50,4 +50,33 @@ class VideoPlayerBufferPolicyTest {
             )
         )
     }
+
+    @Test
+    fun missingMediaPeriodStillLimitsEarlyBufferToAvoidEntryBurst() {
+        // prepare 一开始 period 未就绪（mediaPeriodId == null）也必须限流，
+        // 否则进详情即按 maxBuffer 全力预缓冲
+        assertTrue(
+            shouldLimitEarlyPlaybackBufferForPeriod(
+                hasKnownMediaPeriod = false,
+                playbackPositionUs = 0L,
+                mediaPeriodDurationUs = -1L
+            )
+        )
+        // 有 period 且时长未知（直播等）维持常规策略，不强限
+        assertTrue(
+            !shouldLimitEarlyPlaybackBufferForPeriod(
+                hasKnownMediaPeriod = true,
+                playbackPositionUs = 0L,
+                mediaPeriodDurationUs = -1L
+            )
+        )
+        // 有 period 的普通点播按前 1/4 规则
+        assertTrue(
+            shouldLimitEarlyPlaybackBufferForPeriod(
+                hasKnownMediaPeriod = true,
+                playbackPositionUs = 59_999_999L,
+                mediaPeriodDurationUs = 240_000_000L
+            )
+        )
+    }
 }

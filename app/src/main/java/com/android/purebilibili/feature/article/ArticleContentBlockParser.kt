@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -11,9 +12,18 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 sealed interface ArticleContentBlock {
-    data class Heading(val text: String) : ArticleContentBlock
-    data class Paragraph(val text: String) : ArticleContentBlock
-    data class Quote(val text: String) : ArticleContentBlock
+    data class Heading(
+        val text: String,
+        val spans: List<ArticleTextSpan> = emptyList()
+    ) : ArticleContentBlock
+    data class Paragraph(
+        val text: String,
+        val spans: List<ArticleTextSpan> = emptyList()
+    ) : ArticleContentBlock
+    data class Quote(
+        val text: String,
+        val spans: List<ArticleTextSpan> = emptyList()
+    ) : ArticleContentBlock
     data class ListBlock(
         val ordered: Boolean,
         val items: List<String>
@@ -28,6 +38,19 @@ sealed interface ArticleContentBlock {
         val height: Int = 0
     ) : ArticleContentBlock
 }
+
+/**
+ * 行内富文本片段：保留专栏正文里的字号、颜色、加粗、斜体、删除线。
+ * 空字段表示沿用外层块级样式。
+ */
+data class ArticleTextSpan(
+    val text: String,
+    val fontSizeSp: Int? = null,
+    val colorArgb: Long? = null,
+    val bold: Boolean = false,
+    val italic: Boolean = false,
+    val strikethrough: Boolean = false
+)
 
 private const val ARTICLE_HEADING_FONT_SIZE = 22
 
@@ -76,14 +99,14 @@ private fun parseStructuredParagraph(paragraph: JsonObject): List<ArticleContent
 
 private fun extractLegacyOrTextBlocks(paragraph: JsonObject): List<ArticleContentBlock> {
     val blocks = mutableListOf<ArticleContentBlock>()
-    extractInlineText(paragraph["heading"]).takeIf { it.isNotBlank() }?.let {
-        blocks += ArticleContentBlock.Heading(it)
+    extractInlineRich(paragraph["heading"]).takeIf { it.text.isNotBlank() }?.let {
+        blocks += ArticleContentBlock.Heading(it.text, it.spans)
     }
-    extractInlineText(paragraph["text"]).takeIf { it.isNotBlank() }?.let { text ->
+    extractInlineRich(paragraph["text"]).takeIf { it.text.isNotBlank() }?.let { rich ->
         blocks += if (maxFontSize(paragraph["text"]) >= ARTICLE_HEADING_FONT_SIZE) {
-            ArticleContentBlock.Heading(text)
+            ArticleContentBlock.Heading(rich.text, rich.spans)
         } else {
-            ArticleContentBlock.Paragraph(text)
+            ArticleContentBlock.Paragraph(rich.text, rich.spans)
         }
     }
     blocks += extractImages(paragraph)
@@ -92,9 +115,9 @@ private fun extractLegacyOrTextBlocks(paragraph: JsonObject): List<ArticleConten
 }
 
 private fun extractQuote(paragraph: JsonObject): List<ArticleContentBlock> {
-    val text = extractInlineText(paragraph["text"])
-    if (text.isBlank()) return emptyList()
-    return listOf(ArticleContentBlock.Quote(text))
+    val rich = extractInlineRich(paragraph["text"])
+    if (rich.text.isBlank()) return emptyList()
+    return listOf(ArticleContentBlock.Quote(rich.text, rich.spans))
 }
 
 private fun extractList(paragraph: JsonObject): List<ArticleContentBlock> {
@@ -170,6 +193,80 @@ private fun extractLineImage(paragraph: JsonObject): List<ArticleContentBlock> {
 private fun extractInlineText(element: JsonElement?): String = extractNodesText(
     runCatching { element?.jsonObject?.get("nodes") }.getOrNull()
 )
+
+internal data class InlineRichText(val text: String, val spans: List<ArticleTextSpan>)
+
+private val emptyInlineRich = InlineRichText("", emptyList())
+
+/** 结构化段落的行内富文本：同时产出纯文本（兜底）与带样式的 span 列表。 */
+private fun extractInlineRich(element: JsonElement?): InlineRichText {
+    val nodes = runCatching { element?.jsonObject?.get("nodes")?.jsonArray }.getOrNull()
+        ?: return emptyInlineRich
+    val spans = mutableListOf<ArticleTextSpan>()
+    val plain = StringBuilder()
+    nodes.forEach { node ->
+        val nodeObject = runCatching { node.jsonObject }.getOrNull() ?: return@forEach
+        val richObject = runCatching { nodeObject["rich"]?.jsonObject }.getOrNull()
+        val wordObject = runCatching { nodeObject["word"]?.jsonObject }.getOrNull()
+        val text = wordObject?.get("words")?.jsonPrimitive?.contentOrNull
+            ?: richObject?.get("text")?.jsonPrimitive?.contentOrNull
+            ?: richObject?.get("orig_text")?.jsonPrimitive?.contentOrNull
+            ?: richObject?.get("emoji")?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
+            ?: nodeObject["formula"]?.jsonObject?.get("latex_content")?.jsonPrimitive?.contentOrNull
+            ?: return@forEach
+        if (text.isEmpty()) return@forEach
+        plain.append(text)
+        val fontSize = wordObject?.get("font_size")?.jsonPrimitive?.intOrNull
+            ?.takeIf { it in 8..64 }
+        val color = wordObject?.get("color")?.jsonPrimitive?.contentOrNull
+            ?.let(::parseArticleColor)
+        val style = wordObject?.get("style")?.let { runCatching { it.jsonObject }.getOrNull() }
+        fun styleFlag(key: String): Boolean =
+            style?.get(key)?.jsonPrimitive?.contentOrNull == "true" ||
+                style?.get(key)?.jsonPrimitive?.intOrNull == 1 ||
+                style?.get(key)?.jsonPrimitive?.booleanOrNull == true
+        val bold = styleFlag("bold")
+        val italic = styleFlag("italic")
+        val strike = styleFlag("strikethrough") || styleFlag("strike")
+        spans += if (fontSize != null || color != null || bold || italic || strike) {
+            ArticleTextSpan(
+                text = text,
+                fontSizeSp = fontSize,
+                colorArgb = color,
+                bold = bold,
+                italic = italic,
+                strikethrough = strike
+            )
+        } else {
+            ArticleTextSpan(text = text)
+        }
+    }
+    val text = plain.toString().trim()
+    if (text.isBlank()) return emptyInlineRich
+    return InlineRichText(text, spans)
+}
+
+/** "#RRGGBB" / "#AARRGGBB" / rgb(r,g,b) → ARGB Long。 */
+internal fun parseArticleColor(raw: String?): Long? {
+    val value = raw?.trim().orEmpty()
+    if (value.isEmpty()) return null
+    val hex = when {
+        value.startsWith("#") -> value.substring(1)
+        value.startsWith("rgb(", ignoreCase = true) -> value.substringAfter("(")
+            .substringBefore(")")
+            .split(",", ";")
+            .mapNotNull { it.trim().toIntOrNull() }
+            .takeIf { it.size >= 3 }
+            ?.joinToString("") { it.coerceIn(0, 255).toString(16).padStart(2, '0') }
+            ?: return null
+        else -> return null
+    }
+    return when (hex.length) {
+        6 -> hex.toLongOrNull(16)?.let { 0xFF000000L or it }
+        8 -> hex.toLongOrNull(16)
+        else -> null
+    }
+}
 
 private fun extractNodesText(nodesElement: JsonElement?): String {
     val nodes = runCatching { nodesElement?.jsonArray }.getOrNull() ?: return ""
@@ -324,10 +421,132 @@ private fun appendHtmlTextBlock(
     kind: HtmlInlineKind
 ) {
     if (text.isBlank()) return
+    val spans = parseHtmlSpans(text)
     target += when (kind) {
-        HtmlInlineKind.Paragraph -> ArticleContentBlock.Paragraph(text)
-        HtmlInlineKind.Quote -> ArticleContentBlock.Quote(text)
+        HtmlInlineKind.Paragraph -> ArticleContentBlock.Paragraph(text, spans)
+        HtmlInlineKind.Quote -> ArticleContentBlock.Quote(text, spans)
         HtmlInlineKind.ListItem -> ArticleContentBlock.ListBlock(ordered = false, items = listOf(text))
+    }
+}
+
+private data class HtmlSpanStyle(
+    val fontSizeSp: Int?,
+    val colorArgb: Long?,
+    val bold: Boolean,
+    val italic: Boolean,
+    val strikethrough: Boolean
+) {
+    companion object {
+        val Default = HtmlSpanStyle(null, null, false, false, false)
+    }
+}
+
+private val htmlStyleTagRegex = Regex("""(?is)<(/?)([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>|[^<]+""")
+
+/** 从 HTML 片段提取带样式的行内 span；<img> 已在上游拆出，这里不会再遇到。 */
+internal fun parseHtmlSpans(raw: String): List<ArticleTextSpan> {
+    val spans = mutableListOf<ArticleTextSpan>()
+    val styleStack = ArrayDeque<HtmlSpanStyle>().apply { addLast(HtmlSpanStyle.Default) }
+    val currentText = StringBuilder()
+
+    fun currentStyle(): HtmlSpanStyle = styleStack.last()
+
+    fun flush() {
+        val text = currentText.toString()
+        currentText.clear()
+        if (text.isEmpty()) return
+        val style = currentStyle()
+        val styled = style != HtmlSpanStyle.Default
+        spans += if (styled) {
+            ArticleTextSpan(
+                text = text,
+                fontSizeSp = style.fontSizeSp,
+                colorArgb = style.colorArgb,
+                bold = style.bold,
+                italic = style.italic,
+                strikethrough = style.strikethrough
+            )
+        } else {
+            ArticleTextSpan(text = text)
+        }
+    }
+
+    htmlStyleTagRegex.findAll(raw).forEach { match ->
+        val token = match.value
+        if (!token.startsWith("<")) {
+            currentText.append(decodeHtmlEntities(token))
+            return@forEach
+        }
+        val closing = match.groupValues[1] == "/"
+        val tag = match.groupValues[2].lowercase()
+        when (tag) {
+            "b", "strong" -> {
+                flush()
+                if (closing) {
+                    unwindHtmlStyle(styleStack) { it.bold }
+                } else {
+                    val top = styleStack.last()
+                    styleStack.addLast(top.copy(bold = true))
+                }
+            }
+            "i", "em" -> {
+                flush()
+                if (closing) {
+                    unwindHtmlStyle(styleStack) { it.italic }
+                } else {
+                    val top = styleStack.last()
+                    styleStack.addLast(top.copy(italic = true))
+                }
+            }
+            "del", "s", "strike" -> {
+                flush()
+                if (closing) {
+                    unwindHtmlStyle(styleStack) { it.strikethrough }
+                } else {
+                    val top = styleStack.last()
+                    styleStack.addLast(top.copy(strikethrough = true))
+                }
+            }
+            "span" -> {
+                flush()
+                if (closing) {
+                    unwindHtmlStyle(styleStack) {
+                        it.fontSizeSp != null || it.colorArgb != null
+                    }
+                } else {
+                    val tagHtml = Regex("""(?is)<span\b[^>]*>""").find(token)?.value ?: token
+                    val styleAttr = extractHtmlAttribute(tagHtml, "style").orEmpty()
+                    val fontSize = Regex("""font-size\s*:\s*(\d+(?:\.\d+)?)\s*px""", RegexOption.IGNORE_CASE)
+                        .find(styleAttr)?.groupValues?.getOrNull(1)
+                        ?.toFloatOrNull()?.toInt()
+                        ?.takeIf { it in 8..64 }
+                    val color = Regex("""(?:^|;)\s*color\s*:\s*([^;]+)""", RegexOption.IGNORE_CASE)
+                        .find(styleAttr)?.groupValues?.getOrNull(1)?.trim()
+                        ?.let(::parseArticleColor)
+                    if (fontSize != null || color != null) {
+                        val top = styleStack.last()
+                        styleStack.addLast(top.copy(fontSizeSp = fontSize, colorArgb = color))
+                    }
+                }
+            }
+            "br" -> currentText.append('\n')
+            else -> Unit
+        }
+    }
+    flush()
+    return spans
+}
+
+/** 关闭标签时只回退到引入对应样式的层级，容忍未闭合标签的混排。 */
+private fun unwindHtmlStyle(
+    stack: ArrayDeque<HtmlSpanStyle>,
+    matches: (HtmlSpanStyle) -> Boolean
+) {
+    for (index in stack.size - 1 downTo 1) {
+        if (matches(stack[index])) {
+            while (stack.size > index) stack.removeLast()
+            return
+        }
     }
 }
 
@@ -335,28 +554,52 @@ private fun parseOpsBlocks(ops: List<JsonObject>): List<ArticleContentBlock> {
     if (ops.isEmpty()) return emptyList()
 
     return buildList {
-        val pendingText = StringBuilder()
+        val pendingSegments = mutableListOf<Pair<String, JsonObject?>>()
+        // Quill 把 header/list/blockquote 挂在「\n」操作的 attributes 上，单独记录。
+        var pendingLineAttributes: JsonObject? = null
 
-        fun flushText(attributes: JsonObject? = null) {
-            val text = pendingText.toString().trim()
-            pendingText.clear()
+        fun blockquoteActive(): Boolean = pendingLineAttributes?.get("blockquote")
+            ?.jsonPrimitive?.contentOrNull
+            ?.equals("true", ignoreCase = true) == true
+
+        fun headerLevel(): Int? = pendingLineAttributes?.get("header")
+            ?.jsonPrimitive?.intOrNull
+            ?.takeIf { it in 1..6 }
+
+        fun listStyle(): String? = pendingLineAttributes?.get("list")
+            ?.jsonPrimitive?.contentOrNull
+
+        fun flushText() {
+            val text = pendingSegments.joinToString("") { it.first }.trim()
+            val spans = pendingSegments.flatMap { (segment, attrs) ->
+                parseOpsSpanStyle(attrs)?.let { style ->
+                    listOf(
+                        ArticleTextSpan(
+                            text = segment,
+                            colorArgb = style.first,
+                            bold = style.second,
+                            italic = style.third,
+                            strikethrough = style.fourth
+                        )
+                    )
+                }.orEmpty()
+            }
+            pendingSegments.clear()
+            pendingLineAttributes = null
             if (text.isBlank()) return
 
-            val header = attributes?.get("header")?.jsonPrimitive?.intOrNull
-            val listStyle = attributes?.get("list")?.jsonPrimitive?.contentOrNull
-            val isQuote = attributes?.get("blockquote")
-                ?.jsonPrimitive
-                ?.contentOrNull
-                ?.equals("true", ignoreCase = true) == true
+            val header = headerLevel()
+            val listStyleValue = listStyle()
+            val isQuote = blockquoteActive()
             add(
                 when {
-                    header != null && header in 1..6 -> ArticleContentBlock.Heading(text)
-                    isQuote -> ArticleContentBlock.Quote(text)
-                    !listStyle.isNullOrBlank() -> ArticleContentBlock.ListBlock(
-                        ordered = listStyle.equals("ordered", ignoreCase = true),
+                    header != null -> ArticleContentBlock.Heading(text, spans)
+                    isQuote -> ArticleContentBlock.Quote(text, spans)
+                    !listStyleValue.isNullOrBlank() -> ArticleContentBlock.ListBlock(
+                        ordered = listStyleValue.equals("ordered", ignoreCase = true),
                         items = listOf(text)
                     )
-                    else -> ArticleContentBlock.Paragraph(text)
+                    else -> ArticleContentBlock.Paragraph(text, spans)
                 }
             )
         }
@@ -368,10 +611,13 @@ private fun parseOpsBlocks(ops: List<JsonObject>): List<ArticleContentBlock> {
                 is JsonPrimitive -> {
                     val segments = insert.contentOrNull.orEmpty().split('\n')
                     segments.forEachIndexed { index, segment ->
-                        pendingText.append(segment)
+                        if (segment.isNotEmpty()) {
+                            pendingSegments += segment to attributes
+                        }
                         if (index < segments.lastIndex) {
-                            // Quill stores header/list/blockquote metadata on the newline op.
-                            flushText(attributes)
+                            flushText()
+                            // 换行后行属性重置为该换行操作携带的 attributes。
+                            pendingLineAttributes = attributes
                         }
                     }
                 }
@@ -387,6 +633,23 @@ private fun parseOpsBlocks(ops: List<JsonObject>): List<ArticleContentBlock> {
         flushText()
     }.mergeAdjacentListBlocks()
 }
+
+/** Quill 行内样式属性：返回 (color, bold, italic, strike) 四元组；无样式返回 null。 */
+private fun parseOpsSpanStyle(attributes: JsonObject?): Quadruple<Long?, Boolean, Boolean, Boolean>? {
+    attributes ?: return null
+    fun flag(key: String): Boolean =
+        attributes[key]?.jsonPrimitive?.booleanOrNull == true ||
+            attributes[key]?.jsonPrimitive?.contentOrNull == "true"
+
+    val bold = flag("bold")
+    val italic = flag("italic")
+    val strike = flag("strike")
+    val color = attributes["color"]?.jsonPrimitive?.contentOrNull?.let(::parseArticleColor)
+    if (!bold && !italic && !strike && color == null) return null
+    return Quadruple(color, bold, italic, strike)
+}
+
+internal data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
 private fun parseOpsImage(insert: JsonObject): ArticleContentBlock.Image? {
     val directImage = insert["image"]

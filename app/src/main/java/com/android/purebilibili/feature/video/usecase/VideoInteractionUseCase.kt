@@ -30,16 +30,34 @@ class VideoInteractionUseCase {
      * Toggle like status
      */
     suspend fun toggleLike(
-        aid: Long, 
+        aid: Long,
         currentlyLiked: Boolean,
         bvid: String = ""
     ): Result<Boolean> {
         Logger.d(TAG, "toggleLike: aid=$aid, currentlyLiked=$currentlyLiked")
         val newLiked = !currentlyLiked
-        
+
         return ActionRepository.likeVideo(aid, newLiked).also { result ->
             result.onSuccess { liked ->
                 AnalyticsHelper.logLike(bvid, liked)
+            }
+        }
+    }
+
+    /**
+     * Toggle dislike status（点踩与点赞互斥由 ViewModel 层联动）
+     */
+    suspend fun toggleDislike(
+        aid: Long,
+        currentlyDisliked: Boolean,
+        bvid: String = ""
+    ): Result<Boolean> {
+        Logger.d(TAG, "toggleDislike: aid=$aid, currentlyDisliked=$currentlyDisliked")
+        val newDisliked = !currentlyDisliked
+
+        return ActionRepository.dislikeVideo(aid, newDisliked).also { result ->
+            result.onSuccess { disliked ->
+                AnalyticsHelper.logDislike(bvid, disliked)
             }
         }
     }

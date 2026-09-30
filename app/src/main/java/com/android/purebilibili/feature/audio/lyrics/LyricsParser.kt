@@ -53,8 +53,14 @@ internal fun parseSplLyrics(
                 startTimeMs = raw.startTimeMs,
                 endTimeMs = endTime.coerceAtLeast(raw.startTimeMs),
                 text = raw.text,
-                translations = translationMap[raw.startTimeMs].orEmpty(),
-                romanization = romanizationMap[raw.startTimeMs]?.firstOrNull(),
+                translations = translationMap[raw.startTimeMs]
+                    .orEmpty()
+                    .filterNot { isPseudoSecondaryLine(raw.text, it) },
+                romanization = romanizationMap[raw.startTimeMs]
+                    ?.firstOrNull()
+                    ?.takeIf {
+                        needsPhoneticAnnotation(it) && !isPseudoSecondaryLine(raw.text, it)
+                    },
                 spans = raw.spans
                     .filter { span -> span.startTimeMs < endTime }
                     .map { span ->
