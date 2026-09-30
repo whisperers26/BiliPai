@@ -243,8 +243,8 @@ internal data class ReplyItemLayoutPolicy(
     val decorationImageWidthDp: Int,
     val decorationImageHeightDp: Int,
     val decorationMinWidthDp: Int,
-    val topPaddingDp: Int = 10,
-    val bottomPaddingDp: Int = 10,
+    val topPaddingDp: Int = 4,
+    val bottomPaddingDp: Int = 4,
 ) {
     val dividerStartPaddingDp: Int
         get() = horizontalPaddingDp + avatarSizeDp + avatarContentSpacingDp
@@ -253,11 +253,10 @@ internal data class ReplyItemLayoutPolicy(
 }
 
 /**
- * [compactSpacing] tightens the gap between comments for dense lists. The footer's 48dp dislike
- * touch target already leaves room under the action icons; the small bottom padding keeps a
- * reply preview box off the next comment.
+ * The gap between comments is small because the footer's 48dp dislike touch target already leaves
+ * room under the action icons; the bottom padding keeps a reply preview box off the next comment.
  */
-internal fun resolveReplyItemLayoutPolicy(compactSpacing: Boolean = false): ReplyItemLayoutPolicy {
+internal fun resolveReplyItemLayoutPolicy(): ReplyItemLayoutPolicy {
     return ReplyItemLayoutPolicy(
         horizontalPaddingDp = 12,
         avatarSizeDp = 36,
@@ -267,8 +266,8 @@ internal fun resolveReplyItemLayoutPolicy(compactSpacing: Boolean = false): Repl
         decorationImageWidthDp = 44,
         decorationImageHeightDp = 36,
         decorationMinWidthDp = 64,
-        topPaddingDp = if (compactSpacing) 4 else 10,
-        bottomPaddingDp = if (compactSpacing) 4 else 10,
+        topPaddingDp = 4,
+        bottomPaddingDp = 4,
     )
 }
 
@@ -1234,7 +1233,6 @@ fun ReplyItemView(
     onUrlClick: ((String) -> Unit)? = null,
     maxTimestampMs: Long? = null,
     hideSubPreview: Boolean = false,
-    compactSpacing: Boolean = false,
     onAvatarClick: (String) -> Unit
 ) {
     val appearance = rememberVideoCommentAppearance()
@@ -1272,7 +1270,7 @@ fun ReplyItemView(
         }
     }
     val showTopBadge = shouldShowReplyTopBadge(item = item, isPinned = isPinned)
-    val layoutPolicy = remember(compactSpacing) { resolveReplyItemLayoutPolicy(compactSpacing) }
+    val layoutPolicy = remember { resolveReplyItemLayoutPolicy() }
     val contentPrefix = remember(showTopBadge) {
         if (!showTopBadge) {
             null

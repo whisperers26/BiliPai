@@ -247,7 +247,6 @@ internal fun LargeScreenVideoLayout(
                     includeOwnerUploadsTab = true,
                     relatedTabFirst = relatedTabFirst,
                     showCommentChrome = !useDetailRail,
-                    compactCommentSpacing = useDetailRail,
                 )
             }
         }

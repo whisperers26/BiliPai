@@ -811,7 +811,6 @@ internal fun TabletSecondaryContent(
     onDanmakuToggle: () -> Unit = {},
     // Off when a side rail already offers comment sorting, search and composing.
     showCommentChrome: Boolean = true,
-    compactCommentSpacing: Boolean = false,
 ) {
     val commentAppearance = rememberVideoCommentAppearance()
     var pendingVideoShare by remember { mutableStateOf<VideoSharePayload?>(null) }
@@ -1186,7 +1185,6 @@ internal fun TabletSecondaryContent(
                                             { commentActions.checkCommentFraud(reply) }
                                         } else null,
                                         onUrlClick = openCommentUrl,
-                                        compactSpacing = compactCommentSpacing,
                                         onAvatarClick = { mid -> mid.toLongOrNull()?.let { onUpClick(it) } }
                                     )
                                 }
