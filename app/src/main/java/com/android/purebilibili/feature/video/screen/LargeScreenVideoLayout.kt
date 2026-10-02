@@ -191,6 +191,7 @@ internal fun LargeScreenVideoLayout(
                     engagementActions = engagementActions,
                     onBgmClick = onBgmClick,
                     onRelatedVideoClick = onRelatedVideoClick,
+                    onSearchKeywordClick = onSearchKeywordClick,
                     onOpenBilibiliLink = onOpenBilibiliLink,
                     danmakuEnabled = danmakuChrome.enabled,
                     onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
