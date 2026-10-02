@@ -385,23 +385,36 @@ object BilibiliUrlParser {
     suspend fun resolveShortUrl(shortUrl: String): String? {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                val url = URL(shortUrl)
-                val connection = url.openConnection() as HttpURLConnection
-                connection.instanceFollowRedirects = false
-                connection.connectTimeout = 5000
-                connection.readTimeout = 5000
-                connection.requestMethod = "HEAD"
-                
-                val responseCode = connection.responseCode
-                if (responseCode in 300..399) {
-                    val redirectUrl = connection.getHeaderField("Location")
-                    Logger.d(TAG, "Short URL redirected to: $redirectUrl")
+                // b23.tv 对无 UA 的裸 HEAD 请求常返回 403/200 而非 302，必须带浏览器 UA；
+                // 且可能先 302 到另一层短域，最多跟 3 跳。
+                var current = shortUrl
+                repeat(3) {
+                    val connection = URL(current).openConnection() as HttpURLConnection
+                    connection.instanceFollowRedirects = false
+                    connection.connectTimeout = 5000
+                    connection.readTimeout = 5000
+                    connection.requestMethod = "HEAD"
+                    connection.setRequestProperty(
+                        "User-Agent",
+                        "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36"
+                    )
+
+                    val responseCode = connection.responseCode
+                    if (responseCode in 300..399) {
+                        val redirectUrl = connection.getHeaderField("Location")
+                        Logger.d(TAG, "Short URL redirected to: $redirectUrl")
+                        connection.disconnect()
+                        if (redirectUrl.isNullOrBlank()) return@withContext null
+                        if (redirectUrl.contains("b23.tv", ignoreCase = true)) {
+                            current = redirectUrl
+                            return@repeat
+                        }
+                        return@withContext redirectUrl
+                    }
                     connection.disconnect()
-                    redirectUrl
-                } else {
-                    connection.disconnect()
-                    null
+                    return@withContext null
                 }
+                null
             } catch (e: Exception) {
                 Logger.e(TAG, "Failed to resolve short URL: ${e.message}")
                 null

@@ -258,6 +258,7 @@ internal fun VideoDetailPhoneSuccessContentLayer(
                                 commentState = VideoContentCommentState(
                                     isRepliesLoading = commentState.isRepliesLoading,
                                     isRepliesEnd = commentState.isRepliesEnd,
+                                    voteCard = commentState.voteCard,
                                     sortMode = commentState.sortMode,
                                     currentMid = commentState.currentMid,
                                     showUpFlag = commentState.showUpFlag,
@@ -359,12 +360,15 @@ internal fun VideoDetailPhoneSuccessContentLayer(
                                     onOpenVideoNoteEditor = playbackActions.openVideoNoteEditor,
                                     onCloseVideoNoteEditor = playbackActions.closeVideoNoteEditor,
                                     onVideoNoteDocumentChange = playbackActions.updateVideoNoteEditorDocument,
-                                    onInsertVideoNoteTimestamp = playbackActions.insertCurrentPlaybackTimestampIntoNote,
+                                    onInsertVideoNoteTimestamp = playbackActions.currentVideoNoteTimestamp,
                                     onVideoNoteTimestampClick = playbackActions.seekTo,
                                     onSaveVideoNote = playbackActions.saveVideoNote,
                                     onDeleteVideoNote = playbackActions.deleteVideoNote,
                                     onRetryVideoNote = playbackActions.retryVideoNote,
-                                    onPublicVideoNoteClick = { _, url -> if (url.isNotBlank()) onOpenBilibiliLink?.invoke(url) },
+                                    onLoadMorePublicVideoNotes = playbackActions.loadMorePublicVideoNotes,
+                                    onPublicVideoNoteClick = { cvid, _ ->
+                                        onOpenBilibiliLink?.invoke("https://www.bilibili.com/read/cv$cvid")
+                                    },
                                 ),
                                 uiActions = VideoContentUiActions(
                                     onSelectedTabChange = onSelectedTabChange,

@@ -4,6 +4,22 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.util.Base64
 
+private const val TOMBSTONE_BEGIN = "----- BEGIN TOMBSTONE PROTOBUF BASE64 -----"
+private const val TOMBSTONE_END = "----- END TOMBSTONE PROTOBUF BASE64 -----"
+
+/** The readable crash summary can be sanitized without touching the encoded protobuf. */
+internal fun nativeExitTraceSummary(trace: String): String =
+    trace.substringBefore(TOMBSTONE_BEGIN).trimEnd()
+
+internal fun decodeNativeExitTrace(trace: String): ByteArray? {
+    val start = trace.indexOf(TOMBSTONE_BEGIN)
+    if (start < 0) return null
+    val end = trace.indexOf(TOMBSTONE_END, start + TOMBSTONE_BEGIN.length)
+    if (end < 0) return null
+    val payload = trace.substring(start + TOMBSTONE_BEGIN.length, end).trim()
+    return runCatching { Base64.getDecoder().decode(payload) }.getOrNull()
+}
+
 private data class NativeBacktraceFrame(
     val relativePc: Long?,
     val functionName: String?,
@@ -52,11 +68,11 @@ internal fun encodeNativeExitTrace(stream: InputStream, maxBytes: Int = 4 * 1024
         if (summary != null) {
             appendNativeCrashSummary(summary)
         } else {
-            appendLine("Native crash summary: unavailable (raw tombstone preserved below)")
+            appendLine("Native crash summary: unavailable")
         }
-        appendLine("----- BEGIN TOMBSTONE PROTOBUF BASE64 -----")
+        appendLine(TOMBSTONE_BEGIN)
         appendLine(Base64.getEncoder().encodeToString(bytes))
-        append("----- END TOMBSTONE PROTOBUF BASE64 -----")
+        append(TOMBSTONE_END)
     }
 }
 

@@ -1,4 +1,6 @@
 package com.android.purebilibili.feature.settings
+
+import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 
@@ -420,7 +422,6 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
                 SettingsRootCategoryEntranceSection {
                     SettingsDetailGroup(title = "互动与评论") {
                         SettingsDetailEntrySection(
@@ -459,7 +460,6 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
                 SettingsRootCategoryEntranceSection {
                     SettingsDetailGroup(title = "推荐流与动态") {
                         FeedApiSection(
@@ -508,7 +508,6 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
                 SettingsRootCategoryEntranceSection {
                     SettingsDetailGroup(title = "交互与动效") {
                         SettingsDetailEntrySection(
@@ -595,7 +594,6 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
                 SettingsRootCategoryEntranceSection {
                     SettingsDetailGroup(title = "动效") {
                         SettingsDetailEntrySection(
@@ -614,7 +612,6 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
                 SettingsRootCategoryEntranceSection {
                     SettingsDetailGroup(title = "导航") {
                         SettingsDetailEntrySection(
@@ -633,7 +630,6 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
                 SettingsRootCategoryEntranceSection {
                     SettingsDetailGroup(title = "全屏与手势") {
                         SettingsDetailEntrySection(
@@ -672,7 +668,6 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
                 SettingsRootCategoryEntranceSection {
                     SettingsDetailGroup(title = "推荐流与动态") {
                         FeedApiSection(
@@ -701,7 +696,6 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
                 SettingsRootCategoryEntranceSection {
                     SettingsDetailGroup(title = "画质与播放") {
                         SettingsDetailEntrySection(
@@ -720,7 +714,6 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
                 SettingsRootCategoryEntranceSection {
                     SettingsDetailGroup(title = "互动") {
                         SettingsDetailEntrySection(
@@ -759,7 +752,6 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
                 SettingsRootCategoryEntranceSection {
                     SettingsDetailGroup(title = "隐私与安全") {
                         PrivacySection(
@@ -807,7 +799,6 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
                 SettingsRootCategoryEntranceSection {
                     SettingsDetailGroup(title = "帮助与工具") {
                         SupportToolsSection(
@@ -816,9 +807,23 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
                 SettingsRootCategoryEntranceSection {
                     SettingsDetailGroup(title = "关于与更新") {
+                        var showUserAgreement by remember { mutableStateOf(false) }
+                        SettingClickableItem(
+                            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(
+                                com.android.purebilibili.R.drawable.ms_gavel_24
+                            ),
+                            title = "用户协议与隐私政策",
+                            value = "查看全文",
+                            onClick = { showUserAgreement = true }
+                        )
+                        SettingsAdaptiveDivider()
+                        if (showUserAgreement) {
+                            com.android.purebilibili.feature.agreement.UserAgreementReviewDialog(
+                                onDismiss = { showUserAgreement = false }
+                            )
+                        }
                         AboutSection(
                             versionName = state.versionName,
                             appIconKey = state.appIcon,
@@ -851,7 +856,6 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
                 SettingsRootCategoryEntranceSection {
                     ReleaseChannelPinnedCard(
                         onGithubClick = actions.onGithubClick,
@@ -964,6 +968,12 @@ fun ReleaseChannelPinnedCard(
                         overflow = TextOverflow.Clip
                     )
                 }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 AppOutlinedButton(
                     onClick = onTelegramGroupClick,
                     modifier = Modifier.weight(1f),
@@ -976,7 +986,7 @@ fun ReleaseChannelPinnedCard(
                         overflow = TextOverflow.Clip
                     )
                 }
-                AppTextButton(
+                AppOutlinedButton(
                     onClick = onDisclaimerClick,
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(horizontal = 8.dp)
@@ -1206,7 +1216,7 @@ private fun FeedDynamicTabVisibilityItem(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                IconButton(
+                AppIconButton(
                     enabled = index > 0,
                     onClick = {
                         val newOrder = orderedTabs.map { it.id }.toMutableList()
@@ -1221,7 +1231,7 @@ private fun FeedDynamicTabVisibilityItem(
                         contentDescription = "上移${tab.title}"
                     )
                 }
-                IconButton(
+                AppIconButton(
                     enabled = index < orderedTabs.lastIndex,
                     onClick = {
                         val newOrder = orderedTabs.map { it.id }.toMutableList()
@@ -1497,7 +1507,7 @@ private fun DiagnosticsSection(
     val siblingTints = remember { resolveSettingsSiblingIconTints(6, paletteOffset = 5) }
     val exportLogsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.EXPORT_LOGS)
     val useMd3ExportLogsDescription = LocalAppUiStyle.current == AppUiStyle.MATERIAL3
-    val exportLogsDescription = "导出前统一脱敏，仅由你主动分享"
+    val exportLogsDescription = "崩溃摘要优先；原始回溯需单独选择"
     val proxySettings by NetworkProxyStore.settings.collectAsStateWithLifecycle(
         initialValue = NetworkProxyStore.getSync(context)
     )
@@ -2124,7 +2134,7 @@ private fun AboutProjectOverviewCard(
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 22.sp
+
                 )
             }
             Spacer(modifier = Modifier.height(22.dp))

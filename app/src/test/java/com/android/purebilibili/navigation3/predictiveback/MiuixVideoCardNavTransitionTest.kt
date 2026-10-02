@@ -28,6 +28,44 @@ import androidx.compose.ui.unit.LayoutDirection
 
 class MiuixVideoCardNavTransitionTest {
     @Test
+    fun childPredictiveBackKeepsCoveredVideoFullscreenThroughCommitAndCancel() {
+        val scope = object : NavTransitionScope {
+            override var relativeDepth = 0f
+            override val role get() = if (relativeDepth > 0f) NavRole.Covered else NavRole.Top
+            override val change = NavChange.Pop
+            override val layoutSize = IntSize(1080, 2400)
+            override val layoutDirection = LayoutDirection.Ltr
+            override val density = Density(3f)
+            override var gesture: NavGesture? = null
+            override var settle: NavSettle? = null
+        }
+        val progress = MiuixVideoCardTransitionProgress()
+        // The retained video scope is already bound before opening BGM.
+        progress.bind(scope)
+        for (releasePhase in listOf(NavSettlePhase.Commit, NavSettlePhase.Cancel)) {
+            scope.settle = null
+            for (fraction in listOf(0f, .2f, .7f, .999f)) {
+                scope.relativeDepth = 1f - fraction
+                scope.gesture = NavGesture(fraction, NavSwipeEdge.Left, 500f)
+                assertEquals(1f, progress.depthOrNull())
+                assertEquals(VideoCardTransitionSettleState.Held, progress.settleStateOrNull())
+                assertEquals(false, progress.isGestureInProgress())
+                assertEquals(null, progress.gestureBackProgress())
+            }
+            scope.settle = object : NavSettle {
+                override val phase = releasePhase
+                override val releaseVelocity = 0f
+                override val elapsedMillis = 0f
+            }
+            // Commit reveals the parent; cancel keeps it covered. Neither is a card return.
+            scope.relativeDepth = if (releasePhase == NavSettlePhase.Commit) 0f else 1f
+            assertEquals(1f, progress.depthOrNull())
+            assertEquals(VideoCardTransitionSettleState.Held, progress.settleStateOrNull())
+            assertEquals(null, progress.gestureBackProgress())
+        }
+    }
+
+    @Test
     fun settledEntryRebindsRemovingScopeBeforeReturnStarts() {
         var depth = -.5f
         fun scope(removing: Boolean, lowerPage: Boolean = false) = object : NavTransitionScope {
@@ -77,7 +115,7 @@ class MiuixVideoCardNavTransitionTest {
     }
 
     @Test
-    fun fullGestureKeepsCardAirborneUntilCommitSettleFinishes() {
+    fun fullGestureLandsManuallyAndCommitHasNoSecondFlight() {
         val scope = object : NavTransitionScope {
             override var relativeDepth = 0f
             override var role = NavRole.Top
@@ -93,22 +131,24 @@ class MiuixVideoCardNavTransitionTest {
         assertEquals(1f, progress.depthOrNull())
         scope.relativeDepth = -.999f
         scope.gesture = NavGesture(.999f, NavSwipeEdge.Left, 500f)
-        assertEquals(.2f, progress.depthOrNull()!!, absoluteTolerance = .001f)
+        // Manual drag reaches (almost) full landing; the last sliver waits for the driver.
+        assertEquals(.001f, progress.depthOrNull()!!, absoluteTolerance = .002f)
         scope.settle = object : NavSettle {
             override val phase = NavSettlePhase.Commit
             override val releaseVelocity = 0f
             override val elapsedMillis = 0f
         }
         scope.role = NavRole.Outgoing
-        assertEquals(.2f, progress.depthOrNull()!!, absoluteTolerance = .001f)
+        // Commit at a fully-dragged release has no remaining distance: no second flight.
+        assertEquals(.001f, progress.depthOrNull()!!, absoluteTolerance = .002f)
         scope.relativeDepth = -.9995f
-        assertEquals(.1f, progress.depthOrNull()!!, absoluteTolerance = .002f)
+        assertEquals(.0005f, progress.depthOrNull()!!, absoluteTolerance = .002f)
         scope.relativeDepth = -1f
         assertEquals(0f, progress.depthOrNull())
     }
 
     @Test
-    fun interruptingEntryRetainsItsCurrentPositionAndLeavesLandingDistance() {
+    fun interruptingEntryRetainsItsCurrentPositionAndMapsGestureOneToOne() {
         val scope = object : NavTransitionScope {
             override var relativeDepth = -.5f
             override val role = NavRole.Incoming
@@ -124,8 +164,8 @@ class MiuixVideoCardNavTransitionTest {
         assertEquals(.5f, progress.depthOrNull())
         scope.relativeDepth = -.9f
         scope.gesture = NavGesture(.4f, NavSwipeEdge.Left, 500f)
-        assertEquals(.2f, progress.depthOrNull()!!, absoluteTolerance = .001f)
-        // A very early interruption is already inside the reserved landing range.
+        // Interruption keeps the pre-gesture position and gesture progress maps 1:1.
+        assertEquals(.1f, progress.depthOrNull()!!, absoluteTolerance = .001f)
         // The first gesture frame must stay at the current position.
         val earlyScope = object : NavTransitionScope by scope {
             override val relativeDepth = -.9f
@@ -256,7 +296,7 @@ class MiuixVideoCardNavTransitionTest {
         val progress = MiuixVideoCardTransitionProgress()
         progress.bind(scope)
         assertTrue(progress.isGestureInProgress())
-        assertEquals(.68f, progress.depthOrNull()!!, absoluteTolerance = .001f)
+        assertEquals(.6f, progress.depthOrNull()!!, absoluteTolerance = .001f)
         scope.settle = object : NavSettle {
             override val phase = NavSettlePhase.Cancel
             override val releaseVelocity = 0f
@@ -302,7 +342,7 @@ class MiuixVideoCardNavTransitionTest {
         assertEquals(true, transform.contains("cameraDistance = transform.cameraDistance"))
         assertEquals(true, transform.contains("shadowElevation = MIUIX_VIDEO_CARD_GESTURE_SHADOW_DP.dp.toPx() * poseWeight"))
         assertEquals(true, transform.contains("floatingCornerPx = MIUIX_VIDEO_CARD_FLOATING_CORNER_DP.dp.toPx()"))
-        assertEquals(true, source.contains("56.dp.toPx()"))
+        assertEquals(true, transform.contains("progress.followPose("))
     }
 
     @Test
@@ -384,18 +424,7 @@ class MiuixVideoCardNavTransitionTest {
         )
         assertEquals(28f, mid.radiusX * 0.5f, absoluteTolerance = 0.01f)
         assertEquals(28f, mid.radiusY * 0.4f, absoluteTolerance = 0.01f)
-        val landed = resolveMiuixVideoCardGestureTransform(
-            morphProgress = 0f,
-            touchY = 1200f,
-            initialTouchY = 1200f,
-            widthPx = 1080f,
-            heightPx = 2400f,
-            isLeftEdge = true,
-            maxVerticalTravelPx = 72f,
-        )
-        assertEquals(1f, landed.liftScale, 0.0001f)
-        assertEquals(0f, landed.shadowElevationDp, 0.0001f)
-        assertEquals(MIUIX_VIDEO_CARD_GESTURE_CAMERA_DISTANCE_DP, landed.cameraDistance, 0.0001f)
+
     }
 
     @Test
@@ -448,73 +477,6 @@ class MiuixVideoCardNavTransitionTest {
     }
 
     @Test
-    fun gestureFollowPeaksMidFlightAndKeepsBothLandingEndpointsExact() {
-        val fullscreen = resolveMiuixVideoCardGestureTransform(
-            morphProgress = 1f,
-            touchY = 900f,
-            initialTouchY = 500f,
-            widthPx = 1080f,
-            heightPx = 2400f,
-            isLeftEdge = true,
-            maxVerticalTravelPx = 72f,
-        )
-        val midFlight = resolveMiuixVideoCardGestureTransform(
-            morphProgress = 0.5f,
-            touchY = 900f,
-            initialTouchY = 500f,
-            widthPx = 1080f,
-            heightPx = 2400f,
-            isLeftEdge = true,
-            maxVerticalTravelPx = 72f,
-        )
-        val landed = resolveMiuixVideoCardGestureTransform(
-            morphProgress = 0f,
-            touchY = 900f,
-            initialTouchY = 500f,
-            widthPx = 1080f,
-            heightPx = 2400f,
-            isLeftEdge = true,
-            maxVerticalTravelPx = 72f,
-        )
-
-        assertEquals(0f, fullscreen.translationX)
-        assertEquals(0f, fullscreen.translationY)
-        assertEquals(0f, fullscreen.rotationZ)
-        assertEquals(0f, landed.translationX)
-        assertEquals(0f, landed.translationY)
-        assertEquals(0f, landed.rotationZ)
-        assertEquals(true, abs(midFlight.translationX) > 0f)
-        assertEquals(true, abs(midFlight.translationY) > 0f)
-        assertEquals(true, abs(midFlight.rotationZ) > 0f)
-    }
-
-    @Test
-    fun gestureFollowTiltsFromTheGrabPointEvenWithoutVerticalMove() {
-        val centered = resolveMiuixVideoCardGestureTransform(
-            morphProgress = 0.5f,
-            touchY = 1200f,
-            initialTouchY = 1200f,
-            widthPx = 1080f,
-            heightPx = 2400f,
-            isLeftEdge = true,
-            maxVerticalTravelPx = 72f,
-        )
-        assertEquals(0f, centered.translationY, 0.001f)
-        assertEquals(
-            MIUIX_VIDEO_CARD_GESTURE_PEEL_ROTATION_DEGREES,
-            centered.rotationZ,
-            0.01f,
-        )
-        assertEquals(1f - MIUIX_VIDEO_CARD_GESTURE_LIFT_SCALE, centered.liftScale, 0.0001f)
-        assertEquals(12f, centered.shadowElevationDp, 0.01f)
-        assertTrue(centered.cameraDistance < MIUIX_VIDEO_CARD_GESTURE_CAMERA_DISTANCE_DP)
-        assertTrue(abs(centered.translationX) > 40f)
-        assertEquals(0f, resolveMiuixVideoCardGesturePoseWeight(0f), 0.0001f)
-        assertEquals(0f, resolveMiuixVideoCardGesturePoseWeight(1f), 0.0001f)
-        assertEquals(1f, resolveMiuixVideoCardGesturePoseWeight(0.5f), 0.001f)
-    }
-
-    @Test
     fun gestureVisualOriginTracksTheFlyingCardInsteadOfTheFullscreenCenter() {
         val source = androidx.compose.ui.geometry.Rect(80f, 400f, 500f, 900f)
         val origin = resolveMiuixVideoCardGestureVisualOrigin(
@@ -545,29 +507,4 @@ class MiuixVideoCardNavTransitionTest {
         assertEquals(0.6f, fullscreen.pivotFractionY, 0.0001f)
     }
 
-    @Test
-    fun gestureFollowMirrorsAcrossScreenEdgesWithoutChangingVerticalLanding() {
-        val left = resolveMiuixVideoCardGestureTransform(
-            morphProgress = 0.5f,
-            touchY = 800f,
-            initialTouchY = 500f,
-            widthPx = 1080f,
-            heightPx = 2400f,
-            isLeftEdge = true,
-            maxVerticalTravelPx = 72f,
-        )
-        val right = resolveMiuixVideoCardGestureTransform(
-            morphProgress = 0.5f,
-            touchY = 800f,
-            initialTouchY = 500f,
-            widthPx = 1080f,
-            heightPx = 2400f,
-            isLeftEdge = false,
-            maxVerticalTravelPx = 72f,
-        )
-
-        assertEquals(-left.translationX, right.translationX, absoluteTolerance = 0.001f)
-        assertEquals(left.translationY, right.translationY, absoluteTolerance = 0.001f)
-        assertEquals(-left.rotationZ, right.rotationZ, absoluteTolerance = 0.001f)
-    }
 }

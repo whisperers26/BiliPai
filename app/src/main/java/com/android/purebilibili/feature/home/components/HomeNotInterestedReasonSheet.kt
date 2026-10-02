@@ -47,6 +47,12 @@ fun HomeNotInterestedReasonSheet(
                 modifier = Modifier.padding(horizontal = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall, vertical = AppSpacingTokens.Small)
             )
             AppText(
+                text = "视频已移除。选择原因可减少相关推荐，直接关闭则仅减少该视频推荐。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall, vertical = AppSpacingTokens.ExtraSmall)
+            )
+            AppText(
                 text = video.title,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -232,12 +232,15 @@ internal fun resolveFloatingDockIndicatorHeightDp(
     if (requestedHeightDp <= 0f) return 0f
     if (tabWidthDp <= 0f) return requestedHeightDp
     if (geometryMode != FloatingBottomBarGeometryMode.Dock) {
-        // Match the home dock's 2dp resting inset. The aspect constraint still wins
-        // on narrow slots; never widen the pill across neighbouring destinations.
+        // Segmented controls use a compact 2dp resting inset. Home top navigation shares
+        // the bottom dock's 4dp inset and indicator height so both capsules have matching
+        // vertical spacing; their width stays confined to each tab slot.
         val insetHeight = shellHeightDp?.let { (it - 4f).coerceAtLeast(0f) }
             ?: requestedHeightDp
         return if (geometryMode == FloatingBottomBarGeometryMode.TopNavigation) {
-            min(insetHeight, tabWidthDp / FLOATING_DOCK_MIN_INDICATOR_ASPECT)
+            // Keep the home top indicator capsule-shaped within narrow tab slots, while
+            // preserving the same minimum pill aspect used by the floating bottom dock.
+            min(min(requestedHeightDp, insetHeight), tabWidthDp / FLOATING_DOCK_MIN_INDICATOR_ASPECT)
         } else {
             resolveSegmentedControlIndicatorHeightDp(tabWidthDp, insetHeight)
         }

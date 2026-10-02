@@ -123,7 +123,7 @@ android {
         applicationId = "com.android.purebilibili"
         minSdk = 26
         targetSdk = 37
-        // 版本：语义化 X.Y.Z（MAJOR.MINOR.PATCH）+ versionCode 单调 +1
+        // 版本名按发行计划确定；versionCode 每次发布单调 +1
         // 规范：docs/wiki/VERSIONING.md · 更新日志：CHANGELOG.md
         versionCode = 402
         versionName = "1.0.3"
@@ -410,7 +410,7 @@ dependencies {
     implementation(libs.miuix.shader)
     implementation(libs.miuix.squircle)
     implementation(libs.miuix.icons)
-    implementation(libs.miuix.navigation)
+    implementation(project(":miuix-navigation"))
     // 图标扩展库 (全屏、设置图标等)
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.animation:animation")

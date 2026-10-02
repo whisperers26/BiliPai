@@ -21,6 +21,7 @@ data class SplashItem(
     val id: Long = 0,
     val type: Int = 0,
     val title: String = "",
+    val archiveContentHash: String = "",
     @SerialName("thumb") val thumb: String = "", // 缩略图/图片地址
     @SerialName("image") val image: String = "", // 有些 API 可能返回这个
     @SerialName("logo_url") val logoUrl: String = "",

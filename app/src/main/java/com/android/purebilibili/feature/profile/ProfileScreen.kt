@@ -37,6 +37,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.QrCodeScanner
+import com.android.purebilibili.feature.login.OfficialQrAuthorizationDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.DisposableEffect
@@ -99,6 +101,8 @@ import com.android.purebilibili.core.util.PickGalleryVisualMedia
 import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.isImagePreviewSourceHidden
+import com.android.purebilibili.feature.dynamic.components.prepareImagePreviewSourceTransition
+import com.android.purebilibili.feature.dynamic.components.resolveImagePreviewPlaceholderCacheKey
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.resolveAppContentDialogLayoutPolicy
@@ -1511,6 +1515,13 @@ private fun ProfileTopActions(
     tint: Color,
     onWallpaperClick: (() -> Unit)? = null,
 ) {
+    var showQrAuthorization by remember { mutableStateOf(false) }
+    if (showQrAuthorization) {
+        OfficialQrAuthorizationDialog(onDismiss = { showQrAuthorization = false })
+    }
+    AppIconButton(onClick = { showQrAuthorization = true }) {
+        AppIcon(Icons.Rounded.QrCodeScanner, contentDescription = "扫码授权登录", tint = tint)
+    }
     AppIconButton(onClick = onSearchClick) {
         AppIcon(Icons.Rounded.Search, contentDescription = "搜索", tint = tint)
     }
@@ -2728,7 +2739,7 @@ private fun ProfileDynamicCard(
                 text = bodyText,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
-                lineHeight = 22.sp,
+
                 maxLines = 8,
                 overflow = TextOverflow.Ellipsis
             )
@@ -2774,7 +2785,7 @@ private fun ProfileDynamicOriginalContent(item: SpaceDynamicItem, onVideoClick: 
                     text = text,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 21.sp,
+
                     maxLines = 8,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -2829,7 +2840,10 @@ private fun ProfileDynamicMajorContent(item: SpaceDynamicItem, onVideoClick: (St
             AsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(cover)
-                    .crossfade(true)
+                    .memoryCacheKey(resolveImagePreviewPlaceholderCacheKey(cover) ?: cover)
+                    // This image participates in the Hero flight; don't add a second fade
+                    // when the source node becomes visible after the return animation.
+                    .crossfade(false)
                     .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
@@ -2843,7 +2857,10 @@ private fun ProfileDynamicMajorContent(item: SpaceDynamicItem, onVideoClick: (St
                     }
                     .then(
                         if (clickableBvid == null && imageUrls.isNotEmpty()) {
-                            Modifier.clickable { selectedImageIndex = 0 }
+                            Modifier.clickable(interactionSource = null, indication = null) {
+                                prepareImagePreviewSourceTransition(sourceRect)
+                                selectedImageIndex = 0
+                            }
                         } else {
                             Modifier
                         }

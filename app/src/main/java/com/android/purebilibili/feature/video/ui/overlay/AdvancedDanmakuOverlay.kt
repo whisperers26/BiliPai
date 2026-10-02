@@ -193,7 +193,7 @@ private fun RenderSingleAdvancedDanmaku(
         AppText(
             text = displayText,
             color = color,
-            fontSize = (danmaku.fontSize * fontScale.coerceIn(0.3f, 2f) * viewport.scale).sp,
+            fontSize = (danmaku.fontSize * fontScale.coerceIn(0.3f, 2f)).sp,
             fontWeight = FontWeight(fontWeight.coerceIn(1, 9) * 100)
         )
     }

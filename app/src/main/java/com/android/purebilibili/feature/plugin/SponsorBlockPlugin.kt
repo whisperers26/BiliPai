@@ -68,6 +68,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.io.File
 import java.io.FileOutputStream
+import com.android.purebilibili.core.ui.isMiuixNonGlassEnabled
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 
@@ -82,7 +83,11 @@ internal fun normalizeSponsorSegments(
 ): List<SponsorSegment> {
     return segments
         .asSequence()
-        .filter { segment -> segment.endTimeMs > segment.startTimeMs }
+        .filter { segment ->
+            segment.endTimeMs > segment.startTimeMs ||
+                (segment.actionType == com.android.purebilibili.data.model.response.SponsorActionType.FULL &&
+                    segment.startTimeMs == 0L && segment.endTimeMs == 0L)
+        }
         .groupBy { segment -> "${segment.category}:${segment.actionType}" }
         .values
         .mapNotNull { candidates ->
@@ -110,6 +115,10 @@ internal fun resolveSponsorProgressMarkers(
                 SponsorBlockMarkerMode.SPONSOR_ONLY -> segment.category == com.android.purebilibili.data.model.response.SponsorCategory.SPONSOR
                 SponsorBlockMarkerMode.ALL_SKIPPABLE -> true
             }
+        }
+        .filterNot { segment ->
+            segment.actionType == com.android.purebilibili.data.model.response.SponsorActionType.FULL &&
+                segment.startTimeMs == 0L && segment.endTimeMs == 0L
         }
         .map { segment ->
             SponsorProgressMarker(
@@ -212,27 +221,23 @@ class SponsorBlockPlugin : PlayerPluginApi {
         //  [修复] 加载配置
         loadConfigSuspend()
         
-        // 加载片段数据
-        try {
-            segments = normalizeSponsorSegments(
-                SponsorBlockRepository.getSegments(
-                    bvid = bvid,
-                    cid = cid,
-                    categories = config.requestedCategories,
-                    baseUrl = config.serverBaseUrl
-                )
-            ).filter { segment ->
-                config.behaviorFor(segment.category) != SponsorBlockSegmentBehavior.DISABLED &&
-                    segment.duration >= config.minimumSegmentDurationSeconds
-            }
-            progressMarkers = resolveSponsorProgressMarkers(segments, config.markerMode, config.categoryColorHex)
-            Logger.d(
-                TAG,
-                " Loaded ${segments.size} SponsorBlock segments for $bvid, autoSkip=${config.autoSkip}, markers=${progressMarkers.size}"
-            )
-        } catch (e: Exception) {
-            Logger.w(TAG, " 加载片段失败: ${e.message}")
+        // Failures must reach the owning ViewModel so it can retry this video.
+        val loadedSegments = SponsorBlockRepository.loadSegments(
+            bvid = bvid,
+            cid = cid,
+            categories = config.requestedCategories,
+            baseUrl = config.serverBaseUrl
+        )
+        segments = normalizeSponsorSegments(loadedSegments).filter { segment ->
+            config.behaviorFor(segment.category) != SponsorBlockSegmentBehavior.DISABLED &&
+                (segment.actionType == com.android.purebilibili.data.model.response.SponsorActionType.FULL ||
+                    segment.duration >= config.minimumSegmentDurationSeconds)
         }
+        progressMarkers = resolveSponsorProgressMarkers(segments, config.markerMode, config.categoryColorHex)
+        Logger.d(
+            TAG,
+            "Loaded ${segments.size} SponsorBlock segments for $bvid/$cid, autoSkip=${config.autoSkip}"
+        )
     }
     
     // 记录上次播放位置，用于检测回拉
@@ -425,7 +430,9 @@ class SponsorBlockPlugin : PlayerPluginApi {
         if (!config.communityContributionEnabled) {
             return Result.failure(IllegalStateException("请先在空降助手设置中允许提交社区片段"))
         }
-        if (bvid.isBlank() || endMs <= startMs || startMs < 0L) {
+        val wholeVideo = actionType == com.android.purebilibili.data.model.response.SponsorActionType.FULL &&
+            startMs == 0L && endMs == 0L
+        if (bvid.isBlank() || startMs < 0L || (!wholeVideo && endMs <= startMs)) {
             return Result.failure(IllegalArgumentException("片段时间范围无效"))
         }
         if (category !in com.android.purebilibili.data.model.response.SponsorCategory.ALL_CATEGORIES) {
@@ -481,6 +488,8 @@ class SponsorBlockPlugin : PlayerPluginApi {
                 config = SponsorBlockConfig(autoSkip = true)
             }
             Logger.d(TAG, "Loaded SponsorBlock config: autoSkip=${config.autoSkip}, markerMode=${config.markerMode}")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Logger.e(TAG, "Failed to load config", e)
             config = SponsorBlockConfig(autoSkip = true)
@@ -503,6 +512,8 @@ class SponsorBlockPlugin : PlayerPluginApi {
         val context = LocalContext.current
         val uriHandler = LocalUriHandler.current
         val scope = rememberCoroutineScope()
+        val neutralMiuix = isMiuixNonGlassEnabled()
+        val preferenceIconColor = MaterialTheme.colorScheme.surfaceContainerHighest
         var autoSkip by remember { mutableStateOf(config.autoSkip) }
         var markerMode by remember { mutableStateOf(config.markerMode) }
         var dailySummaryNotificationEnabled by remember { mutableStateOf(config.dailySummaryNotificationEnabled) }
@@ -601,7 +612,7 @@ class SponsorBlockPlugin : PlayerPluginApi {
                         persistConfig(config.copy(autoSkip = newValue, categoryBehaviorRaw = config.categoryBehaviorRaw.mapValues { behavior.name }))
                         categorySettings = resolveSponsorBlockCategorySettings(config)
                     },
-                    iconTint = MaterialTheme.colorScheme.tertiary,
+                    iconTint = if (neutralMiuix) preferenceIconColor else MaterialTheme.colorScheme.tertiary,
                 )
                 SponsorBlockCategorySettingsSection(
                     settings = categorySettings,
@@ -621,7 +632,7 @@ class SponsorBlockPlugin : PlayerPluginApi {
                     subtitle = "短于该时长的社区片段不会参与跳过或提示",
                     value = "${config.minimumSegmentDurationSeconds}s",
                     onClick = { showDurationDialog = true },
-                    iconTint = MaterialTheme.colorScheme.tertiary,
+                    iconTint = if (neutralMiuix) preferenceIconColor else MaterialTheme.colorScheme.tertiary,
                 )
             }
 
@@ -649,7 +660,7 @@ class SponsorBlockPlugin : PlayerPluginApi {
                         skipToastEnabled = enabled
                         persistConfig(config.copy(skipToastEnabled = enabled))
                     },
-                    iconTint = MaterialTheme.colorScheme.primary,
+                    iconTint = if (neutralMiuix) preferenceIconColor else MaterialTheme.colorScheme.primary,
                 )
                 AppSwitchPreference(
                     icon = Icons.Outlined.Notifications,
@@ -660,7 +671,7 @@ class SponsorBlockPlugin : PlayerPluginApi {
                         dailySummaryNotificationEnabled = newValue
                         persistConfig(config.copy(dailySummaryNotificationEnabled = newValue))
                     },
-                    iconTint = MaterialTheme.colorScheme.primary,
+                    iconTint = if (neutralMiuix) preferenceIconColor else MaterialTheme.colorScheme.primary,
                 )
                 if (dailySummaryNotificationEnabled) {
                     AppOutlinedTextField(
@@ -680,7 +691,7 @@ class SponsorBlockPlugin : PlayerPluginApi {
                     title = "发送测试通知",
                     subtitle = "确认通知权限和展示效果，不写入跳过记录",
                     onClick = { notificationPermission.launchWithPermission { sendTestNotification() } },
-                    iconTint = MaterialTheme.colorScheme.primary,
+                    iconTint = if (neutralMiuix) preferenceIconColor else MaterialTheme.colorScheme.primary,
                 )
             }
 
@@ -691,7 +702,7 @@ class SponsorBlockPlugin : PlayerPluginApi {
                     subtitle = serverStatus?.message ?: config.serverBaseUrl,
                     value = if (serverStatus?.reachable == true) "正常" else null,
                     onClick = { showServerDialog = true },
-                    iconTint = MaterialTheme.colorScheme.secondary,
+                    iconTint = if (neutralMiuix) preferenceIconColor else MaterialTheme.colorScheme.secondary,
                 )
                 AppSwitchPreference(
                     icon = Icons.Outlined.BarChart,
@@ -702,7 +713,7 @@ class SponsorBlockPlugin : PlayerPluginApi {
                         communityTrackingEnabled = enabled
                         persistConfig(config.copy(communityTrackingEnabled = enabled))
                     },
-                    iconTint = MaterialTheme.colorScheme.tertiary,
+                    iconTint = if (neutralMiuix) preferenceIconColor else MaterialTheme.colorScheme.tertiary,
                 )
                 AppSwitchPreference(
                     icon = Icons.Outlined.Send,
@@ -713,7 +724,7 @@ class SponsorBlockPlugin : PlayerPluginApi {
                         communityContributionEnabled = enabled
                         persistConfig(config.copy(communityContributionEnabled = enabled))
                     },
-                    iconTint = MaterialTheme.colorScheme.tertiary,
+                    iconTint = if (neutralMiuix) preferenceIconColor else MaterialTheme.colorScheme.tertiary,
                 )
                 AppPreference(
                     icon = Icons.Outlined.Person,
@@ -729,7 +740,7 @@ class SponsorBlockPlugin : PlayerPluginApi {
                                 }
                         }
                     },
-                    iconTint = MaterialTheme.colorScheme.tertiary,
+                    iconTint = if (neutralMiuix) preferenceIconColor else MaterialTheme.colorScheme.tertiary,
                 )
             }
 
@@ -740,7 +751,7 @@ class SponsorBlockPlugin : PlayerPluginApi {
                     subtitle = aboutItem.subtitle,
                     value = aboutItem.value,
                     onClick = { uriHandler.openUri("https://github.com/hanydd/BilibiliSponsorBlock") },
-                    iconTint = MaterialTheme.colorScheme.secondary,
+                    iconTint = if (neutralMiuix) preferenceIconColor else MaterialTheme.colorScheme.secondary,
                 )
             }
         }
@@ -1073,13 +1084,13 @@ private fun SponsorBlockSummaryHeader(summary: SponsorBlockInsightSummary) {
         Box(
             modifier = Modifier
                 .clip(AppShapes.container(ContainerLevel.Pill))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                .background(sponsorBlockBadgeContainerColor(alpha = 0.12f))
                 .padding(horizontal = 10.dp, vertical = 5.dp)
         ) {
             AppText(
                 text = "${summary.totalSkipCount} 次",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = sponsorBlockBadgeContentColor(),
                 fontWeight = FontWeight.Medium
             )
         }
@@ -1433,17 +1444,27 @@ private fun SponsorBlockDetailLine(
 }
 
 @Composable
+private fun sponsorBlockBadgeContainerColor(alpha: Float): Color =
+    if (isMiuixNonGlassEnabled()) MaterialTheme.colorScheme.surfaceContainerHighest
+    else MaterialTheme.colorScheme.primary.copy(alpha = alpha)
+
+@Composable
+private fun sponsorBlockBadgeContentColor(): Color =
+    if (isMiuixNonGlassEnabled()) MaterialTheme.colorScheme.onSurface
+    else MaterialTheme.colorScheme.primary
+
+@Composable
 private fun SponsorBlockChip(text: String) {
     Box(
         modifier = Modifier
             .clip(AppShapes.container(ContainerLevel.Pill))
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+            .background(sponsorBlockBadgeContainerColor(alpha = 0.1f))
             .padding(horizontal = 8.dp, vertical = 3.dp)
     ) {
         AppText(
             text = text,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
+            color = sponsorBlockBadgeContentColor(),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

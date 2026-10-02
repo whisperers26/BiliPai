@@ -159,8 +159,8 @@ internal fun TabletSecondaryDanmakuActions(
         NativeDanmakuToggleButton(
             enabled = danmakuEnabled,
             onToggle = onDanmakuToggle,
-            activeTint = MaterialTheme.colorScheme.secondary,
-            inactiveTint = MaterialTheme.colorScheme.outline,
+            activeTint = MaterialTheme.colorScheme.onSurface,
+            inactiveTint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .padding(end = layoutPolicy.toggleTrailingPaddingDp.dp)
                 .size(layoutPolicy.toggleButtonSizeDp.dp),
@@ -280,12 +280,20 @@ internal fun TabletVideoLayout(
     playerContent: (@Composable (Modifier) -> Unit)? = null,
 ) {
     val adaptiveInfo = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current
-    val foldHalfOpened = adaptiveInfo.posture == com.android.purebilibili.core.util.AppFoldPosture.Book ||
-        adaptiveInfo.posture == com.android.purebilibili.core.util.AppFoldPosture.Tabletop
-    val layoutPolicy = remember(configuration.screenWidthDp, adaptiveInfo.posture) {
+    val hasHingePartition = adaptiveInfo.shouldAvoidHinge
+    val layoutPosture = if (adaptiveInfo.shouldAvoidHinge) {
+        when (adaptiveInfo.foldingFeature.hingeOrientation) {
+            com.android.purebilibili.core.util.AppHingeOrientation.Horizontal ->
+                com.android.purebilibili.core.util.AppFoldPosture.Tabletop
+            com.android.purebilibili.core.util.AppHingeOrientation.Vertical ->
+                com.android.purebilibili.core.util.AppFoldPosture.Book
+            else -> adaptiveInfo.posture
+        }
+    } else adaptiveInfo.posture
+    val layoutPolicy = remember(configuration.screenWidthDp, layoutPosture) {
         resolveTabletVideoLayoutPolicy(
             widthDp = configuration.screenWidthDp,
-            foldPosture = adaptiveInfo.posture,
+            foldPosture = layoutPosture,
         )
     }
     var secondaryPaneModeName by rememberSaveable(bvid) {
@@ -359,7 +367,7 @@ internal fun TabletVideoLayout(
                 //  为播放器容器添加共享元素标记（受开关控制）
                 val playerContainerModifier = if (
                     transitionEnabled &&
-                    !foldHalfOpened &&
+                    !hasHingePartition &&
                     sharedTransitionScope != null &&
                     animatedVisibilityScope != null &&
                     !forceCoverOnlyOnReturn
@@ -416,10 +424,10 @@ internal fun TabletVideoLayout(
                                     isFullscreen = false,
                                     isInPipMode = isInPipMode,
                                     useTextureSurfaceForNavigation = resolveNavigationLiveSurfaceTextureEnabled(
-                                        cardTransitionEnabled = transitionEnabled && !foldHalfOpened,
+                                        cardTransitionEnabled = transitionEnabled && !hasHingePartition,
                                         liveSurfaceCardTransitionEnabled = liveSurfaceCardTransitionEnabled,
                                     ),
-                                    allowLivePlayerSharedElement = !foldHalfOpened &&
+                                    allowLivePlayerSharedElement = !hasHingePartition &&
                                         resolveAllowLivePlayerSharedElementForMorph(
                                             cardTransitionEnabled = transitionEnabled,
                                             liveSurfaceCardTransitionEnabled = liveSurfaceCardTransitionEnabled,
@@ -471,6 +479,9 @@ internal fun TabletVideoLayout(
                                     onSubtitleTrackSelected = playbackActions.selectSubtitleTrack,
                                     onDanmakuInputClick = playbackActions.showDanmakuSendDialog,
                                     onLikeDanmaku = playbackActions.likeDanmaku,
+                                    onLikeDanmakuToggle = playbackActions.likeDanmakuToggle,
+                                    likedDanmakuIds = playbackActions.likedDanmakuIds,
+                                    onReportDanmaku = playbackActions.reportDanmaku,
                                     onRecallDanmaku = playbackActions.recallDanmaku,
                                 ),
                             )
@@ -747,6 +758,7 @@ internal fun TabletVideoInfoPane(
         videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
         onOpenVideoNoteEditor = playbackActions.openVideoNoteEditor,
         onRetryVideoNote = playbackActions.retryVideoNote,
+        onLoadMoreVideoNotes = playbackActions.loadMorePublicVideoNotes,
         onDeleteVideoNoteClick = { confirmDeleteNote = true },
         onShareVideoNote = { document -> onShareVideoNote(document, false) },
         onPublicVideoNoteClick = { cvid, _ ->
@@ -759,7 +771,7 @@ internal fun TabletVideoInfoPane(
         noteState = success.videoNoteState,
         onDismiss = playbackActions.closeVideoNoteEditor,
         onDocumentChange = playbackActions.updateVideoNoteEditorDocument,
-        onInsertTimestamp = playbackActions.insertCurrentPlaybackTimestampIntoNote,
+        currentTimestampProvider = playbackActions.currentVideoNoteTimestamp,
         onTimestampClick = { timestamp -> playbackActions.seekTo(timestamp) },
         onShare = { document -> onShareVideoNote(document, success.videoNoteState.editorFromAiSummary) },
         onSave = playbackActions.saveVideoNote
@@ -971,7 +983,15 @@ internal fun TabletSecondaryContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .then(if (applyStatusBarPadding) Modifier.statusBarsPadding() else Modifier)
+            // 半开沉浸模式下状态栏 inset 为 0，但挖孔仍然存在；
+            // safeDrawing 取两者最大，避免 tab 条被裁切。
+            .then(
+                if (applyStatusBarPadding) {
+                    Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                } else {
+                    Modifier
+                }
+            )
             .background(MaterialTheme.colorScheme.background)
     ) {
         if (!showHeader) {
@@ -1135,6 +1155,14 @@ internal fun TabletSecondaryContent(
                                     bottom = if (showCommentChrome) 104.dp else 16.dp,
                                 )
                             ) {
+                            commentState.voteCard?.let { card ->
+                                item(key = "tablet_vote_${card.voteId}") {
+                                    VideoCommentVoteCard(
+                                        card = card,
+                                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                    )
+                                }
+                            }
                             items(
                                 items = commentState.replies,
                                 key = { "reply_${it.rpid}" },
@@ -1481,6 +1509,7 @@ private fun ScrollableVideoInfoSection(
     videoNoteDefaultCollapsed: Boolean = true,
     onOpenVideoNoteEditor: () -> Unit = {},
     onRetryVideoNote: () -> Unit = {},
+    onLoadMoreVideoNotes: () -> Unit = {},
     onDeleteVideoNoteClick: () -> Unit = {},
     onShareVideoNote: (VideoNoteEditorDocument) -> Unit = {},
     onPublicVideoNoteClick: (Long, String) -> Unit = { _, _ -> },
@@ -1659,7 +1688,17 @@ private fun ScrollableVideoInfoSection(
             onDeleteVideoNoteClick()
         },
         onShareClick = onShareVideoNote,
-        onPublicNoteClick = onPublicVideoNoteClick
+        onPublicNoteClick = onPublicVideoNoteClick,
+        onAuthorClick = { mid ->
+            if (mid > 0L) onOpenBilibiliLink?.invoke("https://space.bilibili.com/$mid")
+        },
+        onLoadMore = onLoadMoreVideoNotes,
+        onOfficialEditorClick = {
+            showNoteListSheet = false
+            onOpenBilibiliLink?.invoke(
+                "https://www.bilibili.com/h5/note-app?oid=${info.aid}&pagefrom=ugcvideo"
+            )
+        }
     )
 }
 

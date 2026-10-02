@@ -11,6 +11,7 @@ import com.android.purebilibili.data.model.response.ReplyData
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ReplyPage
 import com.android.purebilibili.data.model.response.ReplyPicture
+import com.android.purebilibili.data.model.response.ReplyVoteCard
 import com.android.purebilibili.data.repository.CommentRepository
 import com.android.purebilibili.data.repository.CommentFraudRepository
 import com.android.purebilibili.data.repository.shouldStartCommentFraudDetection
@@ -89,6 +90,7 @@ internal fun shouldApplyConversationReplyResult(
 // 评论状态
 data class CommentUiState(
     val replies: ImmutableList<ReplyItem> = persistentListOf(),
+    val voteCard: ReplyVoteCard? = null,
     val isRepliesLoading: Boolean = false,
     val replyCount: Int = 0,
     val repliesError: String? = null,
@@ -337,7 +339,8 @@ class VideoCommentViewModel : ViewModel() {
                 page = pageToLoad, 
                 ps = 20,
                 mode = currentState.sortMode.apiMode,
-                paginationOffset = currentState.grpcNextOffset
+                paginationOffset = currentState.grpcNextOffset,
+                fallbackOnMissingLocation = requestSubject.type == 1,
             )
 
             result.onSuccess { data ->
@@ -384,6 +387,7 @@ class VideoCommentViewModel : ViewModel() {
                 
                 _commentState.value = current.copy(
                     replies = combinedReplies.toImmutableList(),
+                    voteCard = if (pageToLoad == 1) data.voteCard else current.voteCard,
                     likedComments = (current.likedComments + combinedReplies.flatMap { root ->
                         (listOf(root) + root.replies.orEmpty()).filter { it.action == 1 }.map { it.rpid }
                     }).toImmutableSet(),
@@ -1055,16 +1059,14 @@ class VideoCommentViewModel : ViewModel() {
         return withContext(Dispatchers.IO) {
             runCatching {
                 imageUris.take(9).mapIndexed { index, uri ->
-                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        ?: error("无法读取图片文件")
-                    require(bytes.isNotEmpty()) { "图片内容为空" }
-                    require(bytes.size <= 15 * 1024 * 1024) { "图片过大（单张最大 15MB）" }
                     val fileName = queryDisplayName(context, uri)
                         ?: "comment_${System.currentTimeMillis()}_${index + 1}.jpg"
+                    // 流式上传:空/15MB 校验在 CommentRepository 内完成,不再整文件读入内存。
                     CommentRepository.uploadCommentImage(
                         fileName = fileName,
                         mimeType = context.contentResolver.getType(uri) ?: "image/jpeg",
-                        bytes = bytes
+                        resolver = context.contentResolver,
+                        uri = uri
                     ).getOrElse { throw it }
                 }
             }
@@ -1338,6 +1340,7 @@ class VideoCommentViewModel : ViewModel() {
         allReplies = emptyList()
         _commentState.value = _commentState.value.copy(
             replies = emptyList<ReplyItem>().toImmutableList(),
+            voteCard = null,
             nextPage = 1,
             isRepliesEnd = false,
             isRepliesLoading = false,

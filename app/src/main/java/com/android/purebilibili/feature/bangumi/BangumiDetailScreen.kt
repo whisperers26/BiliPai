@@ -371,7 +371,8 @@ private fun TabletBangumiDetailContent(
                         if (targetEpisode != null) {
                             AppButton(
                                 onClick = { onEpisodeClick(targetEpisode) },
-                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                                modifier = Modifier.weight(1f).height(48.dp),
                                 shape = AppShapes.container(ContainerLevel.Chip),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = resolveFilledButtonContainerColor(MaterialTheme.colorScheme),
@@ -389,7 +390,12 @@ private fun TabletBangumiDetailContent(
                                 } else {
                                     if (detail.userStatus?.progress?.lastEpId != null && detail.userStatus.progress.lastEpId > 0L) "继续观看" else "立即播放"
                                 }
-                                AppText(playLabel)
+                                AppText(
+                                    text = playLabel,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
                         }
                         // Follow Button
@@ -405,7 +411,8 @@ private fun TabletBangumiDetailContent(
                                 containerColor = if (isFollowing || targetEpisode != null) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
                                 contentColor = if (isFollowing || targetEpisode != null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
                             ),
-                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                            modifier = Modifier.weight(1f).height(48.dp),
                             shape = AppShapes.container(ContainerLevel.Chip)
                         ) {
                             AppIcon(
@@ -423,7 +430,8 @@ private fun TabletBangumiDetailContent(
                         if (canReviewBangumi(detail.mediaId, detail.rights)) {
                             AppOutlinedButton(
                                 onClick = { onReviewsClick(detail.mediaId, detail.title) },
-                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                                modifier = Modifier.weight(1f).height(48.dp),
                                 shape = AppShapes.container(ContainerLevel.Chip)
                             ) {
                                 AppText("点评")
@@ -918,7 +926,8 @@ private fun MobileBangumiDetailContent(
                     if (targetEpisode != null) {
                         AppButton(
                             onClick = { onEpisodeClick(targetEpisode) },
-                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                            modifier = Modifier.weight(1f).height(48.dp),
                             shape = AppShapes.container(ContainerLevel.Chip),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = resolveFilledButtonContainerColor(MaterialTheme.colorScheme),
@@ -936,7 +945,12 @@ private fun MobileBangumiDetailContent(
                             } else {
                                 if (detail.userStatus?.progress?.lastEpId != null && detail.userStatus.progress.lastEpId > 0L) "继续观看" else "立即播放"
                             }
-                            AppText(playLabel)
+                            AppText(
+                                text = playLabel,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     }
                     // 追番/收藏按钮
@@ -954,7 +968,8 @@ private fun MobileBangumiDetailContent(
                                 MaterialTheme.colorScheme.primary
                             ),
                             shape = AppShapes.container(ContainerLevel.Chip),
-                            modifier = Modifier.weight(1f)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                            modifier = Modifier.weight(1f).height(48.dp)
                         ) {
                             AppIcon(
                                 Icons.Outlined.Check,
@@ -975,7 +990,8 @@ private fun MobileBangumiDetailContent(
                                 contentColor = if (targetEpisode != null) MaterialTheme.colorScheme.onSurfaceVariant else resolveFilledButtonContentColor(MaterialTheme.colorScheme)
                             ),
                             shape = AppShapes.container(ContainerLevel.Chip),
-                            modifier = Modifier.weight(1f)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                            modifier = Modifier.weight(1f).height(48.dp)
                         ) {
                             AppIcon(
                                 Icons.Outlined.Add,
@@ -989,7 +1005,8 @@ private fun MobileBangumiDetailContent(
                     if (canReviewBangumi(detail.mediaId, detail.rights)) {
                         AppOutlinedButton(
                             onClick = { onReviewsClick(detail.mediaId, detail.title) },
-                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                            modifier = Modifier.weight(1f).height(48.dp),
                             shape = AppShapes.container(ContainerLevel.Chip)
                         ) {
                             AppText("点评")

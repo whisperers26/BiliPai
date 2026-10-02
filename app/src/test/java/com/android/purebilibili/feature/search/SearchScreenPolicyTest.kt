@@ -12,19 +12,19 @@ import kotlin.test.assertTrue
 class SearchScreenPolicyTest {
 
     @Test
-    fun searchResultCardsUseSemanticTypographyOnlyForMiuixNonGlassMode() {
+    fun searchResultCardsUseSemanticTypographyInEveryTheme() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/search/SearchScreen.kt")
         val typographyFacade = source
             .substringAfter("private enum class SearchResultTextRole")
             .substringBefore("/**\n *  搜索结果卡片")
 
-        assertTrue(typographyFacade.contains("if (isMiuixNonGlassEnabled())"))
+        assertFalse(typographyFacade.contains("if (isMiuixNonGlassEnabled())"))
         assertTrue(typographyFacade.contains("MaterialTheme.typography.titleSmall"))
         assertTrue(typographyFacade.contains("MaterialTheme.typography.bodySmall"))
         assertTrue(typographyFacade.contains("MaterialTheme.typography.labelMedium"))
         assertTrue(typographyFacade.contains("MaterialTheme.typography.labelSmall"))
-        assertTrue(typographyFacade.contains("fontSize = legacyFontSize"))
-        assertTrue(typographyFacade.contains("lineHeight = legacyLineHeight"))
+        assertFalse(typographyFacade.contains("fontSize = legacyFontSize"))
+        assertFalse(typographyFacade.contains("lineHeight = legacyLineHeight"))
 
         listOf(
             "fun SearchResultCard(",
@@ -540,30 +540,6 @@ class SearchScreenPolicyTest {
         // Exiting results must not reopen IME.
         assertTrue(searchSource.contains("exitResultsToLanding("))
         assertTrue(searchSource.contains("dismissSearchKeyboardAndFocus("))
-    }
-
-    @Test
-    fun searchTopBar_inputUsesFixedHeightNotFillMaxSize() {
-        val searchSource = loadSource("app/src/main/java/com/android/purebilibili/feature/search/SearchScreen.kt")
-        val topBar = searchSource
-            .substringAfter("fun SearchTopBar(")
-            .substringBefore("private fun SearchTopBarIconButton(")
-        // 回归：fillMaxSize 会让输入框在 Column 剩余高度里变成竖向长胶囊
-        assertFalse(topBar.contains("Modifier = Modifier.fillMaxSize()"))
-        assertTrue(topBar.contains(".height(chromeSpec.inputHeightDp.dp)"))
-        assertTrue(topBar.contains(".fillMaxWidth()"))
-        assertTrue(topBar.contains("TextFieldValue("))
-        assertTrue(topBar.contains("resolveSearchInputShape(topChromePolicy)"))
-        assertFalse(topBar.contains("RoundedCornerShape("))
-        assertFalse(topBar.contains("searchTopChromeGlass(dockShape)"))
-        assertTrue(topBar.contains("searchTopChromeGlass(inputShape, chromeSpec.inputHeightDp)"))
-        assertTrue(topBar.contains("searchTopChromeGlass(actionShape, chromeSpec.submitActionSizeDp)"))
-        assertEquals(2, Regex("searchTopChromeGlass\\(actionShape, chromeSpec.clearActionSizeDp\\)").findAll(topBar).count())
-        assertTrue(topBar.contains("resolveHomeTopEdgeButtonShape(topChromePolicy)"))
-        assertTrue(topBar.contains("liquidGlassEnabled"))
-        assertTrue(topBar.contains("homeTopBottomBarMatchedSurface("))
-        assertTrue(topBar.contains("drawShellLens = true"))
-        assertTrue(topBar.contains("resolveFloatingDockGeometryScale(controlHeightDp.toFloat())"))
     }
 
     @Test

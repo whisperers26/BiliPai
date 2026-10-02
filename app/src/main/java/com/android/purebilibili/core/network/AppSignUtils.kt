@@ -25,6 +25,11 @@ object AppSignUtils {
     // Bilibili HD client credentials used by the current SMS login endpoints.
     const val ANDROID_HD_APP_KEY = "dfca71928277209b"
     private const val ANDROID_HD_APP_SEC = "b5475a8825547a4fc26c7d518eaaa02e"
+
+    // Android64 client credentials; required by the web QR scan-authorization endpoints,
+    // which authenticate via access_key + sign rather than SESSDATA cookies.
+    const val ANDROID64_APP_KEY = "783bbb7264451d82"
+    private const val ANDROID64_APP_SEC = "2653583c8873dea268ab9386918b1d65"
     
     /**
      * Percent-encode like Dart/BiliPai Uri.encodeComponent / encodeURIComponent.
@@ -92,6 +97,16 @@ object AppSignUtils {
             params + ("appkey" to ANDROID_HD_APP_KEY)
         }
         return signEncoded(withAppKey, ANDROID_HD_APP_SEC)
+    }
+
+    /** Signs web QR scan-authorization params with the android64 credentials. */
+    fun signForAndroid64Login(params: Map<String, String>): Map<String, String> {
+        val withAppKey = if (params.containsKey("appkey")) {
+            params
+        } else {
+            params + ("appkey" to ANDROID64_APP_KEY)
+        }
+        return signEncoded(withAppKey, ANDROID64_APP_SEC)
     }
 
     private fun signEncoded(params: Map<String, String>, appSec: String): Map<String, String> {

@@ -123,61 +123,18 @@ fun SponsorSkipButton(
 }
 
 /**
- * Explicit community-contribution control. The ViewModel owns the submission state; this
- * composable only renders the current phase and forwards user intent.
+ * Submission review appears only after an explicit action in the player's More menu.
+ * The ViewModel owns the draft; no contribution entry floats over the video.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SponsorContributionOverlay(
     state: SponsorContributionUiState,
-    onMarkBoundary: () -> Unit,
     onCategoryChange: (String) -> Unit,
     onActionTypeChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onCancel: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    if (state.showsMarkAction) {
-        val marking = state.phase == SponsorContributionPhase.MARKING
-        AppSurface(
-            modifier = modifier
-                .clip(AppShapes.container(ContainerLevel.Card))
-                .clickable { onMarkBoundary() },
-            color = Color.Black.copy(alpha = 0.8f),
-            shadowElevation = 8.dp,
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                AppIcon(
-                    imageVector = Icons.Outlined.Send,
-                    contentDescription = null,
-                    tint = Color(0xFF7C9EFF),
-                    modifier = Modifier.size(18.dp),
-                )
-                Column {
-                    AppText(
-                        text = if (marking) "结束标记" else "标记片段",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    AppText(
-                        text = if (marking) {
-                            "起点 ${formatSponsorContributionTime(state.startMs ?: 0L)}"
-                        } else {
-                            "投稿前会再次确认"
-                        },
-                        color = Color.White.copy(alpha = 0.72f),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
-            }
-        }
-    }
-
     if (state.showsReview) {
         AppAlertDialog(
             onDismissRequest = {
@@ -195,7 +152,11 @@ fun SponsorContributionOverlay(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     AppText(
-                        text = "${formatSponsorContributionTime(state.startMs ?: 0L)} – ${formatSponsorContributionTime(state.endMs ?: 0L)}",
+                        text = if (state.actionType == "full") {
+                            "整个视频"
+                        } else {
+                            "${formatSponsorContributionTime(state.startMs ?: 0L)} – ${formatSponsorContributionTime(state.endMs ?: 0L)}"
+                        },
                         style = MaterialTheme.typography.titleMedium,
                     )
                     if (state.phase != SponsorContributionPhase.SUCCESS) {
@@ -208,7 +169,12 @@ fun SponsorContributionOverlay(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            SponsorCategory.ALL_CATEGORIES.forEach { category ->
+                            SponsorCategory.ALL_CATEGORIES
+                                .filter { category ->
+                                    state.actionType != "full" ||
+                                        "full" in sponsorBlockAllowedActionTypes(category)
+                                }
+                                .forEach { category ->
                                 AppFilterChip(
                                     selected = state.category == category,
                                     onClick = { onCategoryChange(category) },
@@ -226,7 +192,9 @@ fun SponsorContributionOverlay(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            sponsorBlockAllowedActionTypes(state.category).forEach { actionType ->
+                            sponsorBlockAllowedActionTypes(state.category)
+                                .filter { actionType -> state.actionType != "full" || actionType == "full" }
+                                .forEach { actionType ->
                                 AppFilterChip(
                                     selected = state.actionType == actionType,
                                     onClick = { onActionTypeChange(actionType) },
