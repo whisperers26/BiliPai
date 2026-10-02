@@ -164,6 +164,7 @@ import com.android.purebilibili.core.ui.rememberAppWatchLaterIcon
 import com.android.purebilibili.core.ui.wallpaper.ProfileWallpaperTransform
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.WindowWidthSizeClass
+import com.android.purebilibili.core.util.animateScrollToTopContinuously
 import com.android.purebilibili.core.ui.components.AppPreference
 import com.android.purebilibili.core.ui.components.AppPreferenceGridItem
 import com.android.purebilibili.core.ui.components.AppSegmentOption
@@ -5147,7 +5148,7 @@ private fun ObserveProfileScrollToTop(
         if (requestId <= 0) return@LaunchedEffect
         listState?.let { state ->
             if (state.firstVisibleItemIndex > 0 || state.firstVisibleItemScrollOffset > 0) {
-                state.animateScrollToItem(0)
+                state.animateScrollToTopContinuously()
             }
         }
         scrollState?.let { state ->

@@ -69,7 +69,7 @@ import com.android.purebilibili.core.ui.LocalBottomBarContentPadding
 import com.android.purebilibili.core.ui.rememberAppTopChromePolicy
 import com.android.purebilibili.core.ui.rememberBackToTopButtonEnabled
 import com.android.purebilibili.core.util.LocalWindowSizeClass
-import com.android.purebilibili.core.util.animateScrollToTop
+import com.android.purebilibili.core.util.animateScrollToTopContinuously
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.util.shouldShowScrollToTop
 import com.android.purebilibili.data.model.response.LiveRoomSearchItem
@@ -410,9 +410,9 @@ fun LiveSearchScreen(
                 onClick = {
                     scope.launch {
                         if (selectedTab == 0) {
-                            liveGridState.animateScrollToTop()
+                            liveGridState.animateScrollToTopContinuously()
                         } else {
-                            userListState.animateScrollToTop()
+                            userListState.animateScrollToTopContinuously()
                         }
                     }
                 },

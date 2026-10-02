@@ -3,10 +3,14 @@ package com.android.purebilibili.core.util
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 data class ScrollToTopPlan(
     val preJumpIndex: Int?,
@@ -66,26 +70,6 @@ fun shouldShowScrollToTop(
     return firstVisibleItemIndex > 0 || firstVisibleItemScrollOffset >= offsetThresholdPx
 }
 
-suspend fun LazyListState.animateScrollToTop(fast: Boolean = false) {
-    val plan = resolveScrollToTopPlan(
-        firstVisibleItemIndex = firstVisibleItemIndex,
-        visibleItemCount = layoutInfo.visibleItemsInfo.size,
-        fast = fast,
-    )
-    plan.preJumpIndex?.let { scrollToItem(it) }
-    animateScrollToItem(plan.animateTargetIndex)
-}
-
-suspend fun LazyGridState.animateScrollToTop(fast: Boolean = false) {
-    val plan = resolveScrollToTopPlan(
-        firstVisibleItemIndex = firstVisibleItemIndex,
-        visibleItemCount = layoutInfo.visibleItemsInfo.size,
-        fast = fast,
-    )
-    plan.preJumpIndex?.let { scrollToItem(it) }
-    animateScrollToItem(plan.animateTargetIndex)
-}
-
 /**
  * 估算当前位置到列表顶部的像素距离：已滚出首个可见项的偏移 + 其上方整行的平均高度。
  * 全宽项（轮播、分割条）会让结果略有偏差，由调用方在动画后收尾。
@@ -101,9 +85,66 @@ fun estimateDistanceToTopPx(
 }
 
 /**
- * 瀑布流的 animateScrollToItem 会按估算目标分段滚动，每段结束后重新估算，视觉上是走走停停。
- * 这里用一次像素级动画连续滚到估算的顶部，再对剩余偏差收尾。
+ * animateScrollToItem 会按估算目标分段滚动，每段结束后重新估算，视觉上是走走停停。
+ * 这里用一次像素级动画连续滚过估算的距离，再由 [settle] 对剩余偏差收尾。
+ * 动画被用户手势打断时会抛 CancellationException；调用方协程本身未取消时就地结束，
+ * 避免连带终止长期收集回顶事件的协程。
  */
+private suspend fun ScrollableState.animateScrollToTopContinuously(
+    distancePx: Int,
+    settle: suspend () -> Unit,
+) {
+    try {
+        if (distancePx > 0) {
+            val durationMillis = (distancePx / 6).coerceIn(250, 900)
+            animateScrollBy(
+                value = -distancePx.toFloat(),
+                animationSpec = tween(durationMillis = durationMillis, easing = FastOutSlowInEasing),
+            )
+        }
+        settle()
+    } catch (e: CancellationException) {
+        currentCoroutineContext().ensureActive()
+    }
+}
+
+suspend fun LazyListState.animateScrollToTopContinuously() {
+    val items = layoutInfo.visibleItemsInfo
+    if (items.isEmpty() || (firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0)) return
+    animateScrollToTopContinuously(
+        distancePx = estimateDistanceToTopPx(
+            firstVisibleItemIndex = firstVisibleItemIndex,
+            firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,
+            columns = 1,
+            averageRowHeightPx = items.map { it.size }.average().toInt() + layoutInfo.mainAxisItemSpacing,
+        )
+    ) {
+        if (firstVisibleItemIndex != 0 || firstVisibleItemScrollOffset != 0) {
+            animateScrollToItem(0)
+        }
+    }
+}
+
+suspend fun LazyGridState.animateScrollToTopContinuously() {
+    val items = layoutInfo.visibleItemsInfo
+    if (items.isEmpty() || (firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0)) return
+    val isVertical = layoutInfo.orientation == Orientation.Vertical
+    val averageItemSize = items.map { if (isVertical) it.size.height else it.size.width }.average().toInt()
+    val columns = (items.maxOf { if (isVertical) it.column else it.row } + 1).coerceAtLeast(1)
+    animateScrollToTopContinuously(
+        distancePx = estimateDistanceToTopPx(
+            firstVisibleItemIndex = firstVisibleItemIndex,
+            firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,
+            columns = columns,
+            averageRowHeightPx = averageItemSize + layoutInfo.mainAxisItemSpacing,
+        )
+    ) {
+        if (firstVisibleItemIndex != 0 || firstVisibleItemScrollOffset != 0) {
+            animateScrollToItem(0)
+        }
+    }
+}
+
 suspend fun LazyStaggeredGridState.animateScrollToTopContinuously() {
     val items = layoutInfo.visibleItemsInfo
     if (items.isEmpty() || (firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0)) return
@@ -112,30 +153,16 @@ suspend fun LazyStaggeredGridState.animateScrollToTopContinuously() {
     val laneItems = items.filter { it.lane >= 0 }.ifEmpty { items }
     val averageItemSize = laneItems.map { if (isVertical) it.size.height else it.size.width }.average().toInt()
     val columns = (laneItems.maxOf { it.lane } + 1).coerceAtLeast(1)
-    val distance = estimateDistanceToTopPx(
-        firstVisibleItemIndex = firstVisibleItemIndex,
-        firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,
-        columns = columns,
-        averageRowHeightPx = averageItemSize + layoutInfo.mainAxisItemSpacing,
-    )
-    if (distance > 0) {
-        val durationMillis = (distance / 6).coerceIn(250, 900)
-        animateScrollBy(
-            value = -distance.toFloat(),
-            animationSpec = tween(durationMillis = durationMillis, easing = FastOutSlowInEasing),
+    animateScrollToTopContinuously(
+        distancePx = estimateDistanceToTopPx(
+            firstVisibleItemIndex = firstVisibleItemIndex,
+            firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,
+            columns = columns,
+            averageRowHeightPx = averageItemSize + layoutInfo.mainAxisItemSpacing,
         )
+    ) {
+        if (firstVisibleItemIndex != 0 || firstVisibleItemScrollOffset != 0) {
+            animateScrollToItem(0)
+        }
     }
-    if (firstVisibleItemIndex != 0 || firstVisibleItemScrollOffset != 0) {
-        animateScrollToItem(0)
-    }
-}
-
-suspend fun LazyStaggeredGridState.animateScrollToTop(fast: Boolean = false) {
-    val plan = resolveScrollToTopPlan(
-        firstVisibleItemIndex = firstVisibleItemIndex,
-        visibleItemCount = layoutInfo.visibleItemsInfo.size,
-        fast = fast,
-    )
-    plan.preJumpIndex?.let { scrollToItem(it) }
-    animateScrollToItem(plan.animateTargetIndex)
 }

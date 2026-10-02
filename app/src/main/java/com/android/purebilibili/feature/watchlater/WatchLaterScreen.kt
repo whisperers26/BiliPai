@@ -129,6 +129,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.animateScrollToTopContinuously
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 // 辅助函数：格式化时长
@@ -799,7 +800,7 @@ fun WatchLaterScreen(
     LaunchedEffect(scrollToTopChannel) {
         scrollToTopChannel?.receiveAsFlow()?.collect {
             if (gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 0) {
-                gridState.animateScrollToItem(0)
+                gridState.animateScrollToTopContinuously()
             }
         }
     }

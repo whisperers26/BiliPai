@@ -198,7 +198,7 @@ import com.android.purebilibili.data.repository.SearchUserType
 import com.android.purebilibili.data.repository.resolveSearchDurationFilterLabel
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.core.util.animateScrollToTop
+import com.android.purebilibili.core.util.animateScrollToTopContinuously
 import com.android.purebilibili.core.util.shouldShowScrollToTop
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
@@ -1513,9 +1513,9 @@ fun SearchScreen(
                         LaunchedEffect(scrollToTopRequestId, scrollToTopSearchType, targetSearchType) {
                             if (scrollToTopSearchType == targetSearchType && scrollToTopRequestId > 0) {
                                 if (targetSearchType == SearchType.VIDEO) {
-                                    activePageGridState.animateScrollToItem(0)
+                                    activePageGridState.animateScrollToTopContinuously()
                                 } else {
-                                    activePageListState.animateScrollToItem(0)
+                                    activePageListState.animateScrollToTopContinuously()
                                 }
                             }
                         }
@@ -2463,9 +2463,9 @@ fun SearchScreen(
                     scope.launch {
                         animateSearchHeaderOffsetTo(0f)
                         if (state.searchType == SearchType.VIDEO) {
-                            resultGridState.animateScrollToTop(fast = true)
+                            resultGridState.animateScrollToTopContinuously()
                         } else {
-                            resultListState.animateScrollToTop(fast = true)
+                            resultListState.animateScrollToTopContinuously()
                         }
                     }
                 },

@@ -66,6 +66,7 @@ import com.android.purebilibili.core.ui.components.resolveReadableNativeTabMinWi
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.animateScrollToTopContinuously
 import com.android.purebilibili.feature.home.components.biliPaiProgressiveTopBlur
 import com.android.purebilibili.core.ui.blur.topSolidProgressiveFade
 import com.android.purebilibili.core.ui.performance.TrackJankStateFlag
@@ -1166,9 +1167,9 @@ internal fun VideoContentSection(
             onClick = {
                 scope.launch {
                     if (pagerState.currentPage == 0) {
-                        introListState.animateScrollToItem(0)
+                        introListState.animateScrollToTopContinuously()
                     } else {
-                        commentListState.animateScrollToItem(0)
+                        commentListState.animateScrollToTopContinuously()
                     }
                     tabBarCollapsePx = 0f
                 }
