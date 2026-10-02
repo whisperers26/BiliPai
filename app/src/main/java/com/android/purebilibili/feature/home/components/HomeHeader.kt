@@ -409,6 +409,8 @@ internal fun resolveHomeTopPinnedChromeLayout(
     searchToTabsSpacing: Dp,
     renderMode: HomeTopChromeRenderMode,
     includeTabInBlur: Boolean = true,
+    // The unified panel pads its content top and bottom; the background must grow with it.
+    panelVerticalPadding: Dp = AppSpacingTokens.None,
 ): HomeTopPinnedChromeLayout {
     val visibleSearchBlockHeight = if (visibleSearchHeight > AppSpacingTokens.None) {
         searchToTabsSpacing + visibleSearchHeight
@@ -418,9 +420,13 @@ internal fun resolveHomeTopPinnedChromeLayout(
     val visibleChromeHeight = statusBarHeight + visibleSearchBlockHeight +
         if (includeTabInBlur) tabRowHeight else AppSpacingTokens.None
     return HomeTopPinnedChromeLayout(
-        tabTop = statusBarHeight + visibleSearchBlockHeight,
+        tabTop = statusBarHeight + visibleSearchBlockHeight + panelVerticalPadding,
         searchTop = statusBarHeight,
-        blurHeight = if (renderMode == HomeTopChromeRenderMode.PLAIN) AppSpacingTokens.None else visibleChromeHeight
+        blurHeight = if (renderMode == HomeTopChromeRenderMode.PLAIN) {
+            AppSpacingTokens.None
+        } else {
+            visibleChromeHeight + panelVerticalPadding * 2
+        }
     )
 }
 
@@ -2059,6 +2065,11 @@ fun HomeHeader(
         renderMode = if (isProgressiveBlurRequested || isProgressiveFadeActive) HomeTopChromeRenderMode.BLUR else effectiveContinuousSlabRenderMode,
         // 连续背景始终覆盖顶部 Dock；独立轨道只负责自身材质与前景可读性。
         includeTabInBlur = true,
+        panelVerticalPadding = if (embedTopTabsInUnifiedPanel && renderUnifiedTopPanelChrome) {
+            unifiedPanelInnerPadding
+        } else {
+            AppSpacingTokens.None
+        },
     )
     val progressiveBlurBottomExtension = resolveProgressiveTopBlurBottomExtension(
         enabled = isProgressiveBlurRequested &&
