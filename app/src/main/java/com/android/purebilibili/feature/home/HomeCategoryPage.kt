@@ -10,6 +10,7 @@ import com.android.purebilibili.core.ui.components.FeedVerticalStaggeredGrid
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.ui.AppSpacingTokens
 
@@ -544,7 +545,23 @@ internal fun HomeCategoryPageContent(
         { (gridState.firstVisibleItemIndex shl 16) + gridState.firstVisibleItemScrollOffset }
     }
 
-    Box(modifier = modifier) {
+    //  用户手指滚动列表后收起「定位上次刷新」胶囊（程序化滚动不算）
+    val dismissLocatorOnUserScroll = remember {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPreScroll(
+                available: androidx.compose.ui.geometry.Offset,
+                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource,
+            ): androidx.compose.ui.geometry.Offset {
+                if (source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput &&
+                    available.y != 0f
+                ) {
+                    oldContentLocatorDismissed = true
+                }
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
+    Box(modifier = modifier.nestedScroll(dismissLocatorOnUserScroll)) {
         CompositionLocalProvider(
             LocalVideoCardSharedElementSourceRoute provides sourceRoute,
             LocalHomeScrollTickProvider provides homeScrollTickProvider

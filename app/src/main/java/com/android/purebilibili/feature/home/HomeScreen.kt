@@ -1764,6 +1764,9 @@ fun HomeScreen(
         gridStates[currentCategory]
     }
 
+    //  手动关闭或用户滚动列表后收起撤销胶囊；下次撤销可用时自动复位
+    var undoDismissed by remember { mutableStateOf(false) }
+    val undoAvailableLatest by androidx.compose.runtime.rememberUpdatedState(undoAvailable)
     val nestedScrollConnection = remember(
         isAnyHeaderCollapseEnabled,
         headerAutoCollapseDistancePx,
@@ -1782,6 +1785,9 @@ fun HomeScreen(
     ) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (undoAvailableLatest && source == NestedScrollSource.UserInput && available.y != 0f) {
+                    undoDismissed = true
+                }
                 if (homeHeaderRevealLock) {
                     return Offset.Zero
                 }
@@ -2850,8 +2856,6 @@ fun HomeScreen(
         val refreshLocatorEnabled by SettingsManager.getRefreshLocatorEnabled(context)
             .collectAsStateWithLifecycle(initialValue = false)
         val undoVisible = refreshUndoEnabled && undoAvailable && currentCategory == HomeCategory.RECOMMEND
-        //  手动关闭撤销胶囊；下次撤销可用时自动复位
-        var undoDismissed by remember { androidx.compose.runtime.mutableStateOf(false) }
         androidx.compose.runtime.LaunchedEffect(undoAvailable) {
             if (!undoAvailable) undoDismissed = false
         }
