@@ -166,33 +166,3 @@ suspend fun LazyStaggeredGridState.animateScrollToTopContinuously() {
         }
     }
 }
-
-suspend fun LazyListState.animateScrollToTop(fast: Boolean = false) {
-    val plan = resolveScrollToTopPlan(
-        firstVisibleItemIndex = firstVisibleItemIndex,
-        visibleItemCount = layoutInfo.visibleItemsInfo.size,
-        fast = fast,
-    )
-    plan.preJumpIndex?.let { scrollToItem(it) }
-    animateScrollToItem(plan.animateTargetIndex)
-}
-
-suspend fun LazyGridState.animateScrollToTop(fast: Boolean = false) {
-    val plan = resolveScrollToTopPlan(
-        firstVisibleItemIndex = firstVisibleItemIndex,
-        visibleItemCount = layoutInfo.visibleItemsInfo.size,
-        fast = fast,
-    )
-    plan.preJumpIndex?.let { scrollToItem(it) }
-    animateScrollToItem(plan.animateTargetIndex)
-}
-
-suspend fun LazyStaggeredGridState.animateScrollToTop(fast: Boolean = false) {
-    val plan = resolveScrollToTopPlan(
-        firstVisibleItemIndex = firstVisibleItemIndex,
-        visibleItemCount = layoutInfo.visibleItemsInfo.size,
-        fast = fast,
-    )
-    plan.preJumpIndex?.let { scrollToItem(it) }
-    animateScrollToItem(plan.animateTargetIndex)
-}
