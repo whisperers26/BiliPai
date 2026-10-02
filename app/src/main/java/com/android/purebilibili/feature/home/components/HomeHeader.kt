@@ -1373,6 +1373,12 @@ internal fun Modifier.homeTopChromeSurface(
 ): Modifier = composed {
     val isLiquidGlassMode = renderMode == HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP ||
         renderMode == HomeTopChromeRenderMode.LIQUID_GLASS_HAZE
+    // biliPaiProgressiveTopBlur draws nothing under a forced low blur budget, so a transparent
+    // surface is only valid while the blur really renders.
+    val progressiveBlurRenders = shouldUseBiliPaiProgressiveTopBlur(
+        enabled = useProgressiveTopBlur,
+        hasBackdrop = miuixBackdrop != null,
+    ) && !isLowBlurBudgetForced(forceLowBlurBudget)
     // Compact controls reuse the bottom-bar material. The full-width top slab deliberately keeps
     // the progressive blur path so its lower edge fades into content instead of becoming a clipped
     // glass-shell boundary.
@@ -1412,14 +1418,11 @@ internal fun Modifier.homeTopChromeSurface(
                             ?: BILIPAI_PROGRESSIVE_TOP_BLUR_FALLOFF_CURVE,
                     ),
                 )
-                .background(if (useProgressiveTopBlur || useProgressiveTopFade) Color.Transparent else surfaceColor, shape)
+                .background(if (progressiveBlurRenders || useProgressiveTopFade) Color.Transparent else surfaceColor, shape)
         }
 
         HomeTopChromeRenderMode.BLUR -> {
-            val isProgressiveBlurActive = shouldUseBiliPaiProgressiveTopBlur(
-                enabled = useProgressiveTopBlur,
-                hasBackdrop = miuixBackdrop != null,
-            )
+            val isProgressiveBlurActive = progressiveBlurRenders
             this
                 .then(
                     if (isProgressiveBlurActive) {
@@ -2045,11 +2048,16 @@ fun HomeHeader(
         }
     }
     val isProgressiveBlurRequested = progressiveTopBlurEnabled
+    // The runtime visual guard can drop the blur mid-scroll; the header must then paint a solid
+    // fill instead of leaving the unblurred, unfilled progressive surface transparent.
+    val lowBlurBudget = isLowBlurBudgetForced(forceLowBlurBudget)
     val isProgressiveBlurActive = shouldUseBiliPaiProgressiveTopBlur(
         enabled = isProgressiveBlurRequested && !isHeaderBlurEnabled,
         hasBackdrop = miuixBackdrop != null,
-    ) && !forceLowBlurBudget
+    ) && !lowBlurBudget
     val isProgressiveFadeActive = progressiveTopFadeEnabled && !isHeaderBlurEnabled
+    val needsLowBudgetFill = lowBlurBudget && isProgressiveBlurRequested &&
+        !isProgressiveFadeActive && !isHeaderBlurEnabled
 
     val pinnedChromeLayout = resolveHomeTopPinnedChromeLayout(
         statusBarHeight = statusBarHeight,
@@ -2283,7 +2291,7 @@ fun HomeHeader(
             containerWidthDp = maxWidth,
             chromePolicy = topChromePolicy
         )
-        if (shouldUseOpaqueTopChromeBackground(
+        if (needsLowBudgetFill || shouldUseOpaqueTopChromeBackground(
                 progressiveBlurActive = isProgressiveBlurActive || isProgressiveFadeActive,
                 headerBlurActive = isHeaderBlurEnabled,
                 liquidGlassActive = isGlassEnabled || topChromeLiquidGlassEnabled,
