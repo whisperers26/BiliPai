@@ -40,7 +40,7 @@ import com.android.purebilibili.feature.home.components.cards.StoryVideoCard
 import com.android.purebilibili.feature.home.resolveHomeFeedCardLayout
 import com.android.purebilibili.core.ui.skeleton.ContentVideoGridSkeletonFixedColumns
 import com.android.purebilibili.core.util.LocalWindowSizeClass
-import com.android.purebilibili.core.util.animateScrollToTop
+import com.android.purebilibili.core.util.animateScrollToTopContinuously
 import com.android.purebilibili.core.util.resolveReplaceRefreshPage
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.util.shouldShowScrollToTop
@@ -355,7 +355,7 @@ fun CategoryScreen(
                 visible = backToTopButtonEnabled && videos.isNotEmpty() && hasScrolledAwayFromTop,
                 onClick = {
                     scope.launch {
-                        gridState.animateScrollToTop()
+                        gridState.animateScrollToTopContinuously()
                     }
                 },
                 modifier = Modifier

@@ -50,7 +50,7 @@ import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
-import com.android.purebilibili.core.util.animateScrollToTop
+import com.android.purebilibili.core.util.animateScrollToTopContinuously
 import com.android.purebilibili.core.util.Logger
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
@@ -252,7 +252,7 @@ fun SubscriptionFeedPage(
     var reloadToken by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(scrollToTopRequestId) {
-        if (scrollToTopRequestId > 0 && !isArticleOpen) listState.animateScrollToTop()
+        if (scrollToTopRequestId > 0 && !isArticleOpen) listState.animateScrollToTopContinuously()
     }
     LaunchedEffect(reloadToken, subscriptionRevision) {
         loading = true

@@ -2,7 +2,7 @@
 package com.android.purebilibili.feature.partition
 
 import android.os.Build
-import com.android.purebilibili.core.util.animateScrollToTop
+import com.android.purebilibili.core.util.animateScrollToTopContinuously
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.theme.LocalAppUiStyle
@@ -515,7 +515,7 @@ fun PartitionContent(
     LaunchedEffect(scrollToTopRequestId) {
         if (scrollToTopRequestId <= 0) return@LaunchedEffect
         if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0) {
-            listState.animateScrollToTop()
+            listState.animateScrollToTopContinuously()
         }
     }
     val layoutDirection = LocalLayoutDirection.current

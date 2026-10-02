@@ -29,7 +29,7 @@ import com.android.purebilibili.feature.home.isCompactHomeFeedScreen
 import com.android.purebilibili.feature.home.GridPinchColumnHudPill
 import com.android.purebilibili.core.ui.components.AppLiquidGlassBackToTopButton
 import com.android.purebilibili.core.ui.rememberBackToTopButtonEnabled
-import com.android.purebilibili.core.util.animateScrollToTop
+import com.android.purebilibili.core.util.animateScrollToTopContinuously
 import com.android.purebilibili.core.util.shouldShowScrollToTop
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -820,7 +820,7 @@ fun SpaceScreen(
                     shouldShowBackToTop,
                 onClick = {
                     coroutineScope.launch {
-                        gridState.animateScrollToTop()
+                        gridState.animateScrollToTopContinuously()
                     }
                 },
                 modifier = Modifier
