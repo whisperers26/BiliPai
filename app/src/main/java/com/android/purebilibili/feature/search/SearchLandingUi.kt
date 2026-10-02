@@ -1,6 +1,10 @@
 package com.android.purebilibili.feature.search
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,17 +25,27 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.ClearAll
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
@@ -57,6 +71,8 @@ import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private const val SEARCH_HIGHLIGHT_START_TOKEN = "§hl§"
 private const val SEARCH_HIGHLIGHT_END_TOKEN = "§/hl§"
@@ -737,40 +753,99 @@ private fun SearchHistorySectionModern(
                 horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
             ) {
                 rowItems.forEach { history ->
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(AppShapes.container(ContainerLevel.Chip))
-                            .clickable { onItemClick(history.keyword) }
-                            .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AppText(
-                            text = history.keyword,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        AppIconButton(
-                            onClick = { onDelete(history) },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            AppIcon(
-                                imageVector = Icons.Outlined.Close,
-                                contentDescription = "删除",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
+                    SearchHistoryItem(
+                        keyword = history.keyword,
+                        onClick = { onItemClick(history.keyword) },
+                        onLongPressComplete = { onDelete(history) },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
                 if (rowItems.size < safeColumns) {
                     Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
+    }
+}
+
+internal const val SEARCH_HISTORY_LONG_PRESS_DELETE_MILLIS = 800
+private const val SEARCH_HISTORY_LONG_PRESS_START_DELAY_MILLIS = 100
+
+/** 长按历史项：进度条沿条目自左向右填满，填满即删除；中途松手则回退。 */
+@Composable
+private fun SearchHistoryItem(
+    keyword: String,
+    onClick: () -> Unit,
+    onLongPressComplete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val progress = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnComplete by rememberUpdatedState(onLongPressComplete)
+    val fillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+    val shape = AppShapes.container(ContainerLevel.Chip)
+
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .drawBehind {
+                val fraction = progress.value
+                if (fraction > 0f) {
+                    drawRect(
+                        color = fillColor,
+                        size = Size(size.width * fraction, size.height)
+                    )
+                }
+            }
+            .pointerInput(Unit) {
+                var fillStarted = false
+                detectTapGestures(
+                    // 填充一旦开始，松手只取消删除，不再算点击（否则松手会跳去搜索）。
+                    onTap = { if (!fillStarted) currentOnClick() },
+                    onLongPress = {},
+                    onPress = {
+                        fillStarted = false
+                        val fill = scope.launch {
+                            // 先等一小段再填充，避免普通点击时闪一下进度。
+                            delay(SEARCH_HISTORY_LONG_PRESS_START_DELAY_MILLIS.toLong())
+                            fillStarted = true
+                            progress.animateTo(
+                                targetValue = 1f,
+                                animationSpec = tween(
+                                    // 总按压时长固定，填充动画只占起始延迟之后的部分。
+                                    durationMillis = SEARCH_HISTORY_LONG_PRESS_DELETE_MILLIS -
+                                        SEARCH_HISTORY_LONG_PRESS_START_DELAY_MILLIS,
+                                    easing = LinearEasing
+                                )
+                            )
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            currentOnComplete()
+                            // 条目被移除后后面的历史项会顶替到本位置，进度必须归零。
+                            progress.snapTo(0f)
+                        }
+                        tryAwaitRelease()
+                        if (progress.value < 1f) {
+                            fill.cancel()
+                            scope.launch { progress.snapTo(0f) }
+                        }
+                    }
+                )
+            }
+            .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = 5.dp)
+            .semantics {
+                onClick { currentOnClick(); true }
+                onLongClick(label = "删除") { currentOnComplete(); true }
+            }
+    ) {
+        AppText(
+            text = keyword,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }
 
