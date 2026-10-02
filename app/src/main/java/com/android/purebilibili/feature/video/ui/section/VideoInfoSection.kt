@@ -281,6 +281,21 @@ internal fun resolveVideoInfoInitialExpandedState(
     defaultExpanded: Boolean = false
 ): Boolean = defaultExpanded && (hasDescription || hasTags)
 
+/**
+ * Whether the rows under the title and stats (badges, honors, declarations, BGM) are shown.
+ * A fixed-height host sets [compactWhenCollapsed] so only an expanded title makes room for them.
+ */
+internal fun shouldShowVideoInfoSupplementRows(
+    compactWhenCollapsed: Boolean,
+    expanded: Boolean
+): Boolean = !compactWhenCollapsed || expanded
+
+/** How many lines the stats may wrap to; a compact collapsed title keeps them on one. */
+internal fun resolveVideoInfoStatsMaxLines(
+    compactWhenCollapsed: Boolean,
+    expanded: Boolean
+): Int = if (compactWhenCollapsed && !expanded) 1 else Int.MAX_VALUE
+
 private const val BGM_DISCOVERY_LOAD_DELAY_MS = 420L
 private const val BGM_RECOMMEND_PAGE_SIZE = 5
 private const val BGM_RECOMMEND_ROW_START_INDEX = 4
@@ -459,6 +474,8 @@ fun VideoTitleWithDesc(
     headerTrailingContent: (@Composable RowScope.() -> Unit)? = null,
     /** Lists the creator team first in the expanded details, for callers whose owner row leaves it out. */
     onCreatorTeamMemberClick: ((Long) -> Unit)? = null,
+    /** Keeps the collapsed title to the title and one stats line; badges, honors, declarations and BGM wait for expansion. */
+    compactWhenCollapsed: Boolean = false,
     // PiliPlus 式标题前缀徽标（赞助/恰饭等），空串不展示
     sponsorLabel: String = "",
     // 信息行末尾的紧凑入口插槽（AI 总结 / 视频笔记图标）
@@ -642,7 +659,11 @@ fun VideoTitleWithDesc(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    itemVerticalAlignment = Alignment.CenterVertically
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                    maxLines = resolveVideoInfoStatsMaxLines(
+                        compactWhenCollapsed = compactWhenCollapsed,
+                        expanded = expanded
+                    )
                 ) {
                     // Stats Row split for shared element transitions
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -810,79 +831,98 @@ fun VideoTitleWithDesc(
             )
         }
 
-        if (videoBadges.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
-            androidx.compose.foundation.layout.FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                videoBadges.forEach { badge ->
-                    VideoDetailBadgeChip(
-                        text = badge,
-                        emphasized = badge.startsWith("充电专属")
+        androidx.compose.animation.AnimatedVisibility(
+            visible = shouldShowVideoInfoSupplementRows(
+                compactWhenCollapsed = compactWhenCollapsed,
+                expanded = expanded
+            ),
+            enter = if (animateLayout) {
+                folmeExpandEnterTransition(useMiuixSpring)
+            } else {
+                androidx.compose.animation.EnterTransition.None
+            },
+            exit = if (animateLayout) {
+                folmeExpandExitTransition(useMiuixSpring)
+            } else {
+                androidx.compose.animation.ExitTransition.None
+            }
+        ) {
+            Column {
+                if (videoBadges.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    androidx.compose.foundation.layout.FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        videoBadges.forEach { badge ->
+                            VideoDetailBadgeChip(
+                                text = badge,
+                                emphasized = badge.startsWith("充电专属")
+                            )
+                        }
+                    }
+                }
+
+                // 视频荣誉徽标(全站排行榜/每周必看/入站必刷/热门):可点击跳转对应榜单页
+                val honorChips = info.honorReply?.honor.orEmpty().mapNotNull { honor ->
+                    resolveVideoHonorChipText(
+                        type = honor.type,
+                        honorName = honor.honorName,
+                        descContent = honor.desc?.content,
+                        weeklyRecommendNum = honor.weeklyRecommendNum
+                    )?.let { text ->
+                        val jumpUrl = resolveVideoHonorJumpUrl(
+                            type = honor.type,
+                            honorUrl = honor.honorUrl,
+                            weeklyRecommendNum = honor.weeklyRecommendNum,
+                            honorText = "${honor.honorName} ${honor.desc?.content.orEmpty()}"
+                        ) ?: return@mapNotNull null
+                        Triple(honor, text, jumpUrl)
+                    }
+                }
+                if (honorChips.isNotEmpty()) {
+                    // 紧跟统计行/徽标区:上方无徽标时收紧到 3dp,避免与播放量行隔离太远。
+                    Spacer(Modifier.height(if (videoBadges.isNotEmpty()) 6.dp else 3.dp))
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        honorChips.forEach { (honor, text, jumpUrl) ->
+                            VideoHonorChip(
+                                text = text,
+                                onClick = { onDescriptionUrlClick?.invoke(jumpUrl) }
+                            )
+                        }
+                    }
+                }
+
+                // UP 主视频声明(PiliPlus argue_msg)+ 禁止转载(rights.no_reprint):
+                // 声明小字置于 BGM 胶囊之上,与荣誉胶囊形成"胶囊区→声明区"的统一观感。
+                val argueMsg = info.argueInfo?.argueMsg.orEmpty()
+                val noReprint = info.rights.noReprint == 1
+                if (argueMsgShown && (argueMsg.isNotBlank() || noReprint)) {
+                    Spacer(Modifier.height(6.dp))
+                    if (argueMsg.isNotBlank()) {
+                        VideoArgueMsgRow(argueMsg = argueMsg)
+                    }
+                    if (argueMsg.isNotBlank() && noReprint) {
+                        Spacer(Modifier.height(4.dp))
+                    }
+                    if (noReprint) {
+                        VideoArgueMsgRow(argueMsg = "未经作者授权，请勿转载")
+                    }
+                }
+
+                // [新增] BGM Info Row
+                if (bgmList.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    InlineBgmSection(
+                        bgmList = bgmList,
+                        onBgmClick = onBgmClick,
+                        onRelatedVideoClick = onRelatedVideoClick
                     )
                 }
             }
-        }
-
-        // 视频荣誉徽标(全站排行榜/每周必看/入站必刷/热门):可点击跳转对应榜单页
-        val honorChips = info.honorReply?.honor.orEmpty().mapNotNull { honor ->
-            resolveVideoHonorChipText(
-                type = honor.type,
-                honorName = honor.honorName,
-                descContent = honor.desc?.content,
-                weeklyRecommendNum = honor.weeklyRecommendNum
-            )?.let { text ->
-                val jumpUrl = resolveVideoHonorJumpUrl(
-                    type = honor.type,
-                    honorUrl = honor.honorUrl,
-                    weeklyRecommendNum = honor.weeklyRecommendNum,
-                    honorText = "${honor.honorName} ${honor.desc?.content.orEmpty()}"
-                ) ?: return@mapNotNull null
-                Triple(honor, text, jumpUrl)
-            }
-        }
-        if (honorChips.isNotEmpty()) {
-            // 紧跟统计行/徽标区:上方无徽标时收紧到 3dp,避免与播放量行隔离太远。
-            Spacer(Modifier.height(if (videoBadges.isNotEmpty()) 6.dp else 3.dp))
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                honorChips.forEach { (honor, text, jumpUrl) ->
-                    VideoHonorChip(
-                        text = text,
-                        onClick = { onDescriptionUrlClick?.invoke(jumpUrl) }
-                    )
-                }
-            }
-        }
-
-        // UP 主视频声明(PiliPlus argue_msg)+ 禁止转载(rights.no_reprint):
-        // 声明小字置于 BGM 胶囊之上,与荣誉胶囊形成"胶囊区→声明区"的统一观感。
-        val argueMsg = info.argueInfo?.argueMsg.orEmpty()
-        val noReprint = info.rights.noReprint == 1
-        if (argueMsgShown && (argueMsg.isNotBlank() || noReprint)) {
-            Spacer(Modifier.height(6.dp))
-            if (argueMsg.isNotBlank()) {
-                VideoArgueMsgRow(argueMsg = argueMsg)
-            }
-            if (argueMsg.isNotBlank() && noReprint) {
-                Spacer(Modifier.height(4.dp))
-            }
-            if (noReprint) {
-                VideoArgueMsgRow(argueMsg = "未经作者授权，请勿转载")
-            }
-        }
-
-        // [新增] BGM Info Row
-        if (bgmList.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
-            InlineBgmSection(
-                bgmList = bgmList,
-                onBgmClick = onBgmClick,
-                onRelatedVideoClick = onRelatedVideoClick
-            )
         }
 
         //  Description - 默认隐藏，展开后显示
