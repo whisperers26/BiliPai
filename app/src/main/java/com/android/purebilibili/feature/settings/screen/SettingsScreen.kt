@@ -150,6 +150,10 @@ fun SettingsScreen(
         .collectAsStateWithLifecycle(initialValue = SettingsManager.AppUpdateChannel.STABLE)
     val incrementalTimelineRefreshEnabled by SettingsManager.getIncrementalTimelineRefresh(context)
         .collectAsStateWithLifecycle(initialValue = false)
+    val refreshLocatorEnabled by SettingsManager.getRefreshLocatorEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = false)
+    val refreshUndoEnabled by SettingsManager.getRefreshUndoEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = false)
     val homeRefreshCount by SettingsManager.getHomeRefreshCount(context)
         .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.DEFAULT_HOME_REFRESH_COUNT)
     val dynamicVisibleTabIds by SettingsManager.getDynamicTabVisibleTabs(context)
@@ -864,9 +868,21 @@ fun SettingsScreen(
                         }
                     },
                     incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
+                    refreshLocatorEnabled = refreshLocatorEnabled,
+                    refreshUndoEnabled = refreshUndoEnabled,
                     onIncrementalTimelineRefreshChange = { enabled ->
                         scope.launch {
                             SettingsManager.setIncrementalTimelineRefresh(context, enabled)
+                        }
+                    },
+                    onRefreshLocatorChange = { enabled ->
+                        scope.launch {
+                            SettingsManager.setRefreshLocatorEnabled(context, enabled)
+                        }
+                    },
+                    onRefreshUndoChange = { enabled ->
+                        scope.launch {
+                            SettingsManager.setRefreshUndoEnabled(context, enabled)
                         }
                     },
                     dynamicImagePreviewTextVisible = dynamicImagePreviewTextVisible,
@@ -1030,7 +1046,11 @@ private fun MobileSettingsNavLayout(
     feedApiType: SettingsManager.FeedApiType,
     onFeedApiTypeChange: (SettingsManager.FeedApiType) -> Unit,
     incrementalTimelineRefreshEnabled: Boolean,
+    refreshLocatorEnabled: Boolean,
+    refreshUndoEnabled: Boolean,
     onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
+    onRefreshLocatorChange: (Boolean) -> Unit,
+    onRefreshUndoChange: (Boolean) -> Unit,
     dynamicImagePreviewTextVisible: Boolean,
     onDynamicImagePreviewTextVisibleChange: (Boolean) -> Unit,
     dynamicDetailImageLayout: SettingsManager.DynamicDetailImageLayout,
@@ -1106,6 +1126,8 @@ private fun MobileSettingsNavLayout(
         onAppUpdateChannelChange = onAppUpdateChannelChange,
         onFeedApiTypeChange = onFeedApiTypeChange,
         onIncrementalTimelineRefreshChange = onIncrementalTimelineRefreshChange,
+        onRefreshLocatorChange = onRefreshLocatorChange,
+        onRefreshUndoChange = onRefreshUndoChange,
         onDynamicImagePreviewTextVisibleChange = onDynamicImagePreviewTextVisibleChange,
         onDynamicDetailImageLayoutChange = onDynamicDetailImageLayoutChange,
         onDynamicAllTabHorizontalUserListVisibleChange = onDynamicAllTabHorizontalUserListVisibleChange,
@@ -1146,6 +1168,8 @@ private fun MobileSettingsNavLayout(
         versionClickThreshold = versionClickThreshold,
         feedApiType = feedApiType,
         incrementalTimelineRefreshEnabled = incrementalTimelineRefreshEnabled,
+        refreshLocatorEnabled = refreshLocatorEnabled,
+        refreshUndoEnabled = refreshUndoEnabled,
         dynamicImagePreviewTextVisible = dynamicImagePreviewTextVisible,
         dynamicDetailImageLayout = dynamicDetailImageLayout,
         dynamicAllTabHorizontalUserListVisible = dynamicAllTabHorizontalUserListVisible,

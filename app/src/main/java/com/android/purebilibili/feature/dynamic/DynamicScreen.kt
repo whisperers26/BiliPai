@@ -1266,8 +1266,10 @@ fun DynamicScreen(
             var oldContentLocatorDismissed by remember(oldContentDividerIndex) {
                 mutableStateOf(false)
             }
+            val refreshLocatorEnabled by SettingsManager.getRefreshLocatorEnabled(context)
+                .collectAsStateWithLifecycle(initialValue = false)
             AnimatedVisibility(
-                visible = oldContentDividerIndex >= 0 && !oldContentLocatorDismissed,
+                visible = refreshLocatorEnabled && oldContentDividerIndex >= 0 && !oldContentLocatorDismissed,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(

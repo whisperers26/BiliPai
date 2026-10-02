@@ -2845,13 +2845,17 @@ fun HomeScreen(
         //  [新增] 刷新撤销悬浮按钮（右下角，5秒后自动消失）
         //  与「定位上次刷新」胶囊共用同一底部锚点：跟随听视频横条上浮，且在定位胶囊
         //  可见时再抬一个胶囊位（胶囊高约 36dp + 8dp 间距），避免两者互相遮挡。
-        val undoVisible = undoAvailable && currentCategory == HomeCategory.RECOMMEND
+        val refreshUndoEnabled by SettingsManager.getRefreshUndoEnabled(context)
+            .collectAsStateWithLifecycle(initialValue = false)
+        val refreshLocatorEnabled by SettingsManager.getRefreshLocatorEnabled(context)
+            .collectAsStateWithLifecycle(initialValue = false)
+        val undoVisible = refreshUndoEnabled && undoAvailable && currentCategory == HomeCategory.RECOMMEND
         //  手动关闭撤销胶囊；下次撤销可用时自动复位
         var undoDismissed by remember { androidx.compose.runtime.mutableStateOf(false) }
         androidx.compose.runtime.LaunchedEffect(undoAvailable) {
             if (!undoAvailable) undoDismissed = false
         }
-        val oldContentLocatorVisible = shouldShowRecommendOldContentDivider(
+        val oldContentLocatorVisible = refreshLocatorEnabled && shouldShowRecommendOldContentDivider(
             currentCategory = currentCategory,
             refreshNewItemsKey = refreshNewItemsKey,
             revealedRefreshKey = recommendOldContentRevealKey,
