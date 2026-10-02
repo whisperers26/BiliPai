@@ -135,7 +135,7 @@ import com.android.purebilibili.feature.home.LocalHomeFeedScrollInProgress
 import com.android.purebilibili.feature.home.LocalHomeScrollOffset
 import com.android.purebilibili.feature.home.components.BottomBarMatchedDockEdge
 import com.android.purebilibili.feature.home.components.BottomBarMatchedDockVisibility
-import com.android.purebilibili.core.util.animateScrollToTop
+import com.android.purebilibili.core.util.animateScrollToTopContinuously
 import com.android.purebilibili.core.util.resolveScrollToTopPlan
 import kotlinx.coroutines.channels.Channel
 import com.android.purebilibili.core.ui.blur.hazeSourceCompat
@@ -412,7 +412,7 @@ fun DynamicScreen(
         scope.launch {
             when (resolveDynamicTabReselectAction(displayedTabIndex, visibleIndex)) {
                 DynamicTabReselectAction.SCROLL_TO_TOP -> {
-                    activeListState?.animateScrollToItem(0)
+                    activeListState?.animateScrollToTopContinuously()
                 }
                 DynamicTabReselectAction.SWITCH_TAB -> {
                     // Reuse the shared pager-follow deformation: tap switching now drives the
@@ -662,7 +662,7 @@ fun DynamicScreen(
         val isAtTop = state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset < 50
         val plan = resolveDynamicScrollActionPlan(request = request, isAtTop = isAtTop)
         if (plan.shouldScrollToTop) {
-            state.animateScrollToTop(fast = true)
+            state.animateScrollToTopContinuously()
         }
         if (plan.shouldRefresh) {
             viewModel.refresh(displayedLogicalTab)
