@@ -768,7 +768,8 @@ private fun SearchHistorySectionModern(
     }
 }
 
-internal const val SEARCH_HISTORY_LONG_PRESS_DELETE_MILLIS = 2000
+internal const val SEARCH_HISTORY_LONG_PRESS_DELETE_MILLIS = 500
+private const val SEARCH_HISTORY_LONG_PRESS_START_DELAY_MILLIS = 100
 
 /** 长按历史项：进度条沿条目自左向右填满，填满即删除；中途松手则回退。 */
 @Composable
@@ -799,21 +800,23 @@ private fun SearchHistoryItem(
                 }
             }
             .pointerInput(Unit) {
+                var fillStarted = false
                 detectTapGestures(
-                    onTap = { currentOnClick() },
-                    // 声明长按后，超过长按阈值再松手就不会再触发 onTap（否则松手会跳去搜索）。
+                    // 填充一旦开始，松手只取消删除，不再算点击（否则松手会跳去搜索）。
+                    onTap = { if (!fillStarted) currentOnClick() },
                     onLongPress = {},
                     onPress = {
+                        fillStarted = false
                         val fill = scope.launch {
-                            // 过了长按阈值才开始填充：此前松手算点击，此后松手只取消删除。
-                            val startDelayMillis = viewConfiguration.longPressTimeoutMillis
-                            delay(startDelayMillis)
+                            // 先等一小段再填充，避免普通点击时闪一下进度。
+                            delay(SEARCH_HISTORY_LONG_PRESS_START_DELAY_MILLIS.toLong())
+                            fillStarted = true
                             progress.animateTo(
                                 targetValue = 1f,
                                 animationSpec = tween(
-                                    // 总按压时长固定，填充动画只占阈值之后的部分。
-                                    durationMillis = (SEARCH_HISTORY_LONG_PRESS_DELETE_MILLIS - startDelayMillis.toInt())
-                                        .coerceAtLeast(0),
+                                    // 总按压时长固定，填充动画只占起始延迟之后的部分。
+                                    durationMillis = SEARCH_HISTORY_LONG_PRESS_DELETE_MILLIS -
+                                        SEARCH_HISTORY_LONG_PRESS_START_DELAY_MILLIS,
                                     easing = LinearEasing
                                 )
                             )
