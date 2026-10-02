@@ -1761,6 +1761,7 @@ private fun VideoInfoHeaderSection(
             onTagClick = onSearchKeywordClick,
             onExpandedChange = onExpandedChange,
             onCreatorTeamMemberClick = onUpClick,
+            compactWhenCollapsed = true,
             expandedContent = {
                 if (shouldShowAiSummaryEntry(
                         aiSummary = aiSummary,
