@@ -8,6 +8,9 @@ import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 data class ScrollToTopPlan(
     val preJumpIndex: Int?,
@@ -84,19 +87,25 @@ fun estimateDistanceToTopPx(
 /**
  * animateScrollToItem 会按估算目标分段滚动，每段结束后重新估算，视觉上是走走停停。
  * 这里用一次像素级动画连续滚过估算的距离，再由 [settle] 对剩余偏差收尾。
+ * 动画被用户手势打断时会抛 CancellationException；调用方协程本身未取消时就地结束，
+ * 避免连带终止长期收集回顶事件的协程。
  */
 private suspend fun ScrollableState.animateScrollToTopContinuously(
     distancePx: Int,
     settle: suspend () -> Unit,
 ) {
-    if (distancePx > 0) {
-        val durationMillis = (distancePx / 6).coerceIn(250, 900)
-        animateScrollBy(
-            value = -distancePx.toFloat(),
-            animationSpec = tween(durationMillis = durationMillis, easing = FastOutSlowInEasing),
-        )
+    try {
+        if (distancePx > 0) {
+            val durationMillis = (distancePx / 6).coerceIn(250, 900)
+            animateScrollBy(
+                value = -distancePx.toFloat(),
+                animationSpec = tween(durationMillis = durationMillis, easing = FastOutSlowInEasing),
+            )
+        }
+        settle()
+    } catch (e: CancellationException) {
+        currentCoroutineContext().ensureActive()
     }
-    settle()
 }
 
 suspend fun LazyListState.animateScrollToTopContinuously() {
