@@ -955,10 +955,16 @@ interface BilibiliApi {
 
     @GET("x/copyright-music-publicity/bgm/detail")
     suspend fun getBgmDetail(
-        @Query("music_id") musicId: String,
-        @Query("aid") aid: Long,
-        @Query("cid") cid: Long
+        @QueryMap params: Map<String, String>
     ): com.android.purebilibili.data.model.response.BgmDetailResponse
+
+    @retrofit2.http.FormUrlEncoded
+    @POST("x/copyright-music-publicity/bgm/wish/update")
+    suspend fun updateBgmWish(
+        @retrofit2.http.Field("music_id") musicId: String,
+        @retrofit2.http.Field("state") state: Int,
+        @retrofit2.http.Field("csrf") csrf: String
+    ): SimpleApiResponse
 
     @GET("x/copyright-music-publicity/bgm/recommend_list")
     suspend fun getBgmRecommendList(
@@ -967,6 +973,12 @@ interface BilibiliApi {
         @Query("cid") cid: Long,
         @Query("pn") pn: Int = 1,
         @Query("ps") ps: Int = 5
+    ): com.android.purebilibili.data.model.response.BgmRecommendListResponse
+
+    // 音乐详情页与 PiliPlus 一致，取完整列表而非视频内发现音乐的分页窗口。
+    @GET("x/copyright-music-publicity/bgm/recommend_list")
+    suspend fun getAllBgmRecommendList(
+        @Query("music_id") musicId: String
     ): com.android.purebilibili.data.model.response.BgmRecommendListResponse
 
     @GET("x/stein/edgeinfo_v2")
@@ -1050,6 +1062,27 @@ interface BilibiliApi {
 
     @GET
     suspend fun getDanmakuSpecialDm(@retrofit2.http.Url url: String): ResponseBody
+
+    // [新增] 云端弹幕屏蔽规则列表
+    @retrofit2.http.GET("x/dm/filter/user")
+    suspend fun getDanmakuFilterRules(): DanmakuFilterRulesResponse
+
+    // [新增] 添加云端弹幕屏蔽规则 (type: 0=关键词, 1=正则, 2=UID crc32 hex)
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("x/dm/filter/user/add")
+    suspend fun addDanmakuFilterRule(
+        @retrofit2.http.Field("type") type: Int,
+        @retrofit2.http.Field("filter") filter: String,
+        @retrofit2.http.Field("csrf") csrf: String
+    ): DanmakuFilterAddResponse
+
+    // [新增] 删除云端弹幕屏蔽规则
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("x/dm/filter/user/del")
+    suspend fun deleteDanmakuFilterRule(
+        @retrofit2.http.Field("ids") ids: Long,
+        @retrofit2.http.Field("csrf") csrf: String
+    ): DanmakuActionResponse
 
     // [新增] 打分弹幕提交 (x/v2/dm/command/grade/post)
     // 互动投票/打分弹幕的提交端点；grade_score 为偶数，最大 10
@@ -2430,6 +2463,39 @@ interface PassportApi {
 
     @GET("x/passport-login/web/qrcode/poll")
     suspend fun pollQrCode(@Query("qrcode_key") key: String): Response<PollResponse>
+
+    // Web scan-authorization authenticates via access_key + android64 sign (not cookies).
+    // Contract verified by PiliPlus issue #2933 against the live API.
+    @GET("x/passport-login/web/qrcode/check")
+    @retrofit2.http.Headers(
+        "User-Agent: Mozilla/5.0 BiliDroid/8.43.0 (bbcallen@gmail.com) os/android model/android mobi_app/android build/8430300 channel/master innerVer/8430300 osVer/15 network/2",
+        "app-key: android64",
+        "env: prod",
+    )
+    suspend fun checkWebQrCode(
+        @retrofit2.http.QueryMap signedParams: Map<String, String>,
+    ): QrAuthorizationResponse
+
+    @GET("x/passport-login/web/qrcode/scene")
+    @retrofit2.http.Headers(
+        "User-Agent: Mozilla/5.0 BiliDroid/8.43.0 (bbcallen@gmail.com) os/android model/android mobi_app/android build/8430300 channel/master innerVer/8430300 osVer/15 network/2",
+        "app-key: android64",
+        "env: prod",
+    )
+    suspend fun getWebQrScene(
+        @retrofit2.http.QueryMap signedParams: Map<String, String>,
+    ): QrAuthorizationSceneResponse
+
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("x/passport-login/web/qrcode/confirm")
+    @retrofit2.http.Headers(
+        "User-Agent: Mozilla/5.0 BiliDroid/8.43.0 (bbcallen@gmail.com) os/android model/android mobi_app/android build/8430300 channel/master innerVer/8430300 osVer/15 network/2",
+        "app-key: android64",
+        "env: prod",
+    )
+    suspend fun confirmWebQrCode(
+        @retrofit2.http.FieldMap signedParams: Map<String, String>,
+    ): QrAuthorizationResponse
     
     // ==========  极验验证 + 手机号/密码登录 ==========
 
@@ -2564,12 +2630,20 @@ interface PassportApi {
     /** Confirm a TV QR scanned by an already logged-in BiliPai client. */
     @retrofit2.http.FormUrlEncoded
     @retrofit2.http.POST("https://passport.bilibili.com/x/passport-tv-login/h5/qrcode/confirm")
+    @retrofit2.http.Headers(
+        "Origin: https://passport.bilibili.com",
+        "User-Agent: Mozilla/5.0 BiliDroid/8.43.0 (bbcallen@gmail.com) os/android model/android mobi_app/android build/8430300 channel/bilih5 osVer/15 network/2",
+    )
     suspend fun confirmTvQrCode(
         @retrofit2.http.Field("auth_code") authCode: String,
         @Header(FORCE_COOKIE_HEADER) cookieHeader: String,
-        @retrofit2.http.Field("build") build: Int = 7082000,
+        @retrofit2.http.Field("build") build: Int = 8430300,
         @retrofit2.http.Field("csrf") csrf: String,
-    ): com.android.purebilibili.data.model.response.SimpleApiResponse
+        @retrofit2.http.Field("scanning_type") scanningType: Int = 1,
+        @Header("Referer") referer: String,
+        @retrofit2.http.Field("mobi_app") mobiApp: String = "android",
+        @Header("Buvid") buvidHeader: String = "",
+    ): QrAuthorizationResponse
 
     //  [新增] TV 端刷新 Token
     @retrofit2.http.FormUrlEncoded
@@ -3350,6 +3424,13 @@ object NetworkModule {
     }
     val passportApi: PassportApi by lazy {
         Retrofit.Builder().baseUrl("https://passport.bilibili.com/").client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType())).build()
+            .create(PassportApi::class.java)
+    }
+    /** Strict TLS and fixed destinations even in Debug builds, with no credential redirects. */
+    val qrAuthorizationApi: PassportApi by lazy {
+        Retrofit.Builder().baseUrl("https://passport.bilibili.com/")
+            .client(createQrAuthorizationClient(okHttpClient))
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType())).build()
             .create(PassportApi::class.java)
     }

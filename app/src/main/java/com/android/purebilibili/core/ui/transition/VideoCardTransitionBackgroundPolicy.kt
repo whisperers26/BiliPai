@@ -198,6 +198,7 @@ internal data class VideoCardTransitionBackgroundState(
      * 默认值仅供未接入导航宿主的调用方兜底；导航宿主应显式选择返回策略。
      */
     val preferWholeCardReturnProvider: () -> Boolean = { true },
+    val returnContentFollowProgressEnabledProvider: () -> Boolean = { true },
     val motionTierProvider: () -> MotionTier = { MotionTier.Normal },
     val isLightBackgroundProvider: () -> Boolean = { false },
     val realtimeBlurEnabledProvider: () -> Boolean = { false },
@@ -1272,7 +1273,7 @@ internal fun Modifier.videoCardTransitionBackgroundEffect(
                         displayListStale = snapshotState.displayListStale,
                     )
                 ) {
-                    val heldFrame = snapshotState.frameCache.resolve(
+                    val resolvedHeldFrame = snapshotState.frameCache.resolve(
                         progress = 1f,
                         phase = VideoCardTransitionBackgroundPhase.HELD,
                         motionTier = motionTierProvider(),
@@ -1282,6 +1283,11 @@ internal fun Modifier.videoCardTransitionBackgroundEffect(
                         deviceCornerRadiusPx = deviceCornerRadiusPx,
                         scaleReduction = scaleReductionProvider(),
                     )
+                    val heldFrame = if (realtimeBlurEnabledProvider()) {
+                        resolvedHeldFrame
+                    } else {
+                        resolvedHeldFrame.copy(blurRadiusPx = 0f)
+                    }
                     applyVideoCardTransitionSnapshotFrame(
                         contentLayer = contentLayer,
                         snapshotState = snapshotState,

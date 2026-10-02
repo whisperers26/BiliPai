@@ -112,6 +112,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
@@ -251,9 +252,17 @@ fun CommonListScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     // 个人列表（历史/收藏）默认单列，列数由双指缩放调节；其余页面保持双列默认。
     val personalListPage = viewModel is HistoryViewModel || viewModel is FavoriteViewModel
-    var pinchListColumns by rememberSaveable(viewModel) {
-        androidx.compose.runtime.mutableIntStateOf(if (personalListPage) 1 else 2)
+    val windowSizeClass = LocalWindowSizeClass.current
+    val isCompactGridWindow = com.android.purebilibili.feature.home.isCompactHomeFeedScreen(
+        windowSizeClass.widthSizeClass
+    )
+    val defaultPersonalColumns = if (personalListPage) 1 else 2
+    var pinchColumnsByWindow by rememberSaveable(viewModel) {
+        androidx.compose.runtime.mutableStateOf(
+            mapOf(false to defaultPersonalColumns, true to defaultPersonalColumns)
+        )
     }
+    val pinchListColumns = pinchColumnsByWindow[isCompactGridWindow] ?: defaultPersonalColumns
     val primaryGridState = rememberLazyGridState()
     val subscribedFolderListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val favoriteFolderListState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -274,7 +283,6 @@ fun CommonListScreen(
     val liquidGlassEnabled = rememberAppChromeLiquidGlassEnabled(
         androidNativeEnabled = homeSettings.androidNativeLiquidGlassEnabled,
     )
-    val windowSizeClass = LocalWindowSizeClass.current
     val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(
             widthSizeClass = windowSizeClass.widthSizeClass
@@ -697,7 +705,7 @@ fun CommonListScreen(
     var pinchPillVisible by remember { mutableStateOf(false) }
     var pinchPillDismissJob by remember { androidx.compose.runtime.mutableStateOf<Job?>(null) }
     val onPinchColumnsChange: (Int) -> Unit = { newColumns ->
-        pinchListColumns = newColumns
+        pinchColumnsByWindow = pinchColumnsByWindow + (isCompactGridWindow to newColumns)
         hapticFeedback.performHapticFeedback(
             androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
         )
@@ -2107,15 +2115,21 @@ fun CommonListScreen(
                 AppTextButton(
                     onClick = {
                         val targetKeys = selectedHistoryKeys
-                        when (resolveHistoryDeleteAnimationMode(targetKeys.size)) {
-                            HistoryDeleteAnimationMode.SINGLE_DISSOLVE -> {
-                                targetKeys.firstOrNull()?.let(historyViewModel::startVideoDissolve)
-                            }
-                            HistoryDeleteAnimationMode.DIRECT_DELETE -> {
-                                // Batch selection may include off-screen items that never report animation completion.
-                                historyViewModel.deleteHistoryItems(targetKeys)
-                            }
-                        }
+                        val pageIndex = historyPagerState.currentPage
+                        val pageItems = filterHistoryItemsByContent(
+                            items = state.items,
+                            filter = historyFilters.getOrElse(pageIndex) { HistoryContentFilter.ALL },
+                            resolveHistoryItem = { video ->
+                                historyViewModel.getHistoryItem(historyViewModel.resolveHistoryLookupKey(video))
+                            },
+                        )
+                        val filteredItems = filterCommonListVideosByQuery(pageItems, searchQuery)
+                        val visibleKeys = historyPagerGridStates[pageIndex]?.layoutInfo
+                            ?.visibleItemsInfo.orEmpty()
+                            .mapNotNull { item -> filteredItems.getOrNull(item.index) }
+                            .map(historyViewModel::resolveHistoryRenderKey)
+                            .toSet()
+                        historyViewModel.startVideosDissolve(targetKeys, visibleKeys)
                         selectedHistoryKeys = emptySet()
                         isHistoryBatchMode = false
                         showHistoryBatchDeleteConfirm = false
@@ -2908,12 +2922,15 @@ private fun CommonListContent(
                                 collapseAfterDissolve = shouldCollapseHistoryDeleteCard(historyDeleteAnimationMode),
                                 publishGlobalDissolveState = shouldJiggleHistoryDeleteCards(historyDeleteAnimationMode),
                                 keepInvisibleAfterDissolve = shouldKeepPlaceholderHidden ||
-                                    historyDeleteAnimationMode == HistoryDeleteAnimationMode.DIRECT_DELETE,
-                                modifier = Modifier.jiggleOnDissolve(
-                                    cardId = historyKey,
-                                    enabled = shouldJiggleHistoryDeleteCards(historyDeleteAnimationMode),
-                                    isCurrentCardDissolving = isDissolving
-                                )
+                                    historyDeleteAnimationMode == HistoryDeleteAnimationMode.BATCH_DISSOLVE,
+                                modifier = Modifier
+                                    // Completed cards keep their layout slot until the whole batch finishes.
+                                    .alpha(if (shouldKeepPlaceholderHidden) 0f else 1f)
+                                    .jiggleOnDissolve(
+                                        cardId = historyKey,
+                                        enabled = shouldJiggleHistoryDeleteCards(historyDeleteAnimationMode),
+                                        isCurrentCardDissolving = isDissolving
+                                    )
                             ) {
                                 cardContent()
                             }

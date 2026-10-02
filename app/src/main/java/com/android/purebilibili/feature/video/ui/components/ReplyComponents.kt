@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material.icons.filled.MoreVert
@@ -82,6 +83,7 @@ import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.feature.dynamic.components.isImagePreviewSourceHidden
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewSourceAnchor
+import com.android.purebilibili.feature.dynamic.components.prepareImagePreviewSourceTransition
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextPlacement
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewCommentContext
 import com.android.purebilibili.feature.dynamic.components.ImageDecodeTarget
@@ -101,6 +103,7 @@ import com.android.purebilibili.core.ui.UserAvatarCornerMarkBadge
 import com.android.purebilibili.core.ui.resolveOfficialVerifyBadge
 import com.android.purebilibili.core.ui.resolveUserAvatarCornerMark
 import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.resolveUpNameColor
 import com.android.purebilibili.core.ui.components.AppSurface
 import androidx.compose.foundation.text.selection.SelectionContainer
 import java.net.URLEncoder
@@ -1580,11 +1583,12 @@ fun ReplyItemView(
                                 text = item.member.uname,
                                 fontSize = VideoCommentTypographyTokens.author,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (item.member.vip?.vipStatus == 1) {
-                                    appearance.accentColor
-                                } else {
-                                    appearance.primaryTextColor.copy(alpha = 0.9f)
-                                },
+                                color = resolveUpNameColor(
+                                    vipStatus = item.member.vip?.vipStatus ?: 0,
+                                    vipType = item.member.vip?.vipType ?: 0,
+                                    onSurface = appearance.primaryTextColor.copy(alpha = 0.9f),
+                                    secondary = MaterialTheme.colorScheme.secondary,
+                                ),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false)
@@ -1620,7 +1624,7 @@ fun ReplyItemView(
                         AppText(
                             text = metadataText,
                             fontSize = VideoCommentTypographyTokens.metadata,
-                            lineHeight = 16.sp,
+                            lineHeight = VideoCommentTypographyTokens.metadataLineHeight,
                             color = appearance.secondaryTextColor
                         )
                     }
@@ -1655,7 +1659,8 @@ fun ReplyItemView(
                                 ReplyTextAction(
                                     label = "屏蔽该用户",
                                     appearance = appearance,
-                                    onClick = { confirmBlockUser = true }
+                                    onClick = { confirmBlockUser = true },
+                                    icon = Icons.Outlined.Block
                                 )
                                 ReplyTextAction(
                                     label = "举报",
@@ -1663,7 +1668,8 @@ fun ReplyItemView(
                                     onClick = {
                                         hatePromptHandled = true
                                         showReportDialog = true
-                                    }
+                                    },
+                                    icon = Icons.Outlined.Flag
                                 )
                             }
                         }
@@ -2722,11 +2728,24 @@ private fun parseHexColorOrNull(hex: String?): Color? {
 
 // 评论行组合期热路径：共享 formatter，避免每条评论格式化时间都新建 SimpleDateFormat。
 // 仅主线程（Compose 组合）调用，不涉及 SimpleDateFormat 的线程安全问题。
-private val replyPublishDayFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+private val replyPublishTimeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
+private val replyPublishDayFormatter = SimpleDateFormat("MM-dd", Locale.getDefault())
+private val replyPublishYearDayFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+private val replyPublishCalendar = Calendar.getInstance()
 
 fun formatTime(timestamp: Long): String {
     val date = Date(timestamp * 1000)
-    return replyPublishDayFormatter.format(date)
+    val calendar = replyPublishCalendar
+    val now = calendar.clone() as Calendar
+    calendar.time = date
+    val sameDay = calendar.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
+        calendar.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)
+    return when {
+        sameDay -> replyPublishTimeFormatter.format(date)
+        calendar.get(Calendar.YEAR) == now.get(Calendar.YEAR) ->
+            replyPublishDayFormatter.format(date)
+        else -> replyPublishYearDayFormatter.format(date)
+    }
 }
 
 @Composable
@@ -2742,7 +2761,8 @@ internal fun ReplySpecialLabelChip(text: String) {
 internal fun ReplyTextAction(
     label: String,
     appearance: VideoCommentAppearance,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    icon: ImageVector = Icons.AutoMirrored.Outlined.Reply
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -2752,7 +2772,7 @@ internal fun ReplyTextAction(
             .padding(end = 8.dp)
     ) {
         AppIcon(
-            imageVector = Icons.AutoMirrored.Outlined.Reply,
+            imageVector = icon,
             contentDescription = null,
             tint = appearance.actionTint,
             modifier = Modifier.size(17.dp)
@@ -2956,26 +2976,38 @@ fun CommentPictures(
                         imageRect = coordinates.boundsInWindow()
                         imageRect?.let { galleryRects[0] = it }
                     }
-                    .clickable(enabled = !sourceHidden) {
+                    .clickable(
+                        interactionSource = null,
+                        indication = null,
+                        enabled = !sourceHidden,
+                    ) {
+                        val anchor = imageRect?.let {
+                            ImagePreviewSourceAnchor(
+                                it,
+                                singleImageCornerDp,
+                                galleryRects = galleryRects.toMap()
+                            )
+                        }
+                        prepareImagePreviewSourceTransition(anchor?.rect)
                         onImageClick(
                             imageUrls,
                             0,
-                            imageRect?.let {
-                                ImagePreviewSourceAnchor(
-                                    it,
-                                    singleImageCornerDp,
-                                    galleryRects = galleryRects.toMap()
-                                )
-                            }
+                            anchor
                         )
                     }
             ) {
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(imageUrls[0])
+                        // Preview uses this exact URL as its placeholder cache key. Keep
+                        // the thumbnail cache identity independent of its decode size so
+                        // the hero flight can paint the already-visible source immediately.
+                        .memoryCacheKey(imageUrls[0])
                         .size(thumbnailDecodeSize.widthPx, thumbnailDecodeSize.heightPx)
                         .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())  //  必需
-                        .crossfade(true)
+                        // Hero owns the transition; a second image fade on return causes
+                        // the thumbnail to blink after the preview window is removed.
+                        .crossfade(false)
                         .build(),
                     contentDescription = null,
                     imageLoader = gifImageLoader,  //  支持 GIF 和其他格式
@@ -3011,17 +3043,23 @@ fun CommentPictures(
                                         imageRect = coordinates.boundsInWindow()
                                         imageRect?.let { galleryRects[globalIndex] = it }
                                     }
-                                    .clickable(enabled = !sourceHidden) {
+                                    .clickable(
+                                        interactionSource = null,
+                                        indication = null,
+                                        enabled = !sourceHidden,
+                                    ) {
+                                        val anchor = imageRect?.let {
+                                            ImagePreviewSourceAnchor(
+                                                it,
+                                                gridImageCornerDp,
+                                                galleryRects = galleryRects.toMap()
+                                            )
+                                        }
+                                        prepareImagePreviewSourceTransition(anchor?.rect)
                                         onImageClick(
                                             imageUrls,
                                             globalIndex,
-                                            imageRect?.let {
-                                                ImagePreviewSourceAnchor(
-                                                    it,
-                                                    gridImageCornerDp,
-                                                    galleryRects = galleryRects.toMap()
-                                                )
-                                            }
+                                            anchor
                                         )
                                     },
                                 contentAlignment = Alignment.Center
@@ -3029,9 +3067,13 @@ fun CommentPictures(
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
                                         .data(imageUrls[globalIndex])
+                                        // Match ImagePreviewDialog's placeholder key; the
+                                        // thumbnail and fullscreen requests use different
+                                        // decode sizes but must share the source image entry.
+                                        .memoryCacheKey(imageUrls[globalIndex])
                                         .size(thumbnailDecodeSize.widthPx, thumbnailDecodeSize.heightPx)
                                         .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())  //  必需
-                                        .crossfade(true)
+                                        .crossfade(false)
                                         .build(),
                                     contentDescription = null,
                                     imageLoader = gifImageLoader,  //  支持 GIF

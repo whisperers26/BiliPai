@@ -12,7 +12,7 @@ class BiliPaiNavDisplayHostStructureTest {
         assertTrue(source.contains("resolveVideoHeroMotionSpec("))
         assertTrue(source.contains("heroMotionSpec = heroMotion"))
         assertTrue(source.contains("bindNavigationDriver("))
-        assertTrue(source.contains("remember(sourceMetadata.sourceKey) { MiuixVideoCardTransitionProgress() }"))
+        assertTrue(source.contains("sourceMetadata.sourceKey, videoSharedReturnGestureFollowEnabled, videoSharedReturnGestureTranslationEnabled,"))
         assertTrue(source.contains("followNavigationDriver("))
         assertTrue(source.contains("snapshotFlow { videoCardTransitionProgress.settleStateOrNull() }"))
         assertFalse(source.contains("animateFallbackTo("))

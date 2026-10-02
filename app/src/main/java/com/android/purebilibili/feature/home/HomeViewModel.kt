@@ -1037,7 +1037,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun markNotInterested(
         video: VideoItem,
         reason: RecommendationFeedbackReason,
-        cardAnimationEnabled: Boolean = true
+        dissolveAnimationEnabled: Boolean = true
     ) {
         viewModelScope.launch {
             val action = resolveHomeNotInterestedAction(video, reason)
@@ -1054,9 +1054,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 pendingNotInterestedRefilterBvids += video.bvid
             }
 
-            val transition = resolveHomeDismissVisualTransition(
+            val transition = resolveHomeNotInterestedVisualTransition(
                 isFeedbackRecorded = true,
-                cardAnimationEnabled = cardAnimationEnabled
+                isDissolveAnimationAvailable = dissolveAnimationEnabled
             )
             if (transition.shouldStartDissolve) {
                 startVideoDissolve(video.bvid)

@@ -132,7 +132,9 @@ data class VideoNoteAuthor(
     val mid: Long = 0L,
     val name: String = "",
     val face: String = "",
-    val level: Int = 0
+    val level: Int = 0,
+    @SerialName("is_senior_member")
+    val isSeniorMember: Int = 0
 )
 
 @Serializable

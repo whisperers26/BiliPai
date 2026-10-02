@@ -815,7 +815,8 @@ fun BangumiPlayerScreen(
             .getPauseOnPlayerCollapseEnabled(context)
             .collectAsStateWithLifecycle(initialValue = true)
 
-        val inlineCollapseEnabled = !isFullscreen && portraitPlayerCollapseMode != PortraitPlayerCollapseMode.OFF
+        val inlineCollapseEnabled = !isFullscreen && !appWindowAdaptiveInfo.shouldAvoidHinge &&
+            portraitPlayerCollapseMode != PortraitPlayerCollapseMode.OFF
 
         val density = LocalDensity.current
         val screenWidthDp = configuration.screenWidthDp.dp
@@ -900,7 +901,84 @@ fun BangumiPlayerScreen(
             }
         }
 
-        if (isFullscreen) {
+        val supportingContent: @Composable () -> Unit = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(AppSurfaceTokens.groupedListContainer())
+            ) {
+                when (val state = uiState) {
+                    is BangumiPlayerState.Loading -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AdaptiveLoadingIndicator()
+                        }
+                    }
+
+                    is BangumiPlayerState.Error -> {
+                        BangumiErrorContent(
+                            message = state.message,
+                            isVipRequired = state.isVipRequired,
+                            isLoginRequired = state.isLoginRequired,
+                            canRetry = state.canRetry,
+                            onRetry = { viewModel.retry() },
+                            onLogin = onNavigateToLogin
+                        )
+                    }
+
+                    is BangumiPlayerState.Success -> {
+                        BangumiPlayerContent(
+                            detail = state.seasonDetail,
+                            currentEpisode = state.currentEpisode,
+                            commentViewModel = commentViewModel,
+                            onEpisodeClick = { viewModel.switchEpisode(it) },
+                            onFollowStatusSelect = { viewModel.updateFollowStatus(it) },
+                            onUserClick = onUserClick,
+                            onCommentUrlClick = onOpenBilibiliLink,
+                            onDownloadClick = { viewModel.downloadCurrentEpisode(context) },
+                            onShareClick = {
+                                val episode = state.currentEpisode
+                                val shareUrl = "https://www.bilibili.com/cheese/play/ep${episode.id}"
+                                val shareText = listOf(
+                                    state.seasonDetail.title,
+                                    episode.title,
+                                    shareUrl
+                                ).filter { it.isNotBlank() }.joinToString("\n")
+                                runCatching {
+                                    context.startActivity(
+                                        android.content.Intent.createChooser(
+                                            android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                                            },
+                                            "分享课程"
+                                        )
+                                    )
+                                }.onFailure {
+                                    Toast.makeText(context, "暂时无法打开分享面板", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        if (appWindowAdaptiveInfo.shouldAvoidHinge) {
+            com.android.purebilibili.core.ui.adaptive.AppHingePaneLayout(
+                modifier = Modifier.fillMaxSize(),
+                primaryContent = {
+                    Box(
+                        Modifier.fillMaxSize()
+                            .padding(top = if (isFullscreen) 0.dp else portraitPlayerTopPadding)
+                            .background(Color.Black)
+                    ) { playerContentView(isFullscreen) }
+                },
+                secondaryContent = if (isFullscreen) null else supportingContent,
+            )
+        } else if (isFullscreen) {
             // 全屏播放
             playerContentView(true)
         } else {
@@ -950,68 +1028,7 @@ fun BangumiPlayerScreen(
                 }
                 
                 // 内容区域
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(AppSurfaceTokens.groupedListContainer())
-                ) {
-                    when (val state = uiState) {
-                        is BangumiPlayerState.Loading -> {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                AdaptiveLoadingIndicator()
-                            }
-                        }
-                        
-                        is BangumiPlayerState.Error -> {
-                            BangumiErrorContent(
-                                message = state.message,
-                                isVipRequired = state.isVipRequired,
-                                isLoginRequired = state.isLoginRequired,
-                                canRetry = state.canRetry,
-                                onRetry = { viewModel.retry() },
-                                onLogin = onNavigateToLogin
-                            )
-                        }
-                        
-                        is BangumiPlayerState.Success -> {
-                            BangumiPlayerContent(
-                                detail = state.seasonDetail,
-                                currentEpisode = state.currentEpisode,
-                                commentViewModel = commentViewModel,
-                                onEpisodeClick = { viewModel.switchEpisode(it) },
-                                onFollowStatusSelect = { viewModel.updateFollowStatus(it) },
-                                onUserClick = onUserClick,
-                                onCommentUrlClick = onOpenBilibiliLink,
-                                onDownloadClick = { viewModel.downloadCurrentEpisode(context) },
-                                onShareClick = {
-                                    val episode = state.currentEpisode
-                                    val shareUrl = "https://www.bilibili.com/cheese/play/ep${episode.id}"
-                                    val shareText = listOf(
-                                        state.seasonDetail.title,
-                                        episode.title,
-                                        shareUrl
-                                    ).filter { it.isNotBlank() }.joinToString("\n")
-                                    runCatching {
-                                        context.startActivity(
-                                            android.content.Intent.createChooser(
-                                                android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                                    type = "text/plain"
-                                                    putExtra(android.content.Intent.EXTRA_TEXT, shareText)
-                                                },
-                                                "分享课程"
-                                            )
-                                        )
-                                    }.onFailure {
-                                        Toast.makeText(context, "暂时无法打开分享面板", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
+                supportingContent()
             }
         }
     }

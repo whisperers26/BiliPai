@@ -10,6 +10,7 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppListItem
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
+import com.android.purebilibili.core.ui.components.resolveUpNameColor
 
 import com.android.purebilibili.core.ui.UserAvatarCornerMarkBadge
 import com.android.purebilibili.core.ui.resolveUserAvatarCornerMark
@@ -50,6 +51,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -61,6 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.TextUnit
@@ -435,7 +439,10 @@ fun DynamicCardV2(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = resolveDynamicCardContentPadding())
-                .padding(top = AppSpacingTokens.Medium, bottom = if (isDetail) AppSpacingTokens.None else AppSpacingTokens.Small + AppSpacingTokens.Micro)
+                .padding(
+                    top = if (isDetail) AppSpacingTokens.Medium else AppSpacingTokens.ExtraSmall,
+                    bottom = if (isDetail) AppSpacingTokens.None else AppSpacingTokens.ExtraSmall,
+                )
                 .clickable(enabled = isPrimaryClickEnabled) {
                     dispatchDynamicCardPrimaryClick(
                         item = item,
@@ -497,7 +504,12 @@ fun DynamicCardV2(
                         author.name,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = MaterialTheme.typography.bodyMedium.fontSize,
-                        color = if (author.vip?.status == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        color = resolveUpNameColor(
+                            vipStatus = author.vip?.status ?: 0,
+                            vipType = author.vip?.type ?: 0,
+                            onSurface = MaterialTheme.colorScheme.onSurface,
+                            secondary = MaterialTheme.colorScheme.secondary,
+                        ),
                         modifier = Modifier.clickable(enabled = authorClickMid != null || (ugcSeason != null && ugcSeason.id > 0L && onCollectionClick != null)) {
                             onAuthorHeaderClick()
                         }
@@ -871,7 +883,7 @@ fun DynamicCardV2(
                         runCatching { context.startActivity(inAppIntent) }
                     }
                 },
-                modifier = Modifier.padding(bottom = AppSpacingTokens.ExtraSmall),
+                modifier = Modifier.padding(bottom = AppSpacingTokens.Micro),
             )
         }
 
@@ -1131,6 +1143,7 @@ fun DynamicCardV2(
                     initialIndex = selectedImageIndex,
                     sourceRect = sourceAnchor?.rect,
                     sourceRects = sourceAnchor?.galleryRects.orEmpty(),
+                    sourceKey = sourceAnchor?.sourceKey,
                     sourceCornerRadiusDp = sourceAnchor?.cornerRadiusDp
                         ?: resolveDrawGridCornerRadiusDp().toFloat(),
                     textContent = drawPreviewText,
@@ -1414,15 +1427,21 @@ fun DynamicCardV2(
                                             pageIndex = currentImageIndex,
                                         )
                                         .alpha(if (isImagePreviewSourceHidden(expandedImageSourceRect.value)) 0f else 1f)
-                                        .clickable(enabled = currentImageIndex in previewImages.indices) {
+                                        .clickable(
+                                            interactionSource = null,
+                                            indication = null,
+                                            enabled = currentImageIndex in previewImages.indices,
+                                        ) {
                                             fullContentSelectedImageIndex = currentImageIndex
-                                            thumbnailSourceAnchor = expandedImageSourceRect.value?.let {
+                                            val anchor = expandedImageSourceRect.value?.let {
                                                 ImagePreviewSourceAnchor(
                                                     rect = it,
                                                     cornerRadiusDp = opusExpandedImageCornerRadiusDp,
                                                     galleryRects = opusExpandedSourceRects.toMap(),
                                                 )
                                             }
+                                            prepareImagePreviewSourceTransition(anchor?.rect)
+                                            thumbnailSourceAnchor = anchor
                                         },
                                     contentScale = ContentScale.FillWidth
                                 )
@@ -1542,15 +1561,17 @@ fun DynamicCardV2(
                                     pageIndex = index,
                                 )
                                 .alpha(if (isImagePreviewSourceHidden(expandedImageSourceRect.value)) 0f else 1f)
-                                .clickable {
+                                .clickable(interactionSource = null, indication = null) {
                                     selectedImageIndex = index
-                                    sourceAnchor = expandedImageSourceRect.value?.let {
+                                    val anchor = expandedImageSourceRect.value?.let {
                                         ImagePreviewSourceAnchor(
                                             rect = it,
                                             cornerRadiusDp = opusExpandedImageCornerRadiusDp,
                                             galleryRects = opusExpandedSourceRects.toMap(),
                                         )
                                     }
+                                    prepareImagePreviewSourceTransition(anchor?.rect)
+                                    sourceAnchor = anchor
                                 },
                             contentScale = ContentScale.FillWidth,
                         )
@@ -2207,36 +2228,46 @@ internal fun DynamicTopicLabel(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier
-            .heightIn(min = AppChromeSizeTokens.MinimumTouchTarget)
-            .clip(AppShapes.container(ContainerLevel.Chip))
-            .clickable(onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall)
-                .clip(RoundedCornerShape(AppSpacingTokens.ExtraSmall))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
-            contentAlignment = Alignment.Center,
+    // 话题入口按文字高度占位，命中范围也与可见框一致：clickable 会按
+    // ViewConfiguration.minimumTouchTargetSize 把低于 48dp 的布局向外扩命中，
+    // 这里显式清零，避免又撑出一条点得到、看不到的空白。
+    val baseViewConfiguration = LocalViewConfiguration.current
+    val contentSizedViewConfiguration = remember(baseViewConfiguration) {
+        object : ViewConfiguration by baseViewConfiguration {
+            override val minimumTouchTargetSize: DpSize = DpSize.Zero
+        }
+    }
+    CompositionLocalProvider(LocalViewConfiguration provides contentSizedViewConfiguration) {
+        Row(
+            modifier = modifier
+                .clip(AppShapes.container(ContainerLevel.Chip))
+                .clickable(onClick = onClick),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(AppSpacingTokens.ExtraSmall))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+                    .padding(horizontal = AppSpacingTokens.Micro),
+                contentAlignment = Alignment.Center,
+            ) {
+                AppText(
+                    text = "#",
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = MaterialTheme.typography.titleMedium.fontSize,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
             AppText(
-                text = "#",
+                text = topicName,
                 color = MaterialTheme.colorScheme.primary,
-                fontSize = MaterialTheme.typography.titleMedium.fontSize,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
-        AppText(
-            text = topicName,
-            color = MaterialTheme.colorScheme.primary,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
@@ -2516,6 +2547,7 @@ private fun dispatchDynamicRichTextLinkPayload(
                                 true
                             } else false
                         }
+                        is BilibiliNavigationTarget.PopularFeed -> false
                         is BilibiliNavigationTarget.Live -> {
                             if (onLiveClick != null) {
                                 onLiveClick(target.roomId, "", "")

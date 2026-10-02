@@ -56,6 +56,8 @@ import com.android.purebilibili.feature.home.components.LinkedDockPhase
 import com.android.purebilibili.feature.home.components.resolveLinkedDockPhaseOnAudioChange
 import com.android.purebilibili.feature.home.HomeVideoClickRequest
 import com.android.purebilibili.feature.home.HomeVideoClickSource
+import com.android.purebilibili.feature.home.HomeCategory
+import com.android.purebilibili.feature.home.PopularSubCategory
 import com.android.purebilibili.feature.home.HomeScreen
 import com.android.purebilibili.feature.home.HomeViewModel
 import com.android.purebilibili.feature.home.DepthSyncedGlobalHomeWallpaperBackdrop
@@ -244,7 +246,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize // 确保 fillMaxSize 被导入
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.clip
 import com.android.purebilibili.feature.home.components.FrostedSideBar
 import com.android.purebilibili.feature.privacy.PrivacyAuthenticationReason
 import com.android.purebilibili.feature.privacy.PrivacyAuthenticationRequest
@@ -1632,11 +1640,36 @@ fun AppNavigation(
                     pushNavigation3Key(BiliPaiNavKey.BangumiDetail(seasonId = 0L, epId = target.epId))
                 }
                 is BilibiliNavigationTarget.Music -> {
-                    val auSid = target.musicId.removePrefix("au").removePrefix("AU").toLongOrNull() ?: return false
-                    pushNavigation3Key(BiliPaiNavKey.MusicDetail(auSid))
+                    pushNavigation3Route(ScreenRoutes.createMusicRoute(target.musicId) ?: return false)
                 }
                 is BilibiliNavigationTarget.Article -> {
                     pushNavigation3Key(BiliPaiNavKey.ArticleDetail(target.articleId))
+                }
+                is BilibiliNavigationTarget.PopularFeed -> {
+                    if (target.subCategoryKey == "weekly") {
+                        pushNavigation3Key(BiliPaiNavKey.WeeklySeries(target.weeklyNumber))
+                        return true
+                    }
+                    // 热门榜单(排行榜/入站必刷/综合热门):切回首页 POPULAR
+                    // 子分类的原生 feed,并弹回主宿主,与底栏点首页一致。
+                    // 注意顺序:先切子分类(同步写状态),再切大类(其状态更新在协程中,
+                    // 若后切子分类,switchCategory 捕获的旧快照会把子分类覆盖回去)。
+                    val homeIndex = visibleBottomBarItems.indexOf(BottomNavItem.HOME)
+                    if (homeIndex >= 0) {
+                        mainBottomPagerState.switchToPage(homeIndex)
+                    }
+                    homeViewModel.switchPopularSubCategory(
+                        when (target.subCategoryKey) {
+                            "weekly" -> PopularSubCategory.WEEKLY
+                            "rank" -> PopularSubCategory.RANKING
+                            "all", "precious" -> PopularSubCategory.PRECIOUS
+                            else -> PopularSubCategory.COMPREHENSIVE
+                        }
+                    )
+                    homeViewModel.switchCategory(HomeCategory.POPULAR)
+                    replaceNavigation3BackStack(
+                        popBiliPaiNavKeyToRoot(navigation3BackStack)
+                    )
                 }
             }
             return true
@@ -1756,8 +1789,7 @@ fun AppNavigation(
                     pushNavigation3Key(BiliPaiNavKey.BangumiDetail(seasonId = 0L, epId = action.epId))
                 }
                 is MessageLinkNavigationAction.Music -> {
-                    action.musicId.toLongOrNull()
-                        ?.let { pushNavigation3Key(BiliPaiNavKey.MusicDetail(it)) }
+                    ScreenRoutes.createMusicRoute(action.musicId)?.let { pushNavigation3Route(it) }
                         ?: pushNavigation3Key(BiliPaiNavKey.Web(rawLink))
                 }
                 is MessageLinkNavigationAction.Article -> {
@@ -2178,8 +2210,7 @@ fun AppNavigation(
                                                 realtimeBlurEnabledProvider = {
                                                     shouldUseRealtimeVideoCardTransitionBackgroundBlur(
                                                         source = backgroundSource,
-                                                        realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled ||
-                                                            appNavigationSettings.miuixTransitionBlurEnabled,
+                                                        realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
                                                     )
                                                 },
                                                 scaleReductionProvider = {
@@ -2199,8 +2230,7 @@ fun AppNavigation(
                                                 realtimeBlurEnabledProvider = {
                                                     shouldUseRealtimeVideoCardTransitionBackgroundBlur(
                                                         source = backgroundSource,
-                                                        realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled ||
-                                                            appNavigationSettings.miuixTransitionBlurEnabled,
+                                                        realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
                                                     )
                                                 },
                                                 scaleReductionProvider = {
@@ -2303,6 +2333,7 @@ fun AppNavigation(
                         }
                         BiliPaiNavEntryContentRole.HOME -> HomeScreen(
                                 viewModel = homeViewModel,
+                                onWeeklySeriesClick = { pushNavigation3Key(BiliPaiNavKey.WeeklySeries()) },
                                 onVideoClick = { request -> navigateToHomeVideoInNavigation3(request) },
                                 onSearchClick = { pushNavigation3Key(BiliPaiNavKey.Search) },
                                 onAvatarClick = { pushNavigation3Key(BiliPaiNavKey.Login) },
@@ -3076,19 +3107,13 @@ fun AppNavigation(
                                     )
                                 },
                                 onBgmClick = { bgm ->
-                                    if (bgm.jumpUrl.isNotEmpty()) {
-                                        pushNavigation3Route(ScreenRoutes.Web.createRoute(bgm.jumpUrl, "发现音乐"))
-                                        return@VideoDetailScreen
+                                    val musicId = bgm.musicId.ifBlank {
+                                        (BilibiliNavigationTargetParser.parse(bgm.jumpUrl) as? BilibiliNavigationTarget.Music)?.musicId.orEmpty()
                                     }
-
-                                    val auSid = bgm.musicId.removePrefix("au").toLongOrNull()
-                                    if (auSid != null) {
-                                        pushNavigation3Key(BiliPaiNavKey.MusicDetail(auSid))
-                                    } else if (bgm.musicId.startsWith("MA") && videoKey.cid > 0) {
-                                        val title = bgm.musicTitle.ifEmpty { "背景音乐" }
-                                        pushNavigation3Key(
-                                            BiliPaiNavKey.NativeMusic(title, videoKey.bvid, videoKey.cid)
-                                        )
+                                    if (musicId.isNotBlank()) {
+                                        pushNavigation3Key(BiliPaiNavKey.BgmDetail(musicId, cid = videoKey.cid))
+                                    } else if (bgm.jumpUrl.isNotBlank()) {
+                                        pushNavigation3Key(BiliPaiNavKey.Web(bgm.jumpUrl, "发现音乐"))
                                     }
                                 },
                                 viewModel = videoPlaybackViewModel,
@@ -3871,6 +3896,43 @@ fun AppNavigation(
                                     }
                                 )
                             }
+                        BiliPaiNavEntryContentRole.WEEKLY_SERIES -> {
+                            val weeklyKey = key as BiliPaiNavKey.WeeklySeries
+                            com.android.purebilibili.feature.home.WeeklySeriesScreen(
+                                initialNumber = weeklyKey.number,
+                                onBack = { performSystemBackAction() },
+                                onVideoClick = { video, videos ->
+                                    PlaylistManager.setExternalPlaylist(
+                                        items = videos.map { item ->
+                                            com.android.purebilibili.feature.video.player.PlaylistItem(
+                                                bvid = item.bvid, cid = item.cid, title = item.title,
+                                                cover = item.pic, owner = item.owner.name,
+                                                ownerFace = item.owner.face, duration = item.duration.toLong()
+                                            )
+                                        },
+                                        startIndex = videos.indexOfFirst { it.bvid == video.bvid }.coerceAtLeast(0)
+                                    )
+                                    PlaylistManager.setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
+                                    navigateToVideoInNavigation3(video.bvid, video.cid, video.pic)
+                                }
+                            )
+                        }
+                        BiliPaiNavEntryContentRole.BGM_DETAIL -> {
+                            val bgmKey = key as BiliPaiNavKey.BgmDetail
+                            com.android.purebilibili.feature.audio.bgm.BgmDetailScreen(
+                                musicId = bgmKey.musicId, aid = bgmKey.aid, cid = bgmKey.cid,
+                                showVideos = bgmKey.showVideos,
+                                onBack = { performSystemBackAction() },
+                                onVideosClick = { pushNavigation3Key(bgmKey.copy(showVideos = true)) },
+                                onVideoClick = { bvid, cid, cover -> navigateToVideoInNavigation3(bvid, cid, cover) },
+                                onUserClick = { pushNavigation3Key(BiliPaiNavKey.Space(it)) },
+                                onCommentClick = { oid, root, target, type ->
+                                    pushNavigation3Key(BiliPaiNavKey.CommentDetail(oid, root, target, type))
+                                },
+                                onLinkClick = { url -> openBilibiliLinkInNavigation3(url) },
+                                onLogin = { pushNavigation3Key(BiliPaiNavKey.Login) },
+                            )
+                        }
                         BiliPaiNavEntryContentRole.MUSIC_DETAIL -> {
                                 val musicKey = key as BiliPaiNavKey.MusicDetail
                                 com.android.purebilibili.feature.audio.screen.MusicDetailScreen(
@@ -4088,11 +4150,9 @@ fun AppNavigation(
                                         )
                                     },
                                     onMusicClick = { musicId ->
-                                        val auSid = musicId.removePrefix("au").removePrefix("AU").toLongOrNull()
-                                        if (auSid != null) {
-                                            replaceNavigation3TopWithKey(
-                                                BiliPaiNavKey.MusicDetail(auSid)
-                                            )
+                                        val musicRoute = ScreenRoutes.createMusicRoute(musicId)
+                                        if (musicRoute != null) {
+                                            replaceNavigation3TopWithKey(legacyRouteToBiliPaiNavKey(musicRoute))
                                         } else {
                                             replaceNavigation3BackStack(
                                                 popBiliPaiNavKey(navigation3BackStack)
@@ -4306,9 +4366,13 @@ fun AppNavigation(
                         appNavigationSettings.miuixPredictiveBackMaxProgressPercent,
                     videoSharedReturnGestureFollowEnabled =
                         appNavigationSettings.videoSharedReturnGestureFollowEnabled,
+                    videoSharedReturnGestureTranslationEnabled =
+                        appNavigationSettings.videoSharedReturnGestureTranslationEnabled,
                     sourceMetadata = navigation3SourceMetadata,
                     programmaticBackDispatcher = navigation3ProgrammaticBackDispatcher,
                     // List cover waits for the live handoff window; list info is native throughout return.
+                    videoReturnContentFollowProgressEnabled =
+                        appNavigationSettings.videoReturnContentFollowProgressEnabled,
                     preferWholeCardReturn = false,
                     onBack = { performSystemBackAction() },
                     onPrepareVideoCardSharedReturn = {
@@ -4376,6 +4440,13 @@ fun AppNavigation(
                 isLandscape = isLandscapeNowPlaying,
                 isPlayerDestination = isPlayerIndependentDestination
             )
+            // 发布“听视频小横条是否悬浮在内容上方”，供首页/动态等悬浮元素避让
+            androidx.compose.runtime.SideEffect {
+                com.android.purebilibili.feature.audio.player.AudioNowPlayingSession
+                    .publishBarOverlayVisible(
+                        showAudioNowPlayingInDock || showAudioNowPlayingIndependent
+                    )
+            }
 
             val audioNowPlayingHandoff =
                 if (navigation3ReturnSession.isReturningFromDetail && driveBottomBarByProgress) {
@@ -4619,12 +4690,55 @@ fun AppNavigation(
                 }
             } else if (audioNowPlayingItem != null) {
                 val playbackManager = miniPlayerManager ?: MiniPlayerManager.getInstance(context)
+                // 听视频标题横条自动沉浸：听视频页 + 播放中静置 5 秒隐藏，点把柄恢复。
+                val immersiveBarEnabled by com.android.purebilibili.core.store.SettingsManager
+                    .getAudioNowPlayingBarImmersiveEnabled(context)
+                    .collectAsStateWithLifecycle(initialValue = true)
+                var immersiveBarHidden by remember { mutableStateOf(false) }
+                val isOnListenVideoScreen = currentNavigation3Key is BiliPaiNavKey.AudioMode
+                LaunchedEffect(
+                    immersiveBarEnabled,
+                    isOnListenVideoScreen,
+                    playbackManager.isPlaying,
+                    audioNowPlayingItem.bvid,
+                ) {
+                    if (immersiveBarEnabled && isOnListenVideoScreen && playbackManager.isPlaying) {
+                        immersiveBarHidden = false
+                        kotlinx.coroutines.delay(5000)
+                        immersiveBarHidden = true
+                    } else {
+                        immersiveBarHidden = false
+                    }
+                }
                 AudioNowPlayingBarPresenceHost(
-                    visible = showAudioNowPlayingIndependent,
+                    visible = showAudioNowPlayingIndependent && !(immersiveBarEnabled && immersiveBarHidden),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .zIndex(2f),
                 ) {
+                    if (immersiveBarEnabled && immersiveBarHidden) {
+                        // 沉浸态把柄：低调的居中小胶囊，点击唤回标题横条。
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(28.dp)
+                                .clickable(
+                                    interactionSource = remember {
+                                        androidx.compose.foundation.interaction.MutableInteractionSource()
+                                    },
+                                    indication = null,
+                                ) { immersiveBarHidden = false },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(36.dp)
+                                    .height(4.dp)
+                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f))
+                            )
+                        }
+                    } else {
                     AudioNowPlayingBar(
                     state = AudioNowPlayingBarState(
                         bvid = audioNowPlayingItem.bvid,
@@ -4635,6 +4749,11 @@ fun AppNavigation(
                         isPlaying = playbackManager.isPlaying,
                         playbackSpeed = playbackManager.player?.playbackParameters?.speed ?: 1f
                     ),
+                    onManualHide = if (immersiveBarEnabled && isOnListenVideoScreen) {
+                        { immersiveBarHidden = true }
+                    } else {
+                        null
+                    },
                     isLayoutStable = !driveBottomBarByProgress,
                     sourceRoute = currentRoute ?: ScreenRoutes.Home.route,
                     handoff = audioNowPlayingHandoff,
@@ -4685,6 +4804,7 @@ fun AppNavigation(
                     liftAboveBottomBar = false,
                     consumeNavigationBarsPadding = true,
                     )
+                    }
                 }
             }
 

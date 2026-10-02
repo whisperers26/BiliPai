@@ -23,6 +23,7 @@ internal data class VideoDetailPlaybackActions(
     val dismissSponsorSkipButton: () -> Unit,
     val voteSponsorSegment: (Int) -> Unit,
     val markSponsorContributionBoundary: () -> Unit,
+    val markWholeVideoAsSponsor: () -> Unit,
     val setSponsorContributionCategory: (String) -> Unit,
     val setSponsorContributionActionType: (String) -> Unit,
     val submitSponsorContribution: () -> Unit,
@@ -46,15 +47,20 @@ internal data class VideoDetailPlaybackActions(
     val openVideoNoteEditor: () -> Unit,
     val closeVideoNoteEditor: () -> Unit,
     val updateVideoNoteEditorDocument: (VideoNoteEditorDocument) -> Unit,
-    val insertCurrentPlaybackTimestampIntoNote: () -> Unit,
+    val currentVideoNoteTimestamp: () -> com.android.purebilibili.feature.video.note.VideoNoteBlock.Timestamp?,
     val seekTo: (Long) -> Unit,
     val saveVideoNote: (VideoNoteEditorDocument?) -> Unit,
     val deleteVideoNote: () -> Unit,
     val retryVideoNote: () -> Unit,
+    val loadMorePublicVideoNotes: () -> Unit,
     val openRootCommentComposer: () -> Unit,
     val replyTo: (ReplyItem) -> Unit,
     val markVideoNotInterested: () -> Unit,
     val likeDanmaku: (Long) -> Unit = {},
+    val likeDanmakuToggle: (dmid: Long, like: Boolean) -> Unit = { _, _ -> },
+    val likedDanmakuIds: kotlinx.coroutines.flow.StateFlow<Set<Long>> =
+        kotlinx.coroutines.flow.MutableStateFlow(emptySet()),
+    val reportDanmaku: (dmid: Long, reason: Int) -> Unit = { _, _ -> },
     val recallDanmaku: (Long) -> Unit = {}
 )
 

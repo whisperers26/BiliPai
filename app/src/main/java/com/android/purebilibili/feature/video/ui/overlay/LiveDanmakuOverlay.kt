@@ -3,11 +3,11 @@ package com.android.purebilibili.feature.video.ui.overlay
 import android.graphics.Color as AndroidColor
 import android.os.SystemClock
 import android.view.ViewGroup
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -20,16 +20,19 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.android.purebilibili.core.store.DanmakuSettings
 import com.android.purebilibili.danmaku.engine.DanmakuEngine
 import com.android.purebilibili.danmaku.engine.DanmakuItem
+import com.android.purebilibili.danmaku.engine.DanmakuRenderConfig
 import com.android.purebilibili.danmaku.engine.DanmakuRenderView
 import com.android.purebilibili.feature.live.LiveDanmakuItem
 import com.android.purebilibili.feature.video.danmaku.DanmakuTypeFilterSettings
-import com.android.purebilibili.feature.video.danmaku.DanmakuViewport
+import com.android.purebilibili.feature.video.danmaku.DANMAKU_BASE_TEXT_SIZE_DP
 import com.android.purebilibili.feature.video.danmaku.createBitmapDanmaku
 import com.android.purebilibili.feature.video.danmaku.resolveDanmakuRenderLayerType
+import com.android.purebilibili.feature.video.danmaku.resolveDanmakuPinnedDurationMillis
+import com.android.purebilibili.feature.video.danmaku.resolveDanmakuScrollDurationMillis
 import com.android.purebilibili.feature.video.danmaku.resolveDanmakuTypeface
+import com.android.purebilibili.feature.video.danmaku.resolveDanmakuVisibleLineCount
 import com.android.purebilibili.feature.video.danmaku.shouldBlockDanmakuByRules
 import com.android.purebilibili.feature.video.danmaku.shouldDisplayStandardDanmaku
-import com.android.purebilibili.feature.video.ui.section.DanmakuViewportHost
 import java.util.ArrayDeque
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharedFlow
@@ -50,55 +53,77 @@ fun LiveDanmakuOverlay(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val density = context.resources.displayMetrics.density
     val safeDisplayArea = displayArea.takeIf(Float::isFinite)?.coerceIn(0.25f, 1f) ?: 1f
     val latestDanmakuSettings by rememberUpdatedState(danmakuSettings)
     var renderView by remember { mutableStateOf<DanmakuRenderView?>(null) }
     var engine by remember { mutableStateOf<DanmakuEngine?>(null) }
-    var viewport by remember { mutableStateOf<DanmakuViewport?>(null) }
     var startTime by remember { mutableLongStateOf(0L) }
     var isStarted by remember { mutableStateOf(false) }
     val activeItems = remember { ArrayDeque<DanmakuItem>() }
     val pendingItems = remember { ArrayDeque<DanmakuItem>() }
     val pendingItemsBeforeStart = remember { ArrayDeque<LiveDanmakuItem>() }
 
-    // Same measured surface and config resolution as the video player, so equal settings match.
-    DanmakuViewportHost(modifier.fillMaxSize()) { hostViewport ->
-        SideEffect { viewport = hostViewport }
-        AndroidView(
-            factory = { viewContext ->
-                DanmakuRenderView(viewContext).apply {
-                    setBackgroundColor(AndroidColor.TRANSPARENT)
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                    renderView = this
-                    engine = this.engine
-                    startTime = SystemClock.elapsedRealtime()
-                    this.engine.start(0L)
-                    isStarted = true
-                }
-            },
-            modifier = Modifier.fillMaxSize(),
-            update = { view ->
-                view.engine.updateConfig(
-                    resolveLiveDanmakuRenderConfig(
-                        settings = danmakuSettings.copy(displayArea = safeDisplayArea),
-                        viewport = hostViewport
+    AndroidView(
+        factory = { viewContext ->
+            DanmakuRenderView(viewContext).apply {
+                setBackgroundColor(AndroidColor.TRANSPARENT)
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                renderView = this
+                engine = this.engine
+                startTime = SystemClock.elapsedRealtime()
+                this.engine.start(0L)
+                isStarted = true
+            }
+        },
+        modifier = modifier
+            .fillMaxWidth()
+            .fillMaxHeight(safeDisplayArea),
+        update = { view ->
+            val textSize = DANMAKU_BASE_TEXT_SIZE_DP *
+                density * danmakuSettings.fontScale.coerceIn(0.3f, 2f)
+            val strokeWidth = danmakuSettings.strokeWidth.coerceAtLeast(0f)
+            view.engine.updateConfig(
+                DanmakuRenderConfig(
+                    alpha = (danmakuSettings.opacity.coerceIn(0f, 1f) * 255).toInt(),
+                    textSizePx = textSize,
+                    typeface = resolveDanmakuTypeface(danmakuSettings.fontWeight),
+                    strokeWidthPx = strokeWidth,
+                    scrollDurationMs = resolveDanmakuScrollDurationMillis(
+                        scrollDurationSeconds = danmakuSettings.scrollDurationSeconds,
+                        speedFactor = danmakuSettings.speed,
+                        scrollFixedVelocity = danmakuSettings.scrollFixedVelocity,
+                        viewportWidthPx = view.width
+                    ),
+                    lineHeightPx = textSize * danmakuSettings.lineHeight.coerceIn(0.8f, 2.2f),
+                    lineCount = resolveDanmakuVisibleLineCount(
+                        visibleHeightPx = view.height.toFloat(),
+                        areaRatioHint = safeDisplayArea,
+                        fontSize = textSize,
+                        strokeWidth = strokeWidth,
+                        strokeEnabled = strokeWidth > 0f,
+                        lineHeight = danmakuSettings.lineHeight,
+                        massiveMode = danmakuSettings.massiveMode
+                    ),
+                    pinnedDurationMs = resolveDanmakuPinnedDurationMillis(
+                        danmakuSettings.staticDurationSeconds
                     )
                 )
-            }
-        )
-    }
+            )
+        }
+    )
 
     LaunchedEffect(engine, isStarted) {
         while (isActive) {
             val currentEngine = engine
-            val currentViewport = viewport
-            if (currentEngine != null && currentViewport != null && isStarted) {
+            if (currentEngine != null && isStarted) {
                 val currentTime = SystemClock.elapsedRealtime() - startTime
                 val settings = latestDanmakuSettings
-                val textSize = resolveLiveDanmakuBitmapTextSizePx(currentViewport, settings.fontScale)
+                val textSize = DANMAKU_BASE_TEXT_SIZE_DP *
+                    density * settings.fontScale.coerceIn(0.3f, 2f)
 
                 while (pendingItemsBeforeStart.isNotEmpty()) {
                     pendingItems.addLast(
@@ -159,8 +184,7 @@ fun LiveDanmakuOverlay(
                 return@collect
             }
             val currentEngine = engine
-            val currentViewport = viewport
-            if (!isStarted || currentEngine == null || currentViewport == null || startTime == 0L) {
+            if (!isStarted || currentEngine == null || startTime == 0L) {
                 if (pendingItemsBeforeStart.size >= MAX_PENDING_ITEMS_BEFORE_START) {
                     pendingItemsBeforeStart.removeFirst()
                 }
@@ -169,7 +193,7 @@ fun LiveDanmakuOverlay(
             }
 
             val currentTime = SystemClock.elapsedRealtime() - startTime
-            val textSize = resolveLiveDanmakuBitmapTextSizePx(currentViewport, settings.fontScale)
+            val textSize = DANMAKU_BASE_TEXT_SIZE_DP * density * settings.fontScale.coerceIn(0.3f, 2f)
             val renderItem = createLiveDanmakuItem(
                 item = item,
                 currentTime = currentTime,

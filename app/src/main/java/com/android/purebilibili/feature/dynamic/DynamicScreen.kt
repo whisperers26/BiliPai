@@ -40,6 +40,8 @@ import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridS
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.android.purebilibili.core.ui.components.AppIcon
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +70,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -1260,8 +1263,11 @@ fun DynamicScreen(
                     .align(Alignment.BottomEnd)
                     .padding(end = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall, bottom = dynamicListBottomPadding + AppSpacingTokens.Medium),
             )
+            var oldContentLocatorDismissed by remember(oldContentDividerIndex) {
+                mutableStateOf(false)
+            }
             AnimatedVisibility(
-                visible = oldContentDividerIndex >= 0,
+                visible = oldContentDividerIndex >= 0 && !oldContentLocatorDismissed,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(
@@ -1283,6 +1289,20 @@ fun DynamicScreen(
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                 ) {
                     AppText("定位上次刷新")
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .clickable { oldContentLocatorDismissed = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AppIcon(
+                            imageVector = Icons.Outlined.Close,
+                            contentDescription = "关闭",
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             }
         }
@@ -1525,12 +1545,21 @@ private fun DynamicList(
     val useManualPrependAnchor = remember(feedLayoutMode) {
         shouldUseDynamicManualPrependAnchor(feedLayoutMode)
     }
-    val skeletonPulse = if (showSkeleton) {
-        com.android.purebilibili.feature.dynamic.components.rememberDynamicFeedSkeletonPulse()
+    // [性能优化] 脉冲 state 只包进 provider,值在骨架卡 draw 阶段读取,
+    // 骨架期间屏幕级组合作用域不再逐帧失效。
+    val skeletonPulseState = if (showSkeleton) {
+        com.android.purebilibili.feature.dynamic.components.rememberDynamicFeedSkeletonPulseState()
     } else {
-        0f
+        null
     }
 
+    val dynamicHorizontalArrangement = Arrangement.spacedBy(resolveDynamicTimelineHorizontalSpacing())
+
+    com.android.purebilibili.core.ui.adaptive.AppHingeSafeContent(
+        modifier = modifier
+            .responsiveContentWidth(maxWidth = resolveDynamicTimelineMaxWidth())
+            .fillMaxSize(),
+    ) {
     FeedVerticalStaggeredGrid(
         columns = if (feedLayoutMode == SettingsManager.DynamicFeedLayoutMode.LIST) {
             //  [新增] 列表模式：单列居中（对齐 BiliPai dynamicsWaterfallFlow 的列表布局）
@@ -1551,11 +1580,9 @@ private fun DynamicList(
             top = statusBarHeight + topPaddingExtra,
             bottom = bottomPadding
         ),
-        horizontalArrangement = Arrangement.spacedBy(resolveDynamicTimelineHorizontalSpacing()),
+        horizontalArrangement = dynamicHorizontalArrangement,
         verticalItemSpacing = resolveDynamicTimelineVerticalSpacing(),
-        modifier = modifier
-            .responsiveContentWidth(maxWidth = resolveDynamicTimelineMaxWidth())
-            .fillMaxSize()
+        modifier = Modifier.fillMaxSize()
     ) {
         if (isSelectedUserTabActive) {
             item(
@@ -1580,7 +1607,7 @@ private fun DynamicList(
                 contentType = { "dynamic_skeleton" }
             ) { _ ->
                 com.android.purebilibili.feature.dynamic.components.DynamicFeedSkeletonCard(
-                    pulse = skeletonPulse
+                    pulse = { skeletonPulseState?.value ?: 0f }
                 )
             }
         }
@@ -1687,6 +1714,7 @@ private fun DynamicList(
                 )
             }
         }
+    }
     }
 }
 

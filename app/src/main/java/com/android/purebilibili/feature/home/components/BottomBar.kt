@@ -88,6 +88,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.composed
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.draw.clip
@@ -844,6 +846,33 @@ internal fun shouldResetBottomBarSearchExpansionOverride(
         currentItem != BottomNavItem.HOME ||
         (currentItem == BottomNavItem.HOME && !shouldAutoExpand && isPastTopThreshold)
 }
+
+/**
+ * 提交搜索后胶囊应收起：列表精简搜索与全局搜索共用该语义。
+ * 空关键词走打开搜索页，不在此处收起。
+ */
+internal fun resolveBottomBarSearchExpansionOverrideAfterSubmit(
+    hasKeyword: Boolean
+): BottomBarSearchExpansionOverride? {
+    return if (hasKeyword) BottomBarSearchExpansionOverride.COLLAPSED else null
+}
+
+/**
+ * 输入法只服务用户点按意图。滚动联动的自动展开只改几何形态，
+ * 不得拉起键盘，否则下滑列表会反复弹出 IME。
+ */
+internal fun shouldRequestBottomBarSearchIme(
+    pendingUserImeRequest: Boolean
+): Boolean = pendingUserImeRequest
+
+/**
+ * 列表滚动期间若搜索框仍持有焦点，系统可能再次拉起 IME；
+ * 滚动开始即清焦点，保证「只有点按才弹输入法」。
+ */
+internal fun shouldDismissBottomBarSearchImeOnScroll(
+    isScrolling: Boolean,
+    isSearchExpanded: Boolean
+): Boolean = isScrolling && isSearchExpanded
 
 internal fun shouldRenderBottomBarRefractionCapture(
     glassEnabled: Boolean,
@@ -2496,6 +2525,7 @@ private fun MaterialBottomBar(
         val searchEnabled = shouldReserveBottomBarSearchLayout(
             bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
         )
+        val mergeOnScrollDownEnabled = homeSettings.linkedDockMergeOnScrollEnabled
         if (searchEnabled || nowPlayingContent != null) {
             LinkedBottomDock(
                 currentItem = currentItem,
@@ -2523,6 +2553,7 @@ private fun MaterialBottomBar(
                 dockPhase = linkedDockPhase,
                 onDockPhaseChange = onLinkedDockPhaseChange,
                 isTopLevelDestination = isTopLevelDestination,
+                mergeOnScrollDownEnabled = mergeOnScrollDownEnabled,
                 animateNowPlayingPresence = animateNowPlayingPresence,
                 modifier = modifier,
                 navigationContent = {
@@ -2598,6 +2629,7 @@ private fun MaterialBottomBar(
             navigationIconCrossScaleEnabled = homeSettings.navigationIconCrossScaleEnabled,
             haptic = haptic,
             bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
+            mergeOnScrollDownEnabled = homeSettings.linkedDockMergeOnScrollEnabled,
             bottomBarSearchAutoExpandMode = homeSettings.bottomBarSearchAutoExpandMode,
             bottomBarSearchLayoutMode = homeSettings.bottomBarSearchLayoutMode,
             onSearchClick = onSearchClick,
@@ -3525,6 +3557,7 @@ private fun BiliPaiFloatingBottomBar(
     linkedDockPhase: LinkedDockPhase? = null,
     onLinkedDockPhaseChange: ((LinkedDockPhase) -> Unit)? = null,
     isTopLevelDestination: Boolean = true,
+    mergeOnScrollDownEnabled: Boolean = true,
     animateNowPlayingPresence: Boolean = true,
 ) {
     if (bottomBarSearchEnabled || nowPlayingContent != null) {
@@ -3535,6 +3568,7 @@ private fun BiliPaiFloatingBottomBar(
             dockPhase = linkedDockPhase,
             onDockPhaseChange = onLinkedDockPhaseChange,
             isTopLevelDestination = isTopLevelDestination,
+            mergeOnScrollDownEnabled = mergeOnScrollDownEnabled,
             animateNowPlayingPresence = animateNowPlayingPresence,
             searchEnabled = bottomBarSearchEnabled,
             isFeedScrollInProgress = isFeedScrollInProgress,
@@ -3703,8 +3737,14 @@ private fun BiliPaiFloatingBottomBarChrome(
     }
     val selectedIndex = visibleItems.indexOf(currentItem).coerceAtLeast(0)
     val isValidSelection = currentItem in visibleItems
-    val baseSelectedColor = MaterialTheme.colorScheme.primary
-    val baseUnselectedColor = if (iconStyle == SharedFloatingBottomBarIconStyle.MATERIAL) {
+    val neutralMiuixSelection = LocalAppUiStyle.current == AppUiStyle.MIUIX &&
+        !effectiveGlassEnabled && uiSkinDecoration == null
+    val baseSelectedColor = if (neutralMiuixSelection) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
+    val baseUnselectedColor = if (neutralMiuixSelection || iconStyle == SharedFloatingBottomBarIconStyle.MATERIAL) {
         MaterialTheme.colorScheme.onSurfaceVariant
     } else {
         MaterialTheme.colorScheme.onSurface
@@ -3722,12 +3762,12 @@ private fun BiliPaiFloatingBottomBarChrome(
     val selectedColor = lerpColor(
         skinContentColors.selectedColor,
         readableContentColor,
-        liquidGlassTuning.contentReadabilityBoost * 0.65f,
+        if (neutralMiuixSelection) 0f else liquidGlassTuning.contentReadabilityBoost * 0.65f,
     )
     val unselectedColor = lerpColor(
         skinContentColors.unselectedColor,
         readableContentColor,
-        liquidGlassTuning.contentReadabilityBoost,
+        if (neutralMiuixSelection) 0f else liquidGlassTuning.contentReadabilityBoost,
     ).copy(alpha = 1f)
     val totalItems = allItems.size.coerceAtLeast(1)
 
@@ -3815,6 +3855,12 @@ private fun BiliPaiFloatingBottomBarChrome(
             mode = floatingMode,
             hasUiSkinDecoration = uiSkinDecoration != null,
         )
+    }
+    // Use the same opaque surface roles as the non-glass top dock capsule.
+    val neutralIndicatorContainerColor = if (neutralMiuixSelection) {
+        if (isDarkTheme) AppSurfaceTokens.surfaceContainerHighest() else AppSurfaceTokens.surfaceContainer()
+    } else {
+        null
     }
     val floatingColors = FloatingBottomBarColors(
         containerColor = floatingContainerColor,
@@ -4050,6 +4096,8 @@ private fun BiliPaiFloatingBottomBarChrome(
                                 tabsCount = totalItems,
                                 modifier = dockModifier,
                                 colors = floatingColors,
+                                indicatorContainerColor = neutralIndicatorContainerColor
+                                    ?: floatingColors.indicatorColor.copy(alpha = 0.14f),
                                 content = dockContent,
                             )
                         } else {
@@ -4062,6 +4110,7 @@ private fun BiliPaiFloatingBottomBarChrome(
                                 modifier = dockModifier,
                                 mode = floatingMode,
                                 colors = floatingColors,
+                                indicatorIdleSurfaceColorOverride = neutralIndicatorContainerColor,
                                 shellHeight = dockHeight,
                                 indicatorHeight = resolveBiliPaiBottomBarIndicatorHeight(dockHeight),
                                 minimumIndicatorWidth = searchLayoutState.minimumIndicatorWidth,
@@ -4191,6 +4240,9 @@ private fun BiliPaiFloatingBottomBarChrome(
                             onSearchClick()
                         } else {
                             onSearchKeywordSubmit(keyword)
+                            resolveBottomBarSearchExpansionOverrideAfterSubmit(
+                                hasKeyword = true
+                            )?.let { searchExpansionOverride = it }
                         }
                     },
                     shape = resolveSharedBottomBarCapsuleShape(),
@@ -4589,6 +4641,25 @@ private fun BiliPaiBottomBarSearchCapsule(
     val currentOnCompactClick by rememberUpdatedState(onCompactClick)
     val currentOnSubmit by rememberUpdatedState(onSubmit)
     val currentHaptic by rememberUpdatedState(haptic)
+    var pendingUserImeRequest by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(expanded) {
+        if (!expanded) {
+            // 收起后丢弃未消费的点按 IME 意图，避免下次自动展开误弹键盘。
+            pendingUserImeRequest = false
+        }
+    }
+    LaunchedEffect(isScrolling, expanded) {
+        if (shouldDismissBottomBarSearchImeOnScroll(
+                isScrolling = isScrolling,
+                isSearchExpanded = expanded
+            )
+        ) {
+            focusManager.clearFocus()
+            keyboardController?.hide()
+        }
+    }
     val fieldAlpha = animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
         animationSpec = bottomBarContentVisibilityMotionSpec(),
@@ -4628,13 +4699,20 @@ private fun BiliPaiBottomBarSearchCapsule(
                         role = Role.Button,
                         onClick = {
                             currentHaptic(HapticType.LIGHT)
+                            pendingUserImeRequest = true
                             currentOnCompactClick()
                         },
                     )
                 } else {
-                    Modifier.semantics {
-                        contentDescription = "搜索输入框"
-                    }
+                    Modifier
+                        .semantics {
+                            contentDescription = "搜索输入框"
+                        }
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { pendingUserImeRequest = true },
+                        )
                 }
             ),
         contentAlignment = Alignment.Center
@@ -4651,7 +4729,9 @@ private fun BiliPaiBottomBarSearchCapsule(
             iconScale = { iconScale.value },
             fieldAlpha = { fieldAlpha.value },
             interactive = true,
-            iconStyle = iconStyle
+            iconStyle = iconStyle,
+            pendingUserImeRequest = pendingUserImeRequest,
+            onUserImeRequestConsumed = { pendingUserImeRequest = false }
         )
     }
 }
@@ -4667,11 +4747,27 @@ internal fun BiliPaiBottomBarSearchVisualContent(
     iconScale: () -> Float,
     fieldAlpha: () -> Float,
     interactive: Boolean,
-    iconStyle: SharedFloatingBottomBarIconStyle
+    iconStyle: SharedFloatingBottomBarIconStyle,
+    pendingUserImeRequest: Boolean = false,
+    onUserImeRequestConsumed: () -> Unit = {}
 ) {
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(expanded, interactive) {
-        if (expanded && interactive) focusRequester.requestFocus()
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val currentOnUserImeRequestConsumed by rememberUpdatedState(onUserImeRequestConsumed)
+    // 仅用户点按请求 IME；滚动/自动展开只展开几何，不拉起键盘。
+    LaunchedEffect(pendingUserImeRequest, expanded, interactive) {
+        if (!shouldRequestBottomBarSearchIme(pendingUserImeRequest)) return@LaunchedEffect
+        if (expanded && interactive) {
+            runCatching { focusRequester.requestFocus() }
+            currentOnUserImeRequestConsumed()
+        }
+    }
+    LaunchedEffect(expanded) {
+        if (!expanded) {
+            focusManager.clearFocus()
+            keyboardController?.hide()
+        }
     }
     Row(
         modifier = Modifier

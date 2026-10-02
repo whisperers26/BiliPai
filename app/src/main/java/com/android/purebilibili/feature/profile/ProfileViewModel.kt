@@ -683,7 +683,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                withContext(Dispatchers.Main) {
+                withContext(Dispatchers.Main.immediate) {
                     android.widget.Toast.makeText(getApplication(), error.message ?: "壁纸导入失败", android.widget.Toast.LENGTH_LONG).show()
                 }
             }
@@ -773,16 +773,25 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     val officialWallpapersError = _officialWallpapersError.asStateFlow()
 
     fun loadOfficialWallpapers() {
+        if (_officialWallpapersLoading.value) return
         viewModelScope.launch {
             _officialWallpapersLoading.value = true
             _officialWallpapersError.value = null
-            val result = com.android.purebilibili.data.repository.SplashRepository.getOfficialWallpapers()
-            if (result.isSuccess) {
-                _officialWallpapers.value = result.getOrNull() ?: emptyList()
-            } else {
-                _officialWallpapersError.value = result.exceptionOrNull()?.message ?: "加载失败，点击重试"
+            try {
+                val result = com.android.purebilibili.data.repository.SplashRepository.getOfficialWallpapers()
+                if (result.isSuccess) {
+                    val catalog = result.getOrThrow()
+                    if (catalog.items.isNotEmpty() || catalog.failedSources.isEmpty()) {
+                        _officialWallpapers.value = catalog.items
+                    }
+                    _officialWallpapersError.value = catalog.failedSources.takeIf { it.isNotEmpty() }
+                        ?.joinToString("、")?.let { "${it}未加载成功，当前列表不完整，请刷新重试" }
+                } else {
+                    _officialWallpapersError.value = result.exceptionOrNull()?.message ?: "加载失败，点击重试"
+                }
+            } finally {
+                _officialWallpapersLoading.value = false
             }
-            _officialWallpapersLoading.value = false
         }
     }
 
@@ -902,7 +911,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     
                     loadProfile(force = true) // 刷新
                     
-                    withContext(Dispatchers.Main) {
+                    withContext(Dispatchers.Main.immediate) {
                         _wallpaperSaveState.value = WallpaperSaveState.Success
                         onComplete()
                     }
@@ -977,7 +986,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                          saveImageToGallery(context, bytes, "bili_splash_${System.currentTimeMillis()}.jpg")
                     }
 
-                    withContext(Dispatchers.Main) {
+                    withContext(Dispatchers.Main.immediate) {
                         _splashSaveState.value = WallpaperSaveState.Success
                         onComplete()
                     }
@@ -1013,7 +1022,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 mobileBias?.let { SettingsManager.setSplashAlignment(context, isTablet = false, bias = it) }
                 tabletBias?.let { SettingsManager.setSplashAlignment(context, isTablet = true, bias = it) }
 
-                withContext(Dispatchers.Main) {
+                withContext(Dispatchers.Main.immediate) {
                     _splashSaveState.value = WallpaperSaveState.Success
                     onComplete()
                 }
@@ -1065,7 +1074,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                         saveImageToGallery(context, bytes, "bili_home_${System.currentTimeMillis()}.jpg")
                     }
 
-                    withContext(Dispatchers.Main) {
+                    withContext(Dispatchers.Main.immediate) {
                         _splashSaveState.value = WallpaperSaveState.Success
                         onComplete()
                     }
@@ -1094,7 +1103,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 val wallpaper = importWallpaperMedia(context, Uri.parse(uri), File(context.filesDir, "home_wallpaper"))
                 SettingsManager.setHomeWallpaperUri(context, Uri.fromFile(wallpaper).toString())
 
-                withContext(Dispatchers.Main) {
+                withContext(Dispatchers.Main.immediate) {
                     _splashSaveState.value = WallpaperSaveState.Success
                     onComplete()
                 }

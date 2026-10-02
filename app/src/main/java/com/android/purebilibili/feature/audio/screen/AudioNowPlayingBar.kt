@@ -8,6 +8,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +35,17 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
+import com.android.purebilibili.core.ui.transition.captureNativeVideoCardImage
+import com.android.purebilibili.core.ui.transition.captureNativeVideoCardBitmap
+import com.android.purebilibili.core.ui.transition.recordNativeVideoCardLayer
+import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardLayer
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.transition.NowPlayingBarHandoffState
 import com.android.purebilibili.core.ui.transition.VideoCardSourceChromeSnapshot
 import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
@@ -47,7 +59,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import com.android.purebilibili.feature.audio.lyrics.halcyon.darken
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
@@ -94,6 +108,7 @@ internal fun AudioNowPlayingBar(
     onSkipNext: () -> Unit,
     onSkipPrevious: () -> Unit,
     onDismiss: () -> Unit,
+    onManualHide: (() -> Unit)? = null,
     expandDestinationLabel: String = "听视频",
     sourceRoute: String? = null,
     handoff: NowPlayingBarHandoffState = NowPlayingBarHandoffState.Idle,
@@ -122,13 +137,16 @@ internal fun AudioNowPlayingBar(
         CardPositionManager.invalidateVideoSourceIfWindowChanged(screenWidthPx, screenHeightPx)
     }
 
+    val nativeBarLayer = rememberNativeVideoCardLayer()
+    val snapshotScope = rememberCoroutineScope()
+    var captureInProgress by remember(state.bvid) { mutableStateOf(false) }
     val barCoordsRef = remember { arrayOfNulls<LayoutCoordinates>(1) }
     val coverCoordsRef = remember { arrayOfNulls<LayoutCoordinates>(1) }
 
     val handleExpand = {
         if (onCompactClick != null) {
             onCompactClick()
-        } else if (canOpenAudioNowPlayingBarSource(isLayoutStable)) {
+        } else if (!captureInProgress && canOpenAudioNowPlayingBarSource(isLayoutStable)) {
             barCoordsRef[0]?.takeIf { it.isAttached }?.boundsInRoot()?.let { bounds ->
                 val sourceCoverBounds = coverCoordsRef[0]?.takeIf { it.isAttached }?.boundsInRoot()
                 val effectiveSourceLayout = if (iconOnlyProgress() >= 0.99f) {
@@ -164,7 +182,25 @@ internal fun AudioNowPlayingBar(
                     )
                 }
             }
-            onExpand()
+            // Finish freezing before navigation removes the bar's graphics layer.
+            CardPositionManager.clearNativeVideoCardLayers()
+            captureNativeVideoCardImage(nativeBarLayer)
+            val expectedSourceKey = CardPositionManager.lastClickedVideoSourceKey
+            captureInProgress = true
+            snapshotScope.launch {
+                try {
+                    captureNativeVideoCardBitmap(nativeBarLayer, expectedSourceKey)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    com.android.purebilibili.core.util.Logger.w(
+                        "AudioNowPlayingBar", "Could not freeze return snapshot: ${error.message}",
+                    )
+                } finally {
+                    captureInProgress = false
+                }
+                onExpand()
+            }
         }
     }
     val reduceMotion = rememberSystemReduceMotion()
@@ -179,12 +215,32 @@ internal fun AudioNowPlayingBar(
     )
     val shape = resolveSharedBottomBarCapsuleShape()
     val glassActive = glassEnabled && miuixBackdrop != null
-    val containerColor = resolveBiliPaiBottomBarShellColor(
+    val immersiveBackdrop: Color? =
+        com.android.purebilibili.feature.audio.player.AudioNowPlayingSession
+            .immersiveBackdropColor.collectAsState().value
+    val defaultContainerColor = resolveBiliPaiBottomBarShellColor(
         containerColor = AppSurfaceTokens.surfaceContainer(),
         liquidGlassEnabled = glassEnabled,
         darkTheme = resolveBottomBarDarkTheme(AppSurfaceTokens.background()),
         liquidGlassTuning = liquidGlassTuning,
     )
+    // 悬浮在沉浸式音乐页上时，容器取封面主色的暗化版本，避免主题中性灰与
+    // 封面氛围色冲突。玻璃材质保留外壳的半透明度，仅替换 RGB 为氛围色调。
+    val containerColor = if (immersiveBackdrop != null) {
+        val tint = immersiveBackdrop.darken(0.52f)
+        if (glassActive) {
+            tint.copy(alpha = defaultContainerColor.alpha)
+        } else {
+            androidx.compose.ui.graphics.lerp(defaultContainerColor, tint, 0.85f)
+        }
+    } else {
+        defaultContainerColor
+    }
+    val immersiveContentColor = if (immersiveBackdrop != null) {
+        Color.White
+    } else {
+        null
+    }
     // 迷你条封面旋转：播放时逐帧失效是预期开销（封面独占 graphicsLayer，
     // 不会连带模糊外壳层重绘）；暂停后 while 循环退出，帧率自然回落。
     val coverRotationDegrees = rememberMusicArtworkRotationDegrees(
@@ -218,6 +274,15 @@ internal fun AudioNowPlayingBar(
                 alpha = if (sourceInActiveReturn) 0f else 1f
             }
             .clip(shape)
+            .recordNativeVideoCardLayer(
+                layer = nativeBarLayer,
+                freezeProvider = {
+                    (captureInProgress || sourceInActiveReturn) &&
+                        CardPositionManager.isNativeVideoCardLayerCurrentOwner(nativeBarLayer)
+                },
+                // Visibility is owned by the explicit now-playing handoff above.
+                sourceRoute = sourceRoute,
+            )
             .semantics {
                 contentDescription = if (onCompactClick != null) {
                     "当前视频：${state.title}，收起搜索并展开视频小横条"
@@ -226,6 +291,16 @@ internal fun AudioNowPlayingBar(
                 }
             }
             .clickable(enabled = !sourceInActiveReturn, onClick = handleExpand)
+            .then(
+                if (onManualHide != null && !sourceInActiveReturn) {
+                    Modifier.pointerInput(onManualHide) {
+                        // 长按立即进入沉浸态，与自动沉浸共用同一把柄唤回通道。
+                        detectTapGestures(onLongPress = { onManualHide() })
+                    }
+                } else {
+                    Modifier
+                }
+            )
             .then(
                 if (!sourceInActiveReturn) {
                     Modifier.audioNowPlayingSkipGesture(
@@ -295,7 +370,8 @@ internal fun AudioNowPlayingBar(
                         maxLines = 1,
                         overflow = TextOverflow.Clip,
                         softWrap = false,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = immersiveContentColor
+                            ?: MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -329,7 +405,8 @@ internal fun AudioNowPlayingBar(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = immersiveContentColor?.copy(alpha = 0.72f)
+                                    ?: MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -352,7 +429,7 @@ internal fun AudioNowPlayingBar(
                         AppIcon(
                             imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                             contentDescription = if (state.isPlaying) "暂停" else "播放",
-                            tint = MaterialTheme.colorScheme.onSurface
+                            tint = immersiveContentColor ?: MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -380,7 +457,7 @@ internal fun AudioNowPlayingBar(
                         AppIcon(
                             Icons.Outlined.QueueMusic,
                             contentDescription = "打开$expandDestinationLabel",
-                            tint = MaterialTheme.colorScheme.onSurface,
+                            tint = immersiveContentColor ?: MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 }
@@ -408,7 +485,7 @@ internal fun AudioNowPlayingBar(
                         AppIcon(
                             Icons.Filled.Close,
                             contentDescription = "关闭听视频条",
-                            tint = MaterialTheme.colorScheme.onSurface,
+                            tint = immersiveContentColor ?: MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 }

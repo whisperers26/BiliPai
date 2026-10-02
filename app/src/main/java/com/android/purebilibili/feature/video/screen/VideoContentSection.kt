@@ -12,6 +12,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -73,6 +75,7 @@ import top.yukonga.miuix.kmp.blur.layerBackdrop as miuixLayerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop as rememberMiuixLayerBackdrop
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ReplyItem
+import com.android.purebilibili.data.model.response.ReplyVoteCard
 import com.android.purebilibili.data.model.response.VideoTag
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.data.model.response.BgmInfo
@@ -97,6 +100,7 @@ import com.android.purebilibili.feature.video.ui.components.CommentSortFilterBar
 import com.android.purebilibili.feature.video.ui.components.CommentSearchSheet
 import com.android.purebilibili.feature.video.ui.components.resolveCommentSortDockViewportOverflowDp
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
+import com.android.purebilibili.feature.video.ui.components.VideoCommentVoteCard
 import com.android.purebilibili.feature.video.ui.components.rememberVideoCommentAppearance
 import com.android.purebilibili.feature.video.ui.components.resolveReplyItemContentType
 import com.android.purebilibili.feature.video.ui.components.shouldShowReplyTopAction
@@ -440,6 +444,7 @@ internal class VideoContentEngagementState(
 internal class VideoContentCommentState(
     val isRepliesLoading: Boolean,
     val isRepliesEnd: Boolean,
+    val voteCard: ReplyVoteCard?,
     val sortMode: CommentSortMode,
     val currentMid: Long,
     val showUpFlag: Boolean,
@@ -515,11 +520,12 @@ internal class VideoContentNoteActions(
     val onOpenVideoNoteEditor: () -> Unit,
     val onCloseVideoNoteEditor: () -> Unit,
     val onVideoNoteDocumentChange: (VideoNoteEditorDocument) -> Unit,
-    val onInsertVideoNoteTimestamp: () -> Unit,
+    val onInsertVideoNoteTimestamp: () -> com.android.purebilibili.feature.video.note.VideoNoteBlock.Timestamp?,
     val onVideoNoteTimestampClick: (Long) -> Unit,
     val onSaveVideoNote: (VideoNoteEditorDocument) -> Unit,
     val onDeleteVideoNote: () -> Unit,
     val onRetryVideoNote: () -> Unit,
+    val onLoadMorePublicVideoNotes: () -> Unit,
     val onPublicVideoNoteClick: (Long, String) -> Unit,
 )
 
@@ -564,6 +570,7 @@ internal fun VideoContentSection(
     val isInWatchLater = engagementState.isInWatchLater
     val isRepliesLoading = commentState.isRepliesLoading
     val isRepliesEnd = commentState.isRepliesEnd
+    val voteCard = commentState.voteCard
     val sortMode = commentState.sortMode
     val currentMid = commentState.currentMid
     val showUpFlag = commentState.showUpFlag
@@ -629,6 +636,7 @@ internal fun VideoContentSection(
     val onSaveVideoNote = noteActions.onSaveVideoNote
     val onDeleteVideoNote = noteActions.onDeleteVideoNote
     val onRetryVideoNote = noteActions.onRetryVideoNote
+    val onLoadMorePublicVideoNotes = noteActions.onLoadMorePublicVideoNotes
     val onPublicVideoNoteClick = noteActions.onPublicVideoNoteClick
     val onSelectedTabChange = uiActions.onSelectedTabChange
     val onIntroScrollThresholdChange = uiActions.onIntroScrollThresholdChange
@@ -988,6 +996,7 @@ internal fun VideoContentSection(
                         emoteMap = emoteMap,
                         isRepliesLoading = isRepliesLoading,
                         isRepliesEnd = isRepliesEnd,
+                        voteCard = voteCard,
                         videoTags = videoTags,
                         onUpClick = onUpClick,
                         onSubReplyClick = onSubReplyClick,
@@ -1237,14 +1246,24 @@ internal fun VideoContentSection(
                 confirmDeleteNote = true
             },
             onShareClick = { document -> onShareVideoNote(document, false) },
-            onPublicNoteClick = onPublicVideoNoteClick
+            onPublicNoteClick = onPublicVideoNoteClick,
+            onAuthorClick = { mid ->
+                if (mid > 0L) onDescriptionUrlClick?.invoke("https://space.bilibili.com/$mid")
+            },
+            onLoadMore = onLoadMorePublicVideoNotes,
+            onOfficialEditorClick = {
+                showNoteListSheet = false
+                onDescriptionUrlClick?.invoke(
+                    "https://www.bilibili.com/h5/note-app?oid=${info.aid}&pagefrom=ugcvideo"
+                )
+            }
         )
 
         VideoNoteEditorSheet(
             noteState = videoNoteState,
             onDismiss = onCloseVideoNoteEditor,
             onDocumentChange = onVideoNoteDocumentChange,
-            onInsertTimestamp = onInsertVideoNoteTimestamp,
+            currentTimestampProvider = onInsertVideoNoteTimestamp,
             onTimestampClick = onVideoNoteTimestampClick,
             onShare = { document -> onShareVideoNote(document, videoNoteState.editorFromAiSummary) },
             onSave = onSaveVideoNote
@@ -1452,6 +1471,7 @@ internal fun VideoCommentTab(
     emoteMap: Map<String, String>,
     isRepliesLoading: Boolean,
     isRepliesEnd: Boolean,
+    voteCard: ReplyVoteCard?,
     videoTags: List<VideoTag>,
     onUpClick: (Long) -> Unit,
     onSubReplyClick: (ReplyItem, Long) -> Unit,
@@ -1542,11 +1562,19 @@ internal fun VideoCommentTab(
                     bottom = contentPadding.calculateBottomPadding(),
                 )
             ) {
+            voteCard?.let { card ->
+                item(key = "inline_vote_${card.voteId}") {
+                    VideoCommentVoteCard(
+                        card = card,
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    )
+                }
+            }
             if (isRepliesLoading && replies.isEmpty()) {
                 item {
                     com.android.purebilibili.core.ui.skeleton.CommentListColumnSkeleton()
                 }
-            } else if (replies.isEmpty()) {
+            } else if (replies.isEmpty() && voteCard == null) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                         // replyCount 来自详情/游标 all_count：>0 却列表空 = 最热链路空成功，勿误报「暂无」
@@ -1649,6 +1677,7 @@ internal fun LandscapeCommentPanel(
     emoteMap: Map<String, String>,
     isRepliesLoading: Boolean,
     isRepliesEnd: Boolean,
+    voteCard: ReplyVoteCard?,
     videoTags: List<VideoTag>,
     sortMode: CommentSortMode,
     currentMid: Long,
@@ -1754,6 +1783,7 @@ internal fun LandscapeCommentPanel(
                         emoteMap = emoteMap,
                         isRepliesLoading = isRepliesLoading,
                         isRepliesEnd = isRepliesEnd,
+                        voteCard = voteCard,
                         videoTags = videoTags,
                         onUpClick = onUpClick,
                         onSubReplyClick = onSubReplyClick,
@@ -2025,6 +2055,26 @@ private fun VideoContentTabBar(
             allowLabelOverflow = true,
         )
     }
+    // Tab 数量多时整条超出屏宽（如"UP投稿"被截在右缘）：横向可滚，选中项
+    // 自动滚入可视区——点击与 Pager 滑动切页都会驱动 selectedTabIndex。
+    val tabBarScrollState = rememberScrollState()
+    val tabBarDensity = LocalDensity.current
+    LaunchedEffect(selectedTabIndex, tabItemWidth, tabs.size, tabBarScrollState.maxValue) {
+        if (tabBarScrollState.maxValue <= 0) return@LaunchedEffect
+        val tabWidthPx = with(tabBarDensity) { tabItemWidth.toPx() }
+        // ScrollState 不暴露视口宽；内容宽已知，maxValue = 内容宽 - 视口宽。
+        val viewportPx = tabWidthPx * tabs.size - tabBarScrollState.maxValue
+        if (viewportPx <= 0f) return@LaunchedEffect
+        val tabLeft = selectedTabIndex * tabWidthPx
+        val tabRight = tabLeft + tabWidthPx
+        val scroll = tabBarScrollState.value.toFloat()
+        val target = when {
+            tabRight > scroll + viewportPx -> tabRight - viewportPx
+            tabLeft < scroll -> tabLeft
+            else -> return@LaunchedEffect
+        }
+        tabBarScrollState.animateScrollTo(target.coerceIn(0f, tabBarScrollState.maxValue.toFloat()).toInt())
+    }
     Column(
         modifier = modifier
     ) {
@@ -2052,31 +2102,37 @@ private fun VideoContentTabBar(
                 Arrangement.Start
             }
         ) {
+            // 页签视口独占操作按钮以外的剩余宽度，避免与 Spacer 平分后裁切。
+            // 内容不足时靠左显示，超出视口时才允许横向滚动。
             Box(
-                modifier = Modifier.width(tabItemWidth * tabs.size),
-                contentAlignment = Alignment.CenterStart,
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(tabBarScrollState),
             ) {
-                AppThemeAdaptiveTabRow(
-                    options = tabs.mapIndexed { index, label -> AppSegmentOption(index, label) },
-                    selectedValue = selectedTabIndex,
-                    onSelectionChange = onTabSelected,
-                    modifier = Modifier.fillMaxWidth(),
-                    compactMiuixWhenTwoOptions = false,
-                    height = liquidChromeSpec.segmentedControlHeightDp.dp,
-                    indicatorHeight = liquidChromeSpec.segmentedControlIndicatorHeightDp.dp,
-                    labelFontSize = liquidChromeSpec.labelFontSizeSp.sp,
-                    // 该栏的指示器由 HorizontalPager 实时位置驱动，禁止自身再 settle 一次。
-                    dragSelectionEnabled = true,
-                    tapPressRefractionEnabled = true,
-                    miuixBackdrop = miuixBackdrop,
-                    indicatorPositionProvider = indicatorPositionProvider,
-                    isScrollInProgressProvider = isScrollInProgressProvider,
-                )
+                Box(
+                    modifier = Modifier.width(tabItemWidth * tabs.size),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    AppThemeAdaptiveTabRow(
+                        options = tabs.mapIndexed { index, label -> AppSegmentOption(index, label) },
+                        selectedValue = selectedTabIndex,
+                        onSelectionChange = onTabSelected,
+                        modifier = Modifier.fillMaxWidth(),
+                        compactMiuixWhenTwoOptions = false,
+                        height = liquidChromeSpec.segmentedControlHeightDp.dp,
+                        indicatorHeight = liquidChromeSpec.segmentedControlIndicatorHeightDp.dp,
+                        labelFontSize = liquidChromeSpec.labelFontSizeSp.sp,
+                        // 该栏的指示器由 HorizontalPager 实时位置驱动，禁止自身再 settle 一次。
+                        dragSelectionEnabled = true,
+                        tapPressRefractionEnabled = true,
+                        miuixBackdrop = miuixBackdrop,
+                        indicatorPositionProvider = indicatorPositionProvider,
+                        isScrollInProgressProvider = isScrollInProgressProvider,
+                    )
+                }
             }
 
             if (shouldShowVideoContentTabBarDanmakuActions(selectedTabIndex)) {
-                Spacer(modifier = Modifier.weight(1f))
-
                 AnimatedVisibility(
                     visible = shouldShowDanmakuSendInput(isPlayerCollapsed = isPlayerCollapsed),
                     enter = fadeIn() + expandHorizontally(expandFrom = Alignment.Start),
@@ -2100,8 +2156,8 @@ private fun VideoContentTabBar(
                 NativeDanmakuToggleButton(
                     enabled = danmakuEnabled,
                     onToggle = onDanmakuToggle,
-                    activeTint = MaterialTheme.colorScheme.secondary,
-                    inactiveTint = MaterialTheme.colorScheme.outline,
+                    activeTint = MaterialTheme.colorScheme.onSurface,
+                    inactiveTint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .padding(end = danmakuActionLayoutPolicy.toggleTrailingPaddingDp.dp)
                         .size(danmakuActionLayoutPolicy.toggleButtonSizeDp.dp),

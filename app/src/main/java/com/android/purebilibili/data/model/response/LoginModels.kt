@@ -2,6 +2,35 @@ package com.android.purebilibili.data.model.response
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
+
+/** Missing response status must never be interpreted as authorization success. */
+@Serializable
+data class QrAuthorizationResponse(
+    val code: Int = -1,
+    val message: String = "",
+)
+
+@Serializable
+data class QrAuthorizationSceneResponse(
+    val code: Int = -1,
+    val message: String = "",
+    val data: QrAuthorizationSceneData? = null,
+)
+
+@Serializable
+data class QrAuthorizationSceneData(
+    @SerialName("location_diff") val locationDiffers: Boolean = false,
+    @SerialName("qrcode_location") val location: String = "",
+    @SerialName("verify_tel") val phoneVerification: JsonPrimitive? = null,
+    @SerialName("obtain_env") val requiresEnvironment: Boolean = false,
+    @SerialName("transient") val transient: Boolean = false,
+) {
+    val requiresPhoneVerification: Boolean
+        get() = phoneVerification?.booleanOrNull == true || (phoneVerification?.intOrNull ?: 0) != 0
+}
 
 // --- 1. 二维码申请响应 ---
 @Serializable

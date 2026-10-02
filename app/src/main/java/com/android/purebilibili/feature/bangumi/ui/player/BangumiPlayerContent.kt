@@ -51,6 +51,7 @@ import com.android.purebilibili.feature.bangumi.isBangumiFollowed
 import com.android.purebilibili.feature.bangumi.resolveBangumiFollowStatusLabel
 import com.android.purebilibili.feature.video.ui.components.VideoCommentMainList
 import com.android.purebilibili.feature.video.ui.components.SubReplySheet
+import com.android.purebilibili.feature.video.ui.components.commentThreadNavigationBlur
 import com.android.purebilibili.feature.video.ui.components.CommentInputDialog
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import androidx.compose.ui.geometry.Rect
@@ -98,6 +99,7 @@ fun BangumiPlayerContent(
         { pagerState.currentPage + pagerState.currentPageOffsetFraction }
     }
     val subReplyState by commentViewModel.subReplyState.collectAsStateWithLifecycle()
+    val subReplyCoveredBlurProgress = remember(currentEpisode.id) { mutableFloatStateOf(0f) }
     val commentState by commentViewModel.commentState.collectAsStateWithLifecycle()
     var commentInputVisible by rememberSaveable(currentEpisode.id) { mutableStateOf(false) }
     var sendPending by remember(currentEpisode.id) { mutableStateOf(false) }
@@ -130,7 +132,11 @@ fun BangumiPlayerContent(
                 .layerBackdrop(selectionBackdrop)
                 .background(MaterialTheme.colorScheme.background),
         )
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxSize().commentThreadNavigationBlur {
+                if (subReplyState.visible) subReplyCoveredBlurProgress.floatValue else 0f
+            }
+        ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -690,6 +696,7 @@ fun BangumiPlayerContent(
         state = subReplyState,
         emoteMap = emptyMap(),
         onDismiss = commentViewModel::closeSubReply,
+        onCoveredBlurProgressChange = { subReplyCoveredBlurProgress.floatValue = it },
         onLoadMore = commentViewModel::loadMoreSubReplies,
         onSortModeChange = commentViewModel::setSubReplySortMode,
         onCommentLike = commentViewModel::likeComment,

@@ -19,8 +19,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntSize
@@ -47,15 +45,28 @@ fun ZoomableImage(
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
     onZoomChange: (Float) -> Unit = {},
+    // Reports image bounds in this viewport, before any parent layer transforms.
     onDisplayRectChange: (Rect?) -> Unit = {},
     onVerticalDismissDragStart: () -> Unit = {},
-    onVerticalDismissDrag: (Float) -> Unit = {},
-    onVerticalDismissDragEnd: () -> Unit = {},
+    onVerticalDismissDrag: (Offset) -> Unit = {},
+    onVerticalDismissDragEnd: (Float) -> Unit = {},
     onVerticalDismissDragCancel: () -> Unit = {},
     onExtremeAspectRatioDetected: () -> Unit = {},
     onLongPress: () -> Unit = {},
-    onClick: () -> Unit = {}
+    onClick: () -> Unit = {},
+    resetZoomTrigger: Int = 0,
+    gesturesEnabled: Boolean = true,
+    displayRectTrackingEnabled: Boolean = true,
 ) {
+    // Gesture coroutines outlive recomposition; always use the current host callbacks.
+    val latestOnZoomChange by rememberUpdatedState(onZoomChange)
+    val latestOnDisplayRectChange by rememberUpdatedState(onDisplayRectChange)
+    val latestOnDragStart by rememberUpdatedState(onVerticalDismissDragStart)
+    val latestOnDrag by rememberUpdatedState(onVerticalDismissDrag)
+    val latestOnDragEnd by rememberUpdatedState(onVerticalDismissDragEnd)
+    val latestOnDragCancel by rememberUpdatedState(onVerticalDismissDragCancel)
+    val latestOnLongPress by rememberUpdatedState(onLongPress)
+    val latestOnClick by rememberUpdatedState(onClick)
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
@@ -64,32 +75,43 @@ fun ZoomableImage(
     var imageSize by remember { mutableStateOf(IntSize.Zero) }
     // 容器尺寸
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
-    // 容器在窗口中的原点，便于与缩略图 sourceRect（boundsInWindow）对齐
-    var containerWindowOrigin by remember { mutableStateOf(Offset.Zero) }
-    
-    fun resolveDisplayedRectOrNull(): Rect? {
-        if (containerSize == IntSize.Zero || imageSize == IntSize.Zero) return null
-
-        val fitScale = min(
-            containerSize.width.toFloat() / imageSize.width,
-            containerSize.height.toFloat() / imageSize.height
-        )
-        val displayWidth = imageSize.width * fitScale * scale
-        val displayHeight = imageSize.height * fitScale * scale
-        val centerX = containerWindowOrigin.x + containerSize.width / 2f + offsetX
-        val centerY = containerWindowOrigin.y + containerSize.height / 2f + offsetY
-        return Rect(
-            left = centerX - displayWidth / 2f,
-            top = centerY - displayHeight / 2f,
-            right = centerX + displayWidth / 2f,
-            bottom = centerY + displayHeight / 2f
-        )
-    }
-
-    LaunchedEffect(containerSize, containerWindowOrigin, imageSize, scale, offsetX, offsetY) {
-        onDisplayRectChange(resolveDisplayedRectOrNull())
+    LaunchedEffect(containerSize, imageSize, scale, offsetX, offsetY, displayRectTrackingEnabled) {
+        if (displayRectTrackingEnabled) {
+            latestOnDisplayRectChange(
+                resolveZoomableImageLocalDisplayRect(imageSize, containerSize, scale, offsetX, offsetY)
+            )
+        }
     }
     
+    // 外部触发的缩放复位(放大态退出预回弹):把 scale/offset 动画回 fit。
+    // 逐帧写状态,宿主可经 onZoomChange 观察 activeZoomScale 到达 1。
+    LaunchedEffect(resetZoomTrigger) {
+        if (resetZoomTrigger <= 0 || scale <= 1f) return@LaunchedEffect
+        val startScale = scale
+        val startOffsetX = offsetX
+        val startOffsetY = offsetY
+        val resetAnim = androidx.compose.animation.core.Animatable(0f)
+        resetAnim.animateTo(
+            targetValue = 1f,
+            animationSpec = androidx.compose.animation.core.tween(
+                durationMillis = 180,
+                easing = androidx.compose.animation.core.CubicBezierEasing(0f, 0f, 0.58f, 1f)
+            )
+        ) {
+            // 本项目 Compose 版本的 animateTo block 是 Animatable 接收者 lambda,
+            // value 即 this.value(当前动画值 0f..1f)。
+            val progress = value
+            scale = startScale + (1f - startScale) * progress
+            offsetX = startOffsetX * (1f - progress)
+            offsetY = startOffsetY * (1f - progress)
+            latestOnZoomChange(scale)
+        }
+        scale = 1f
+        offsetX = 0f
+        offsetY = 0f
+        latestOnZoomChange(1f)
+    }
+
     // 双击放大逻辑
     fun onDoubleTap(tapOffset: Offset) {
         if (scale > 1f) {
@@ -97,7 +119,7 @@ fun ZoomableImage(
             scale = 1f
             offsetX = 0f
             offsetY = 0f
-            onZoomChange(1f)
+            latestOnZoomChange(1f)
         } else {
             val scaleLimits = resolveZoomableImageScaleLimits(
                 imageWidth = imageSize.width,
@@ -130,7 +152,7 @@ fun ZoomableImage(
                 offsetX = offsetX.coerceIn(-maxOffsetX, maxOffsetX)
                 offsetY = offsetY.coerceIn(-maxOffsetY, maxOffsetY)
             }
-            onZoomChange(scale)
+            latestOnZoomChange(scale)
         }
     }
 
@@ -138,18 +160,16 @@ fun ZoomableImage(
         modifier = modifier
             .fillMaxSize()
             .onSizeChanged { containerSize = it }
-            .onGloballyPositioned { coordinates ->
-                val bounds = coordinates.boundsInWindow()
-                containerWindowOrigin = Offset(bounds.left, bounds.top)
-            }
-            .pointerInput(Unit) {
+            .pointerInput(gesturesEnabled) {
+                if (!gesturesEnabled) return@pointerInput
                 detectTapGestures(
                     onDoubleTap = { onDoubleTap(it) },
-                    onLongPress = { onLongPress() },
-                    onTap = { onClick() }
+                    onLongPress = { latestOnLongPress() },
+                    onTap = { latestOnClick() }
                 )
             }
-            .pointerInput(Unit) {
+            .pointerInput(gesturesEnabled) {
+                if (!gesturesEnabled) return@pointerInput
                 // 手势监听：缩放 + 拖拽
                 awaitEachGesture {
                     var zoom = 1f
@@ -160,6 +180,9 @@ fun ZoomableImage(
                     var gestureMode = ZoomableImageGestureMode.UNDECIDED
                     var verticalDismissStarted = false
                     var gestureCanceled = false
+                    // 竖滑松手速度（px/s）：EMA 平滑瞬时速度，供回位动画延续手势动量。
+                    var lastVerticalDragTimeMs = 0L
+                    var verticalDragVelocityY = 0f
                     
                     awaitFirstDown(requireUnconsumed = false)
                     
@@ -197,7 +220,7 @@ fun ZoomableImage(
 
                                 if (gestureMode == ZoomableImageGestureMode.VERTICAL_DISMISS) {
                                     verticalDismissStarted = true
-                                    onVerticalDismissDragStart()
+                                    latestOnDragStart()
                                 }
                             }
                         }
@@ -205,9 +228,20 @@ fun ZoomableImage(
                         if (pastTouchSlop) {
                             when (gestureMode) {
                                 ZoomableImageGestureMode.VERTICAL_DISMISS -> {
-                                    if (panChange.y != 0f) {
-                                        onVerticalDismissDrag(panChange.y)
+                                    if (panChange != Offset.Zero) {
+                                        // 双轴跟随：竖滑退出时手指横向漂移也实时传给宿主
+                                        latestOnDrag(panChange)
                                     }
+                                    val moveTimeMs = event.changes.firstOrNull()?.uptimeMillis ?: 0L
+                                    if (lastVerticalDragTimeMs != 0L && moveTimeMs > lastVerticalDragTimeMs) {
+                                        val instantVelocityY = panChange.y / (moveTimeMs - lastVerticalDragTimeMs) * 1000f
+                                        verticalDragVelocityY = if (verticalDragVelocityY == 0f) {
+                                            instantVelocityY
+                                        } else {
+                                            verticalDragVelocityY * 0.6f + instantVelocityY * 0.4f
+                                        }
+                                    }
+                                    lastVerticalDragTimeMs = moveTimeMs
                                     event.changes.forEach {
                                         if (it.position != it.previousPosition) {
                                             it.consume()
@@ -253,7 +287,7 @@ fun ZoomableImage(
                                             offsetY = offsetY.coerceIn(-maxOffsetY, maxOffsetY)
                                         }
 
-                                        onZoomChange(scale)
+                                        latestOnZoomChange(scale)
                                     }
 
                                     if (isMultiTouch || scale > 1.01f) {
@@ -272,9 +306,9 @@ fun ZoomableImage(
 
                     if (verticalDismissStarted) {
                         if (gestureCanceled) {
-                            onVerticalDismissDragCancel()
+                            latestOnDragCancel()
                         } else {
-                            onVerticalDismissDragEnd()
+                            latestOnDragEnd(verticalDragVelocityY)
                         }
                     }
                 }

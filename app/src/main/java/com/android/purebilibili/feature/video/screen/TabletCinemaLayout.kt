@@ -377,11 +377,12 @@ internal fun TabletCinemaLayout(
                         onOpenVideoNoteEditor = playbackActions.openVideoNoteEditor,
                         onCloseVideoNoteEditor = playbackActions.closeVideoNoteEditor,
                         onVideoNoteDocumentChange = playbackActions.updateVideoNoteEditorDocument,
-                        onInsertVideoNoteTimestamp = playbackActions.insertCurrentPlaybackTimestampIntoNote,
+                        onInsertVideoNoteTimestamp = playbackActions.currentVideoNoteTimestamp,
                         onVideoNoteTimestampClick = playbackActions.seekTo,
                         onSaveVideoNote = playbackActions.saveVideoNote,
                         onDeleteVideoNote = playbackActions.deleteVideoNote,
                         onRetryVideoNote = playbackActions.retryVideoNote,
+                        onLoadMoreVideoNotes = playbackActions.loadMorePublicVideoNotes,
                         onShareVideo = openVideoShareSheet
                     )
                 } else {
@@ -604,11 +605,15 @@ private fun CinemaStagePlayer(
                     onSubtitleTrackSelected = playbackActions.selectSubtitleTrack,
                     onDanmakuInputClick = playbackActions.showDanmakuSendDialog,
                     onSponsorContributionMarkBoundary = playbackActions.markSponsorContributionBoundary,
+                    onSponsorContributionMarkWholeVideo = playbackActions.markWholeVideoAsSponsor,
                     onSponsorContributionCategoryChange = playbackActions.setSponsorContributionCategory,
                     onSponsorContributionActionTypeChange = playbackActions.setSponsorContributionActionType,
                     onSponsorContributionSubmit = playbackActions.submitSponsorContribution,
                     onSponsorContributionCancel = playbackActions.cancelSponsorContribution,
                     onLikeDanmaku = playbackActions.likeDanmaku,
+                    onLikeDanmakuToggle = playbackActions.likeDanmakuToggle,
+                    likedDanmakuIds = playbackActions.likedDanmakuIds,
+                    onReportDanmaku = playbackActions.reportDanmaku,
                     onRecallDanmaku = playbackActions.recallDanmaku,
                 ),
             )
@@ -650,11 +655,12 @@ private fun CinemaMetaPanel(
     onOpenVideoNoteEditor: () -> Unit,
     onCloseVideoNoteEditor: () -> Unit,
     onVideoNoteDocumentChange: (VideoNoteEditorDocument) -> Unit,
-    onInsertVideoNoteTimestamp: () -> Unit,
+    onInsertVideoNoteTimestamp: () -> com.android.purebilibili.feature.video.note.VideoNoteBlock.Timestamp?,
     onVideoNoteTimestampClick: (Long) -> Unit,
     onSaveVideoNote: (VideoNoteEditorDocument) -> Unit,
     onDeleteVideoNote: () -> Unit,
     onRetryVideoNote: () -> Unit,
+    onLoadMoreVideoNotes: () -> Unit,
     onShareVideo: () -> Unit
 ) {
     val context = LocalContext.current
@@ -837,10 +843,11 @@ private fun CinemaMetaPanel(
                             onCreateNoteDraftFromAiSummary = onCreateNoteDraftFromAiSummary,
                             onOpenVideoNoteEditor = onOpenVideoNoteEditor,
                             onRetryVideoNote = onRetryVideoNote,
+                            onLoadMoreVideoNotes = onLoadMoreVideoNotes,
                             onDeleteVideoNoteClick = { confirmDeleteNote = true },
                             onShareVideoNote = { document -> onShareVideoNote(document, false) },
-                            onPublicVideoNoteClick = { _, url ->
-                                if (url.isNotBlank()) onOpenBilibiliLink?.invoke(url)
+                            onPublicVideoNoteClick = { cvid, _ ->
+                                onOpenBilibiliLink?.invoke("https://www.bilibili.com/read/cv$cvid")
                             }
                         )
                     }
@@ -873,7 +880,7 @@ private fun CinemaMetaPanel(
         noteState = success.videoNoteState,
         onDismiss = onCloseVideoNoteEditor,
         onDocumentChange = onVideoNoteDocumentChange,
-        onInsertTimestamp = onInsertVideoNoteTimestamp,
+        currentTimestampProvider = onInsertVideoNoteTimestamp,
         onTimestampClick = onVideoNoteTimestampClick,
         onShare = { document -> onShareVideoNote(document, success.videoNoteState.editorFromAiSummary) },
         onSave = onSaveVideoNote
@@ -974,6 +981,7 @@ private fun CinemaVideoIntroSection(
     onCreateNoteDraftFromAiSummary: () -> Unit = {},
     onOpenVideoNoteEditor: () -> Unit = {},
     onRetryVideoNote: () -> Unit = {},
+    onLoadMoreVideoNotes: () -> Unit = {},
     onDeleteVideoNoteClick: () -> Unit = {},
     onShareVideoNote: (VideoNoteEditorDocument) -> Unit = {},
     onPublicVideoNoteClick: (Long, String) -> Unit = { _, _ -> }
@@ -1044,7 +1052,17 @@ private fun CinemaVideoIntroSection(
                 onDeleteVideoNoteClick()
             },
             onShareClick = onShareVideoNote,
-            onPublicNoteClick = onPublicVideoNoteClick
+            onPublicNoteClick = onPublicVideoNoteClick,
+            onAuthorClick = { mid ->
+                if (mid > 0L) onOpenBilibiliLink?.invoke("https://space.bilibili.com/$mid")
+            },
+            onLoadMore = onLoadMoreVideoNotes,
+            onOfficialEditorClick = {
+                showNoteListSheet = false
+                onOpenBilibiliLink?.invoke(
+                    "https://www.bilibili.com/h5/note-app?oid=${success.info.aid}&pagefrom=ugcvideo"
+                )
+            }
         )
     }
 }
@@ -1371,6 +1389,14 @@ private fun CinemaCommentsPane(
                     .layerBackdrop(commentChromeBackdrop),
                 contentPadding = PaddingValues(bottom = 112.dp)
             ) {
+            commentState.voteCard?.let { card ->
+                item(key = "curtain_vote_${card.voteId}") {
+                    com.android.purebilibili.feature.video.ui.components.VideoCommentVoteCard(
+                        card = card,
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    )
+                }
+            }
             items(
                 items = commentState.replies,
                 key = { "curtain_reply_${it.rpid}" },

@@ -77,5 +77,6 @@ include(":plugin-sdk")
 include(":design-system")
 include(":dolby-ffmpeg-decoder")
 include(":danmaku-engine")
+include(":miuix-navigation")
 
  

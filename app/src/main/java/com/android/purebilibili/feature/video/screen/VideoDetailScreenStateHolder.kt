@@ -618,6 +618,7 @@ internal fun VideoDetailScreenStateHolder(
             dismissSponsorSkipButton = viewModel::dismissSponsorSkipButton,
             voteSponsorSegment = viewModel::voteCurrentSponsorSegment,
             markSponsorContributionBoundary = viewModel::markSponsorContributionBoundary,
+            markWholeVideoAsSponsor = viewModel::markWholeVideoAsSponsor,
             setSponsorContributionCategory = viewModel::setSponsorContributionCategory,
             setSponsorContributionActionType = viewModel::setSponsorContributionActionType,
             submitSponsorContribution = viewModel::submitSponsorContribution,
@@ -641,11 +642,12 @@ internal fun VideoDetailScreenStateHolder(
             openVideoNoteEditor = viewModel::openVideoNoteEditor,
             closeVideoNoteEditor = viewModel::closeVideoNoteEditor,
             updateVideoNoteEditorDocument = viewModel::updateVideoNoteEditorDocument,
-            insertCurrentPlaybackTimestampIntoNote = viewModel::insertCurrentPlaybackTimestampIntoNote,
+            currentVideoNoteTimestamp = viewModel::currentVideoNoteTimestamp,
             seekTo = viewModel::seekTo,
             saveVideoNote = viewModel::saveVideoNote,
             deleteVideoNote = viewModel::deleteVideoNote,
             retryVideoNote = viewModel::retryVideoNote,
+            loadMorePublicVideoNotes = viewModel::loadMorePublicVideoNotes,
             openRootCommentComposer = viewModel::openRootCommentComposer,
             replyTo = {
                 viewModel.setReplyingTo(it)
@@ -653,6 +655,9 @@ internal fun VideoDetailScreenStateHolder(
             },
             markVideoNotInterested = viewModel::markVideoNotInterested,
             likeDanmaku = { viewModel.likeDanmaku(it) },
+            likeDanmakuToggle = { dmid, like -> viewModel.likeDanmaku(dmid, like) },
+            likedDanmakuIds = viewModel.likedDanmakuIds,
+            reportDanmaku = { dmid, reason -> viewModel.reportDanmaku(dmid, reason) },
             recallDanmaku = { viewModel.recallDanmaku(it) }
         )
     }
@@ -774,6 +779,9 @@ internal fun VideoDetailScreenStateHolder(
     val commentListState = rememberSaveable(currentBvid, saver = LazyListState.Saver) {
         LazyListState()
     }
+    // 横屏评论面板必须用独立列表状态：与竖屏共用时，转全屏途中横屏列表被销毁
+    // 会让共享 state 的滚动互斥锁卡死，回竖屏后评论区划不动。
+    val landscapeCommentListState = remember(currentBvid) { LazyListState() }
     val videoContentPagerState: PagerState = key(currentBvid) {
         rememberPagerState(pageCount = { 2 })
     }
@@ -1244,15 +1252,14 @@ internal fun VideoDetailScreenStateHolder(
                 .getHideVideoPageStatusBarSync(context),
             lifecycle = lifecycleOwner.lifecycle
         )
-    val useTabletLayout = horizontalAdaptationEnabled && (
-        appWindowAdaptiveInfo.shouldAvoidHinge ||
-            shouldUseLargeScreenVideoLayout(
-                windowWidthDp = configuration.screenWidthDp.toFloat(),
-                windowHeightDp = configuration.screenHeightDp.toFloat(),
-                horizontalAdaptationEnabled = true,
-                isFoldableCoverWindow = displayContext.isFoldableCoverWindow,
-            )
+    val useTabletLayout = appWindowAdaptiveInfo.shouldAvoidHinge || (
+        horizontalAdaptationEnabled && shouldUseLargeScreenVideoLayout(
+            windowWidthDp = configuration.screenWidthDp.toFloat(),
+            windowHeightDp = configuration.screenHeightDp.toFloat(),
+            horizontalAdaptationEnabled = true,
+            isFoldableCoverWindow = displayContext.isFoldableCoverWindow,
         )
+    )
 
     val activity = remember { context.findActivity() }
     val isActivityInMultiWindowMode = activity?.let {
@@ -1825,6 +1832,27 @@ internal fun VideoDetailScreenStateHolder(
             initialValue = false,
             lifecycle = lifecycleOwner.lifecycle
         )
+    val rotationResolver = context.applicationContext.contentResolver
+    var systemAutoRotateEnabled by remember(rotationResolver) {
+        mutableStateOf(
+            Settings.System.getInt(rotationResolver, Settings.System.ACCELEROMETER_ROTATION, 0) != 0
+        )
+    }
+    DisposableEffect(rotationResolver) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                systemAutoRotateEnabled = Settings.System.getInt(
+                    rotationResolver, Settings.System.ACCELEROMETER_ROTATION, 0
+                ) != 0
+            }
+        }
+        rotationResolver.registerContentObserver(
+            Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION), false, observer
+        )
+        observer.onChange(false)
+        onDispose { rotationResolver.unregisterContentObserver(observer) }
+    }
+    val sensorAutoRotateEnabled = autoRotateEnabled && systemAutoRotateEnabled
     val cardAnimationEnabled by com.android.purebilibili.core.store.SettingsManager
         .getCardAnimationEnabled(context).collectAsStateWithLifecycle(
             initialValue = true,
@@ -2518,6 +2546,7 @@ internal fun VideoDetailScreenStateHolder(
 
     LaunchedEffect(
         autoRotateEnabled,
+        systemAutoRotateEnabled,
         fullscreenMode,
         useTabletLayout,
         isOrientationDrivenFullscreen,
@@ -2536,7 +2565,8 @@ internal fun VideoDetailScreenStateHolder(
         if (isFullscreenPlayerLocked) return@LaunchedEffect
         if (usesInWindowFullscreen) return@LaunchedEffect
         val requestedOrientation = resolvePhoneVideoRequestedOrientation(
-            autoRotateEnabled = autoRotateEnabled,
+            autoRotateEnabled = sensorAutoRotateEnabled,
+            systemAutoRotateEnabled = systemAutoRotateEnabled,
             fullscreenMode = fullscreenMode,
             isCompactDevice = orientationPolicyDevice,
             isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
@@ -2581,6 +2611,7 @@ internal fun VideoDetailScreenStateHolder(
 
     LaunchedEffect(
         autoRotateEnabled,
+        systemAutoRotateEnabled,
         isFullscreenMode,
         orientationPolicyDevice,
         isOrientationDrivenFullscreen,
@@ -2591,6 +2622,7 @@ internal fun VideoDetailScreenStateHolder(
         isPortraitFullscreen,
         displayContext,
         isFullscreenPlayerLocked,
+        userRequestedFullscreen,
     ) {
         if (isFullscreenPlayerLocked) {
             lastPhoneAutoRotateLandscapeAppliedAtMs = null
@@ -2598,7 +2630,7 @@ internal fun VideoDetailScreenStateHolder(
             return@LaunchedEffect
         }
         if (!shouldObservePhoneAutoRotate(
-                autoRotateEnabled = autoRotateEnabled,
+                autoRotateEnabled = sensorAutoRotateEnabled,
                 isCompactDevice = orientationPolicyDevice,
                 isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
                 fullscreenMode = fullscreenMode,
@@ -2608,6 +2640,8 @@ internal fun VideoDetailScreenStateHolder(
                 isPortraitFullscreen = isPortraitFullscreen,
                 observeWhenAutoRotateDisabled = displayContext.isFoldableCoverWindow,
                 isFullscreenMode = isFullscreenMode,
+                manualFullscreenRequested = userRequestedFullscreen,
+                systemAutoRotateEnabled = systemAutoRotateEnabled,
             )
         ) {
             lastPhoneAutoRotateLandscapeAppliedAtMs = null
@@ -2618,6 +2652,7 @@ internal fun VideoDetailScreenStateHolder(
     DisposableEffect(
         activity,
         autoRotateEnabled,
+        systemAutoRotateEnabled,
         isFullscreenMode,
         fullscreenMode,
         useTabletLayout,
@@ -2636,7 +2671,7 @@ internal fun VideoDetailScreenStateHolder(
             hostActivity == null ||
             isFullscreenPlayerLocked ||
             !shouldObservePhoneAutoRotate(
-                autoRotateEnabled = autoRotateEnabled,
+                autoRotateEnabled = sensorAutoRotateEnabled,
                 isCompactDevice = orientationPolicyDevice,
                 isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
                 fullscreenMode = fullscreenMode,
@@ -2646,6 +2681,8 @@ internal fun VideoDetailScreenStateHolder(
                 isPortraitFullscreen = isPortraitFullscreen,
                 observeWhenAutoRotateDisabled = displayContext.isFoldableCoverWindow,
                 isFullscreenMode = isFullscreenMode,
+                manualFullscreenRequested = userRequestedFullscreen,
+                systemAutoRotateEnabled = systemAutoRotateEnabled,
             ) ||
             !isOrientationDrivenFullscreen
         ) {
@@ -2660,7 +2697,7 @@ internal fun VideoDetailScreenStateHolder(
                     }
                     return
                 }
-                if (!autoRotateEnabled && !isFullscreenMode) return
+                if (!sensorAutoRotateEnabled && !isFullscreenMode && !userRequestedFullscreen) return
                 val isCurrentlyLandscape =
                     hostActivity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
                 val targetOrientation = resolvePhoneAutoRotateRequestedOrientation(
@@ -2671,7 +2708,7 @@ internal fun VideoDetailScreenStateHolder(
                     // Wait for one physical landscape observation before allowing the sensor
                     // to treat portrait as an explicit rotate-back gesture.
                     allowPortraitTransitions = shouldAllowPhoneSensorPortraitTransition(
-                        autoRotateEnabled = autoRotateEnabled,
+                        autoRotateEnabled = sensorAutoRotateEnabled,
                         manualFullscreenRequested = userRequestedFullscreen,
                     ),
                 )
@@ -2694,6 +2731,7 @@ internal fun VideoDetailScreenStateHolder(
                     if (shouldReleaseManualFullscreenRequestAfterSensorTarget(
                             manualFullscreenRequested = userRequestedFullscreen,
                             sensorTargetOrientation = targetToApply,
+                            autoRotateEnabled = sensorAutoRotateEnabled,
                         )
                     ) {
                         userRequestedFullscreen = false
@@ -3447,10 +3485,11 @@ internal fun VideoDetailScreenStateHolder(
                     val success = uiState as? VideoPlaybackUiState.Success
                     if (canShowLandscapeComments && landscapeCommentPanelVisible && success != null) {
                         LandscapeCommentPanel(
-                            info = success.info, listState = commentListState,
+                            info = success.info, listState = landscapeCommentListState,
                             replies = commentState.replies, replyCount = commentState.replyCount,
                             emoteMap = success.emoteMap, isRepliesLoading = commentState.isRepliesLoading,
                             isRepliesEnd = commentState.isRepliesEnd, videoTags = success.videoTags,
+                            voteCard = commentState.voteCard,
                             sortMode = commentState.sortMode,
                             currentMid = commentState.currentMid, showUpFlag = commentState.showUpFlag,
                             showIdentityDecorations = commentMemberDecorationsEnabled,
@@ -3609,6 +3648,7 @@ internal fun VideoDetailScreenStateHolder(
                         onSponsorDismiss = { viewModel.dismissSponsorSkipButton() },
                         onSponsorVote = viewModel::voteCurrentSponsorSegment,
                         onSponsorContributionMarkBoundary = viewModel::markSponsorContributionBoundary,
+                        onSponsorContributionMarkWholeVideo = viewModel::markWholeVideoAsSponsor,
                         onSponsorContributionCategoryChange = viewModel::setSponsorContributionCategory,
                         onSponsorContributionActionTypeChange = viewModel::setSponsorContributionActionType,
                         onSponsorContributionSubmit = viewModel::submitSponsorContribution,
@@ -3669,12 +3709,13 @@ internal fun VideoDetailScreenStateHolder(
                     if (canShowLandscapeComments && landscapeCommentPanelVisible && success != null) {
                         LandscapeCommentPanel(
                             info = success.info,
-                            listState = commentListState,
+                            listState = landscapeCommentListState,
                             replies = commentState.replies,
                             replyCount = commentState.replyCount,
                             emoteMap = success.emoteMap,
                             isRepliesLoading = commentState.isRepliesLoading,
                             isRepliesEnd = commentState.isRepliesEnd,
+                            voteCard = commentState.voteCard,
                             videoTags = success.videoTags,
                             sortMode = commentState.sortMode,
                             currentMid = commentState.currentMid,
@@ -3781,11 +3822,8 @@ internal fun VideoDetailScreenStateHolder(
                     }
                     //  📐 [大屏适配] 根据设备类型选择布局
                     if (useTabletLayout) {
-                        if (
-                            appWindowAdaptiveInfo.posture == com.android.purebilibili.core.util.AppFoldPosture.Book ||
-                            appWindowAdaptiveInfo.posture == com.android.purebilibili.core.util.AppFoldPosture.Tabletop
-                        ) {
-                            // Book/Tabletop：由 AppSplitLayout 按真实铰链位置切分窗格。
+                        if (appWindowAdaptiveInfo.shouldAvoidHinge) {
+                            // 半开折痕和展开后的实体铰链都按实际安全区域切分。
                             TabletVideoLayout(
                                 playerState = playerState,
                                 uiState = uiState,
@@ -3992,7 +4030,9 @@ internal fun VideoDetailScreenStateHolder(
                                 isCommentThreadVisible = subReplyState.visible,
                                 collapseMode = portraitPlayerCollapseMode,
                                 isVerticalVideo = isVerticalVideo,
-                                isPlaybackPaused = isPlaybackPaused
+                                isPlaybackPaused = isPlaybackPaused,
+                                isCompactFoldableCoverWindow = displayContext.isFoldableCoverWindow &&
+                                    configuration.screenHeightDp < FOLDABLE_COVER_COMPACT_HEIGHT_MAX_DP,
                             )
                         val compactInlinePlayerForIntroScroll =
                             shouldUseCompactInlinePortraitPlayerForIntroScroll(
@@ -4492,12 +4532,12 @@ internal fun VideoDetailScreenStateHolder(
                                 sourceLayout = miuixLandingState.sourceLayout,
                             ).takeIf { it.canRender }
                         }
-                        // The now-playing bar is a COVER_ONLY source, but its frozen bitmap still
-                        // has a real target rect. Keep that rect in the media handoff instead of
-                        // letting the generic COVER_ONLY branch pin the detail-sized shell.
+                        // A frozen now-playing snapshot contains the whole capsule, not just
+                        // its cover. Land it in the complete source bounds for either bar layout.
                         val nativeSnapshotTargetBoundsProvider: (() -> Rect?)? =
                             if (CardPositionManager.lastClickedNativeCardBitmap != null &&
-                                miuixLandingState.sourceLayout == VideoCardSourceLayout.COVER_ONLY
+                                (miuixLandingState.sourceLayout == VideoCardSourceLayout.COVER_ONLY ||
+                                    miuixLandingState.sourceChromeSnapshot?.isNowPlayingBar == true)
                             ) {
                                 { miuixLandingState.sourceBoundsProvider() }
                             } else {
@@ -4566,11 +4606,13 @@ internal fun VideoDetailScreenStateHolder(
                                     animatedVisibilityProgress = detailTransitionProgress.value,
                                     morphDepthProgress =
                                         videoCardDepthBackgroundState.progressProvider(),
-                                    liveReturnMorph = liveReturnMorph,
+                                    liveReturnMorph = liveReturnMorph || entryOwnsMiuixCardTransition,
                                 ),
                                 isCommittedCardReturn = isCommittedCardReturn,
                                 hasResidentCover = hasResidentReturnCover,
                                 liveReturnMorph = liveReturnMorph,
+                                followProgressEnabled = videoCardDepthBackgroundState
+                                    .returnContentFollowProgressEnabledProvider(),
                                 isReturnGestureInProgress = returnGestureInProgress,
                                 showResidentCoverUntilFirstFrame =
                                     entryOwnsMiuixCardTransition &&
@@ -4589,6 +4631,8 @@ internal fun VideoDetailScreenStateHolder(
                                             .isGestureRestoreInProgressProvider(),
                                 sourceLayout = landingLayoutForMedia?.layout
                                     ?: miuixLandingState.sourceLayout,
+                                followProgressEnabled = videoCardDepthBackgroundState
+                                    .returnContentFollowProgressEnabledProvider(),
                                 detailContentLoading = uiState is VideoPlaybackUiState.Loading,
                                 isNowPlayingBar =
                                     miuixLandingState.sourceChromeSnapshot?.isNowPlayingBar == true,
@@ -4611,7 +4655,18 @@ internal fun VideoDetailScreenStateHolder(
                                         0.dp
                                     },
                                 )
-                                .background(Color.Black)
+                                .drawBehind {
+                                    // The compact source is translucent in both plain and glass modes.
+                                    // Do not leave the opaque player backing under its return snapshot.
+                                    val backingAlpha = if (
+                                        miuixLandingState.sourceChromeSnapshot?.isNowPlayingBar == true
+                                    ) {
+                                        1f - flyingSourceChromeAlphaProvider().coerceIn(0f, 1f)
+                                    } else {
+                                        1f
+                                    }
+                                    drawRect(Color.Black.copy(alpha = backingAlpha))
+                                }
                                 //  [PiP修复] 捕获视频播放器在屏幕上的位置
                                 .onGloballyPositioned { layoutCoordinates ->
                                     // Morph height changes every frame. PiP and system-bar bounds only need
@@ -4838,6 +4893,8 @@ internal fun VideoDetailScreenStateHolder(
                                             motionTier =
                                                 videoCardDepthBackgroundState.motionTierProvider(),
                                             sourceLayout = miuixLandingState.sourceLayout,
+                                            followProgressEnabled = videoCardDepthBackgroundState
+                                                .returnContentFollowProgressEnabledProvider(),
                                         )
                                         alpha = frame.alpha
                                         // Shrink toward card-info size so type size meets source chrome
@@ -5135,6 +5192,8 @@ internal fun VideoDetailScreenStateHolder(
                             morphDepthProgressProvider =
                                 miuixCardTransitionState.progressProvider,
                             phaseProvider = videoCardDepthBackgroundState.phaseProvider,
+                            followProgressEnabledProvider = videoCardDepthBackgroundState
+                                .returnContentFollowProgressEnabledProvider,
                             isReturnGestureInProgressProvider = {
                                 videoCardDepthBackgroundState
                                     .isReturnGestureInProgressProvider() ||
