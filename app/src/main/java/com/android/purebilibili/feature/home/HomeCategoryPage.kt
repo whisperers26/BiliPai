@@ -375,6 +375,9 @@ internal fun HomeCategoryPageContent(
         }
     }
     val oldContentLocatorScope = rememberCoroutineScope()
+    val refreshLocatorEnabled by com.android.purebilibili.core.store.SettingsManager
+        .getRefreshLocatorEnabled(androidx.compose.ui.platform.LocalContext.current)
+        .collectAsStateWithLifecycle(initialValue = false)
     var oldContentLocatorDismissed by remember(oldContentLocatorRefreshKey) {
         mutableStateOf(false)
     }
@@ -773,7 +776,8 @@ internal fun HomeCategoryPageContent(
             .AudioNowPlayingSession.barOverlayVisible
             .collectAsStateWithLifecycle()
         AnimatedVisibility(
-            visible = category == HomeCategory.RECOMMEND &&
+            visible = refreshLocatorEnabled &&
+                category == HomeCategory.RECOMMEND &&
                 oldContentGridItemIndex != null &&
                 !oldContentLocatorDismissed,
             enter = fadeIn() + scaleIn(initialScale = 0.92f),
