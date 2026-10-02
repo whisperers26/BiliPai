@@ -769,7 +769,6 @@ private fun SearchHistorySectionModern(
 }
 
 internal const val SEARCH_HISTORY_LONG_PRESS_DELETE_MILLIS = 800
-private const val SEARCH_HISTORY_LONG_PRESS_START_DELAY_MILLIS = 150L
 
 /** 长按历史项：进度条沿条目自左向右填满，填满即删除；中途松手则回退。 */
 @Composable
@@ -802,10 +801,12 @@ private fun SearchHistoryItem(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { currentOnClick() },
+                    // 声明长按后，超过长按阈值再松手就不会再触发 onTap（否则松手会跳去搜索）。
+                    onLongPress = {},
                     onPress = {
                         val fill = scope.launch {
-                            // 短按会在 onTap 前松手，先等一小段再填充，避免点击时闪一下进度。
-                            delay(SEARCH_HISTORY_LONG_PRESS_START_DELAY_MILLIS)
+                            // 过了长按阈值才开始填充：此前松手算点击，此后松手只取消删除。
+                            delay(viewConfiguration.longPressTimeoutMillis)
                             progress.animateTo(
                                 targetValue = 1f,
                                 animationSpec = tween(
