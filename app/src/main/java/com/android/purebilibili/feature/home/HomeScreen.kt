@@ -580,9 +580,9 @@ fun HomeScreen(
 
                         if (!isAtTop) {
                             val listState = requireNotNull(gridState)
-                            // 底栏/重选回顶直达：单次 scrollToItem 是原子操作，
-                            // 无两段式 preJump+animate 的中间态，任何距离都不掉帧。
-                            listState.scrollToItem(0)
+                            // 底栏/重选回顶：一次像素级动画连续滚到顶，
+                            // 无两段式 preJump+animate 的硬跳和走走停停。
+                            listState.animateScrollToTopContinuously()
                             triggerHomeBackToTopCardSquish()
                         }
                         val shouldRefresh = request == HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH ||
@@ -1487,9 +1487,9 @@ fun HomeScreen(
                         if (isAtTop) {
                             viewModel.refresh()
                         } else {
-                            // 直达到顶，避免两段式回顶的硬跳+小动画顿挫。
+                            // 连续滚到顶，避免两段式回顶的硬跳+小动画顿挫。
                             val listState = requireNotNull(gridState)
-                            listState.scrollToItem(0)
+                            listState.animateScrollToTopContinuously()
                         }
                     }
                 }
@@ -2765,7 +2765,7 @@ fun HomeScreen(
             onStatusBarDoubleTap = {
                 coroutineScope.launch {
                     withHomeScrollToTopLock {
-                        activeGridState?.scrollToItem(0)
+                        activeGridState?.animateScrollToTopContinuously()
                     }
                 }
             },
