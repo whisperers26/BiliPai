@@ -411,6 +411,21 @@ class HomeHeaderVisualPolicyTest {
     }
 
     @Test
+    fun `blur slab grows with the unified panel vertical padding to cover the tab row`() {
+        val layout = resolveHomeTopPinnedChromeLayout(
+            statusBarHeight = 44.dp,
+            visibleSearchHeight = 48.dp,
+            tabRowHeight = 56.dp,
+            searchToTabsSpacing = 4.dp,
+            renderMode = HomeTopChromeRenderMode.BLUR,
+            panelVerticalPadding = 10.dp,
+        )
+
+        assertEquals(106.dp, layout.tabTop)
+        assertEquals(172.dp, layout.blurHeight)
+    }
+
+    @Test
     fun `tiny reverse scroll keeps collapsed search row hidden until reveal threshold is crossed`() {
         val layout = resolveHomeHeaderScrollLayout(
             headerOffsetPx = -44f,
