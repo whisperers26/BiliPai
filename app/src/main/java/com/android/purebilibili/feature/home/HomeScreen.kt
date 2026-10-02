@@ -1925,10 +1925,7 @@ fun HomeScreen(
         when (decision) {
             TodayWatchStartupRevealDecision.REVEAL -> {
                 setHeaderOffsetImmediate(0f)
-                if (recommendGridState.firstVisibleItemIndex > 12) {
-                    recommendGridState.scrollToItem(12)
-                }
-                recommendGridState.animateScrollToItem(0)
+                recommendGridState.animateScrollToTopContinuously()
                 setHeaderOffsetImmediate(0f)
                 globalScrollOffset.floatValue = 0f
                 todayWatchStartupRevealHandled = true
