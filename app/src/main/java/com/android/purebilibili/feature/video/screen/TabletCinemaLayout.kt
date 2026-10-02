@@ -104,6 +104,7 @@ import com.android.purebilibili.feature.video.share.VideoSharePayload
 import com.android.purebilibili.feature.video.share.VideoShareSheetHost
 import com.android.purebilibili.feature.video.share.buildVideoSharePayload
 import com.android.purebilibili.core.util.ShareUtils
+import com.android.purebilibili.core.util.animateScrollToTopContinuously
 import com.android.purebilibili.data.model.response.BgmInfo
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.common.resolveIndexedVideoLazyKey
@@ -1607,7 +1608,7 @@ private fun CinemaRelatedPane(
             visible = backToTopButtonEnabled && showBackToTop,
             onClick = {
                 scope.launch {
-                    listState.animateScrollToItem(0)
+                    listState.animateScrollToTopContinuously()
                 }
             },
             modifier = Modifier

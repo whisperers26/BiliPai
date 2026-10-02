@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.ui.components
 
 import android.graphics.RenderEffect as AndroidRenderEffect
+import com.android.purebilibili.core.util.animateScrollToTopContinuously
 import android.graphics.Shader
 import android.os.Build
 import android.widget.Toast
@@ -1038,7 +1039,7 @@ internal fun VideoCommentMainList(
                         // 回顶时通知父级(竖屏详情)恢复被评论区压缩的播放器。
                         onBackToTop()
                         scope.launch {
-                            listState.animateScrollToItem(0)
+                            listState.animateScrollToTopContinuously()
                         }
                     }
                 )
