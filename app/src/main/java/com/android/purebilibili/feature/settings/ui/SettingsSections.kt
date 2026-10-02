@@ -168,6 +168,8 @@ internal data class SettingsRootCategoryActions(
     val onAppUpdateChannelChange: (com.android.purebilibili.core.store.SettingsManager.AppUpdateChannel) -> Unit,
     val onFeedApiTypeChange: (com.android.purebilibili.core.store.SettingsManager.FeedApiType) -> Unit,
     val onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
+    val onRefreshLocatorChange: (Boolean) -> Unit,
+    val onRefreshUndoChange: (Boolean) -> Unit,
     val onDynamicImagePreviewTextVisibleChange: (Boolean) -> Unit,
     val onDynamicDetailImageLayoutChange: (com.android.purebilibili.core.store.SettingsManager.DynamicDetailImageLayout) -> Unit,
     val onDynamicAllTabHorizontalUserListVisibleChange: (Boolean) -> Unit,
@@ -209,6 +211,8 @@ internal data class SettingsRootCategoryState(
     val versionClickThreshold: Int,
     val feedApiType: com.android.purebilibili.core.store.SettingsManager.FeedApiType,
     val incrementalTimelineRefreshEnabled: Boolean,
+    val refreshLocatorEnabled: Boolean,
+    val refreshUndoEnabled: Boolean,
     val dynamicImagePreviewTextVisible: Boolean,
     val dynamicDetailImageLayout: com.android.purebilibili.core.store.SettingsManager.DynamicDetailImageLayout,
     val dynamicAllTabHorizontalUserListVisible: Boolean,
@@ -466,7 +470,11 @@ internal fun SettingsRootCategoryContent(
                             feedApiType = state.feedApiType,
                             onFeedApiTypeChange = actions.onFeedApiTypeChange,
                             incrementalTimelineRefreshEnabled = state.incrementalTimelineRefreshEnabled,
+                            refreshLocatorEnabled = state.refreshLocatorEnabled,
+                            refreshUndoEnabled = state.refreshUndoEnabled,
                             onIncrementalTimelineRefreshChange = actions.onIncrementalTimelineRefreshChange,
+                            onRefreshLocatorChange = actions.onRefreshLocatorChange,
+                            onRefreshUndoChange = actions.onRefreshUndoChange,
                             dynamicImagePreviewTextVisible = state.dynamicImagePreviewTextVisible,
                             onDynamicImagePreviewTextVisibleChange = actions.onDynamicImagePreviewTextVisibleChange,
                             dynamicDetailImageLayout = state.dynamicDetailImageLayout,
@@ -674,7 +682,11 @@ internal fun SettingsRootCategoryContent(
                             feedApiType = state.feedApiType,
                             onFeedApiTypeChange = actions.onFeedApiTypeChange,
                             incrementalTimelineRefreshEnabled = state.incrementalTimelineRefreshEnabled,
+                            refreshLocatorEnabled = state.refreshLocatorEnabled,
+                            refreshUndoEnabled = state.refreshUndoEnabled,
                             onIncrementalTimelineRefreshChange = actions.onIncrementalTimelineRefreshChange,
+                            onRefreshLocatorChange = actions.onRefreshLocatorChange,
+                            onRefreshUndoChange = actions.onRefreshUndoChange,
                             dynamicImagePreviewTextVisible = state.dynamicImagePreviewTextVisible,
                             onDynamicImagePreviewTextVisibleChange = actions.onDynamicImagePreviewTextVisibleChange,
                             dynamicDetailImageLayout = state.dynamicDetailImageLayout,
@@ -1008,7 +1020,11 @@ fun FeedApiSection(
     feedApiType: com.android.purebilibili.core.store.SettingsManager.FeedApiType,
     onFeedApiTypeChange: (com.android.purebilibili.core.store.SettingsManager.FeedApiType) -> Unit,
     incrementalTimelineRefreshEnabled: Boolean,
+    refreshLocatorEnabled: Boolean,
+    refreshUndoEnabled: Boolean,
     onIncrementalTimelineRefreshChange: (Boolean) -> Unit,
+    onRefreshLocatorChange: (Boolean) -> Unit,
+    onRefreshUndoChange: (Boolean) -> Unit,
     dynamicImagePreviewTextVisible: Boolean,
     onDynamicImagePreviewTextVisibleChange: (Boolean) -> Unit,
     dynamicDetailImageLayout: com.android.purebilibili.core.store.SettingsManager.DynamicDetailImageLayout,
@@ -1050,6 +1066,24 @@ fun FeedApiSection(
             subtitle = "下拉刷新只把新动态加到顶部，不重新排列已看到的内容",
             checked = incrementalTimelineRefreshEnabled,
             onCheckedChange = onIncrementalTimelineRefreshChange,
+            iconTint = siblingTints[1]
+        )
+        SettingsAdaptiveDivider()
+        SettingSwitchItem(
+            icon = refreshIcon,
+            title = "显示「定位上次刷新」按钮",
+            subtitle = "刷新后在首页推荐流和动态页显示悬浮按钮，一键回到上次看到的位置",
+            checked = refreshLocatorEnabled,
+            onCheckedChange = onRefreshLocatorChange,
+            iconTint = siblingTints[1]
+        )
+        SettingsAdaptiveDivider()
+        SettingSwitchItem(
+            icon = refreshIcon,
+            title = "显示「撤销刷新」按钮",
+            subtitle = "首页推荐流刷新后显示悬浮按钮，可恢复到刷新前的列表",
+            checked = refreshUndoEnabled,
+            onCheckedChange = onRefreshUndoChange,
             iconTint = siblingTints[1]
         )
         SettingsAdaptiveDivider()
