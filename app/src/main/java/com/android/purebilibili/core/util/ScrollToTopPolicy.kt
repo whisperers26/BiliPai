@@ -3,6 +3,7 @@ package com.android.purebilibili.core.util
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -66,6 +67,97 @@ fun shouldShowScrollToTop(
     return firstVisibleItemIndex > 0 || firstVisibleItemScrollOffset >= offsetThresholdPx
 }
 
+/**
+ * 估算当前位置到列表顶部的像素距离：已滚出首个可见项的偏移 + 其上方整行的平均高度。
+ * 全宽项（轮播、分割条）会让结果略有偏差，由调用方在动画后收尾。
+ */
+fun estimateDistanceToTopPx(
+    firstVisibleItemIndex: Int,
+    firstVisibleItemScrollOffset: Int,
+    columns: Int,
+    averageRowHeightPx: Int,
+): Int {
+    val rowsAbove = firstVisibleItemIndex.coerceAtLeast(0) / columns.coerceAtLeast(1)
+    return firstVisibleItemScrollOffset.coerceAtLeast(0) + rowsAbove * averageRowHeightPx.coerceAtLeast(0)
+}
+
+/**
+ * animateScrollToItem 会按估算目标分段滚动，每段结束后重新估算，视觉上是走走停停。
+ * 这里用一次像素级动画连续滚过估算的距离，再由 [settle] 对剩余偏差收尾。
+ */
+private suspend fun ScrollableState.animateScrollToTopContinuously(
+    distancePx: Int,
+    settle: suspend () -> Unit,
+) {
+    if (distancePx > 0) {
+        val durationMillis = (distancePx / 6).coerceIn(250, 900)
+        animateScrollBy(
+            value = -distancePx.toFloat(),
+            animationSpec = tween(durationMillis = durationMillis, easing = FastOutSlowInEasing),
+        )
+    }
+    settle()
+}
+
+suspend fun LazyListState.animateScrollToTopContinuously() {
+    val items = layoutInfo.visibleItemsInfo
+    if (items.isEmpty() || (firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0)) return
+    animateScrollToTopContinuously(
+        distancePx = estimateDistanceToTopPx(
+            firstVisibleItemIndex = firstVisibleItemIndex,
+            firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,
+            columns = 1,
+            averageRowHeightPx = items.map { it.size }.average().toInt() + layoutInfo.mainAxisItemSpacing,
+        )
+    ) {
+        if (firstVisibleItemIndex != 0 || firstVisibleItemScrollOffset != 0) {
+            animateScrollToItem(0)
+        }
+    }
+}
+
+suspend fun LazyGridState.animateScrollToTopContinuously() {
+    val items = layoutInfo.visibleItemsInfo
+    if (items.isEmpty() || (firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0)) return
+    val isVertical = layoutInfo.orientation == Orientation.Vertical
+    val averageItemSize = items.map { if (isVertical) it.size.height else it.size.width }.average().toInt()
+    val columns = (items.maxOf { if (isVertical) it.column else it.row } + 1).coerceAtLeast(1)
+    animateScrollToTopContinuously(
+        distancePx = estimateDistanceToTopPx(
+            firstVisibleItemIndex = firstVisibleItemIndex,
+            firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,
+            columns = columns,
+            averageRowHeightPx = averageItemSize + layoutInfo.mainAxisItemSpacing,
+        )
+    ) {
+        if (firstVisibleItemIndex != 0 || firstVisibleItemScrollOffset != 0) {
+            animateScrollToItem(0)
+        }
+    }
+}
+
+suspend fun LazyStaggeredGridState.animateScrollToTopContinuously() {
+    val items = layoutInfo.visibleItemsInfo
+    if (items.isEmpty() || (firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0)) return
+    val isVertical = layoutInfo.orientation == Orientation.Vertical
+    // 只统计单列项（lane >= 0），全宽项的高度和列数不代表一行卡片
+    val laneItems = items.filter { it.lane >= 0 }.ifEmpty { items }
+    val averageItemSize = laneItems.map { if (isVertical) it.size.height else it.size.width }.average().toInt()
+    val columns = (laneItems.maxOf { it.lane } + 1).coerceAtLeast(1)
+    animateScrollToTopContinuously(
+        distancePx = estimateDistanceToTopPx(
+            firstVisibleItemIndex = firstVisibleItemIndex,
+            firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,
+            columns = columns,
+            averageRowHeightPx = averageItemSize + layoutInfo.mainAxisItemSpacing,
+        )
+    ) {
+        if (firstVisibleItemIndex != 0 || firstVisibleItemScrollOffset != 0) {
+            animateScrollToItem(0)
+        }
+    }
+}
+
 suspend fun LazyListState.animateScrollToTop(fast: Boolean = false) {
     val plan = resolveScrollToTopPlan(
         firstVisibleItemIndex = firstVisibleItemIndex,
@@ -84,50 +176,6 @@ suspend fun LazyGridState.animateScrollToTop(fast: Boolean = false) {
     )
     plan.preJumpIndex?.let { scrollToItem(it) }
     animateScrollToItem(plan.animateTargetIndex)
-}
-
-/**
- * 估算当前位置到列表顶部的像素距离：已滚出首个可见项的偏移 + 其上方整行的平均高度。
- * 全宽项（轮播、分割条）会让结果略有偏差，由调用方在动画后收尾。
- */
-fun estimateDistanceToTopPx(
-    firstVisibleItemIndex: Int,
-    firstVisibleItemScrollOffset: Int,
-    columns: Int,
-    averageRowHeightPx: Int,
-): Int {
-    val rowsAbove = firstVisibleItemIndex.coerceAtLeast(0) / columns.coerceAtLeast(1)
-    return firstVisibleItemScrollOffset.coerceAtLeast(0) + rowsAbove * averageRowHeightPx.coerceAtLeast(0)
-}
-
-/**
- * 瀑布流的 animateScrollToItem 会按估算目标分段滚动，每段结束后重新估算，视觉上是走走停停。
- * 这里用一次像素级动画连续滚到估算的顶部，再对剩余偏差收尾。
- */
-suspend fun LazyStaggeredGridState.animateScrollToTopContinuously() {
-    val items = layoutInfo.visibleItemsInfo
-    if (items.isEmpty() || (firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0)) return
-    val isVertical = layoutInfo.orientation == Orientation.Vertical
-    // 只统计单列项（lane >= 0），全宽项的高度和列数不代表一行卡片
-    val laneItems = items.filter { it.lane >= 0 }.ifEmpty { items }
-    val averageItemSize = laneItems.map { if (isVertical) it.size.height else it.size.width }.average().toInt()
-    val columns = (laneItems.maxOf { it.lane } + 1).coerceAtLeast(1)
-    val distance = estimateDistanceToTopPx(
-        firstVisibleItemIndex = firstVisibleItemIndex,
-        firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,
-        columns = columns,
-        averageRowHeightPx = averageItemSize + layoutInfo.mainAxisItemSpacing,
-    )
-    if (distance > 0) {
-        val durationMillis = (distance / 6).coerceIn(250, 900)
-        animateScrollBy(
-            value = -distance.toFloat(),
-            animationSpec = tween(durationMillis = durationMillis, easing = FastOutSlowInEasing),
-        )
-    }
-    if (firstVisibleItemIndex != 0 || firstVisibleItemScrollOffset != 0) {
-        animateScrollToItem(0)
-    }
 }
 
 suspend fun LazyStaggeredGridState.animateScrollToTop(fast: Boolean = false) {
