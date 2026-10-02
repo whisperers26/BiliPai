@@ -786,10 +786,8 @@ internal fun HomeCategoryPageContent(
                 .align(Alignment.BottomEnd)
                 .padding(
                     end = AppSpacingTokens.Large,
-                    // 听视频小横条悬浮时上浮避让（与动态页 76dp 预留一致）；
-                    // 整体抬高 120dp，避免胶囊压在底部卡片上
+                    // 固定在右下角；听视频小横条悬浮时上浮避让（与动态页 76dp 预留一致）
                     bottom = contentPadding.calculateBottomPadding() + AppSpacingTokens.Medium +
-                        120.dp +
                         if (nowPlayingBarOverlayVisible) 76.dp else 0.dp,
                 ),
         ) {
