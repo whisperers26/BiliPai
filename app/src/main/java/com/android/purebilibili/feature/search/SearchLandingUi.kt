@@ -768,7 +768,7 @@ private fun SearchHistorySectionModern(
     }
 }
 
-internal const val SEARCH_HISTORY_LONG_PRESS_DELETE_MILLIS = 500
+internal const val SEARCH_HISTORY_LONG_PRESS_DELETE_MILLIS = 800
 private const val SEARCH_HISTORY_LONG_PRESS_START_DELAY_MILLIS = 100
 
 /** 长按历史项：进度条沿条目自左向右填满，填满即删除；中途松手则回退。 */
