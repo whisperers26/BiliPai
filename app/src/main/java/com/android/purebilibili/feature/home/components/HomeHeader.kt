@@ -2056,8 +2056,10 @@ fun HomeHeader(
         hasBackdrop = miuixBackdrop != null,
     ) && !lowBlurBudget
     val isProgressiveFadeActive = progressiveTopFadeEnabled && !isHeaderBlurEnabled
-    val needsLowBudgetFill = lowBlurBudget && isProgressiveBlurRequested &&
-        !isProgressiveFadeActive && !isHeaderBlurEnabled
+    // Under the guard the header blur loses its haze source too, so every blur flavour (not just
+    // the progressive one) needs the fill. Liquid glass controls own their surfaces and skip it.
+    val needsLowBudgetFill = lowBlurBudget && !isProgressiveFadeActive &&
+        (isProgressiveBlurRequested || !(isGlassEnabled || topChromeLiquidGlassEnabled))
 
     val pinnedChromeLayout = resolveHomeTopPinnedChromeLayout(
         statusBarHeight = statusBarHeight,
