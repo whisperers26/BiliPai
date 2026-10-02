@@ -559,6 +559,20 @@ fun DynamicScreen(
             )
         }
     }
+    //  手动关闭或用户手指滚动列表后收起「定位上次刷新」胶囊（程序化滚动不算）；下次刷新时复位
+    var oldContentLocatorDismissed by remember(oldContentDividerIndex) {
+        mutableStateOf(false)
+    }
+    val dismissLocatorOnUserScroll = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput && available.y != 0f) {
+                    oldContentLocatorDismissed = true
+                }
+                return Offset.Zero
+            }
+        }
+    }
     val currentHasMore = activePresentation.hasMore
     val activeLoading = activePresentation.isLoading
     val activeError = activePresentation.error
@@ -746,7 +760,7 @@ fun DynamicScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent // 透明背景以显示渐变
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().nestedScroll(dismissLocatorOnUserScroll)) {
             // 背景层 - 自适应 MaterialTheme
             Box(
                 modifier = Modifier
@@ -1263,9 +1277,6 @@ fun DynamicScreen(
                     .align(Alignment.BottomEnd)
                     .padding(end = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall, bottom = dynamicListBottomPadding + AppSpacingTokens.Medium),
             )
-            var oldContentLocatorDismissed by remember(oldContentDividerIndex) {
-                mutableStateOf(false)
-            }
             val refreshLocatorEnabled by SettingsManager.getRefreshLocatorEnabled(context)
                 .collectAsStateWithLifecycle(initialValue = false)
             AnimatedVisibility(
