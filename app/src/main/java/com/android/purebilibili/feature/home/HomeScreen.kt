@@ -169,7 +169,7 @@ import com.android.purebilibili.core.ui.blur.recoverableBlurEnabled
 import com.android.purebilibili.core.ui.blur.shouldAllowRenderEffectBackedHazeEffect
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.util.CardPositionManager
-import com.android.purebilibili.core.util.animateScrollToTop
+import com.android.purebilibili.core.util.animateScrollToTopContinuously
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.ui.motion.pullRefreshReleaseSpring
@@ -2523,7 +2523,7 @@ fun HomeScreen(
                                      oldContentLocatorRefreshKey = refreshNewItemsKey,
                                      onOldContentDividerClick = {
                                          coroutineScope.launch {
-                                             contentGridState.animateScrollToTop()
+                                             contentGridState.animateScrollToTopContinuously()
                                          }
                                          viewModel.refresh(category)
                                      },
