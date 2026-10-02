@@ -281,6 +281,21 @@ internal fun resolveVideoInfoInitialExpandedState(
     defaultExpanded: Boolean = false
 ): Boolean = defaultExpanded && (hasDescription || hasTags)
 
+/**
+ * Whether the rows under the title and stats (badges, honors, declarations, BGM) are shown.
+ * A fixed-height host sets [compactWhenCollapsed] so only an expanded title makes room for them.
+ */
+internal fun shouldShowVideoInfoSupplementRows(
+    compactWhenCollapsed: Boolean,
+    expanded: Boolean
+): Boolean = !compactWhenCollapsed || expanded
+
+/** How many lines the stats may wrap to; a compact collapsed title keeps them on one. */
+internal fun resolveVideoInfoStatsMaxLines(
+    compactWhenCollapsed: Boolean,
+    expanded: Boolean
+): Int = if (compactWhenCollapsed && !expanded) 1 else Int.MAX_VALUE
+
 private const val BGM_DISCOVERY_LOAD_DELAY_MS = 420L
 private const val BGM_RECOMMEND_PAGE_SIZE = 5
 private const val BGM_RECOMMEND_ROW_START_INDEX = 4

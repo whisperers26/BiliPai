@@ -40,6 +40,21 @@ class VideoInfoDisplayPolicyTest {
     }
 
     @Test
+    fun videoInfoSupplementRows_waitForExpansionOnlyWhenCompact() {
+        assertFalse(shouldShowVideoInfoSupplementRows(compactWhenCollapsed = true, expanded = false))
+        assertTrue(shouldShowVideoInfoSupplementRows(compactWhenCollapsed = true, expanded = true))
+        assertTrue(shouldShowVideoInfoSupplementRows(compactWhenCollapsed = false, expanded = false))
+        assertTrue(shouldShowVideoInfoSupplementRows(compactWhenCollapsed = false, expanded = true))
+    }
+
+    @Test
+    fun videoInfoStats_stayOnOneLineOnlyWhileCompactAndCollapsed() {
+        assertEquals(1, resolveVideoInfoStatsMaxLines(compactWhenCollapsed = true, expanded = false))
+        assertEquals(Int.MAX_VALUE, resolveVideoInfoStatsMaxLines(compactWhenCollapsed = true, expanded = true))
+        assertEquals(Int.MAX_VALUE, resolveVideoInfoStatsMaxLines(compactWhenCollapsed = false, expanded = false))
+    }
+
+    @Test
     fun videoInfoInitialExpanded_respectsDefaultExpandedSwitch() {
         assertFalse(
             resolveVideoInfoInitialExpandedState(
