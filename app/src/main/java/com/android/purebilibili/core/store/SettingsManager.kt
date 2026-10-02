@@ -5666,6 +5666,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     
     private val KEY_FEED_API_TYPE = intPreferencesKey("feed_api_type")
     private val KEY_INCREMENTAL_TIMELINE_REFRESH = booleanPreferencesKey("incremental_timeline_refresh")
+    private val KEY_REFRESH_LOCATOR_ENABLED = booleanPreferencesKey("refresh_locator_enabled")
+    private val KEY_REFRESH_UNDO_ENABLED = booleanPreferencesKey("refresh_undo_enabled")
     private val KEY_HOME_REFRESH_COUNT = intPreferencesKey("home_refresh_count")
     
     /**
@@ -5712,6 +5714,25 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     suspend fun setIncrementalTimelineRefresh(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_INCREMENTAL_TIMELINE_REFRESH] = value
+        }
+    }
+
+    // --- 刷新后的「定位上次刷新」/「撤销刷新」悬浮按钮开关（默认关闭） ---
+    fun getRefreshLocatorEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_REFRESH_LOCATOR_ENABLED] ?: false }
+
+    suspend fun setRefreshLocatorEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_REFRESH_LOCATOR_ENABLED] = value
+        }
+    }
+
+    fun getRefreshUndoEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_REFRESH_UNDO_ENABLED] ?: false }
+
+    suspend fun setRefreshUndoEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_REFRESH_UNDO_ENABLED] = value
         }
     }
 
@@ -8290,6 +8311,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             IntShareablePreferenceDefinition(KEY_DYNAMIC_PAGE_LAYOUT_DIRECTION, SettingsShareSection.NAVIGATION),
             IntShareablePreferenceDefinition(KEY_FEED_API_TYPE, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_INCREMENTAL_TIMELINE_REFRESH, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_REFRESH_LOCATOR_ENABLED, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_REFRESH_UNDO_ENABLED, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(
                 KEY_DYNAMIC_IMAGE_PREVIEW_TEXT_VISIBLE,
                 SettingsShareSection.NAVIGATION
