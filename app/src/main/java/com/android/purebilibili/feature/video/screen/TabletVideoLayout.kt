@@ -619,8 +619,8 @@ internal enum class TabletVideoInfoLayout {
     List,
 
     /**
-     * A header: the title beside the owner, over the parts selector. The description, AI summary
-     * and note open under the title; actions and recommendations are left to the host.
+     * A header: the title beside the owner. The description, parts selector, AI summary and note
+     * open under the title; actions and recommendations are left to the host.
      */
     Header,
 }
@@ -1708,9 +1708,13 @@ private fun ScrollableVideoInfoSection(
 }
 
 /**
- * The video info as a header: the title beside the owner, then the parts selector for multi-part
- * videos. Tapping the title opens the creator team, description, tags, AI summary and note across the full width
- * below them, and [onExpandedChange] lets the host make room; the header scrolls when they overflow.
+ * The video info as a header: the title beside the owner, and nothing else until the title is tapped.
+ * Tapping it opens the creator team, description, tags, parts selector, AI summary and note across
+ * the full width below, and [onExpandedChange] lets the host make room; the header scrolls when they
+ * overflow.
+ *
+ * The closed header must stay at the height of the title and its stats: anything added here goes
+ * into the title's expandedContent, never beside or below [VideoTitleWithDesc].
  */
 @Composable
 private fun VideoInfoHeaderSection(
@@ -1763,6 +1767,14 @@ private fun VideoInfoHeaderSection(
             onCreatorTeamMemberClick = onUpClick,
             compactWhenCollapsed = true,
             expandedContent = {
+                if (info.pages.size > 1) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    PagesSelector(
+                        pages = info.pages,
+                        currentPageIndex = currentPageIndex,
+                        onPageSelect = onPageSelect
+                    )
+                }
                 if (shouldShowAiSummaryEntry(
                         aiSummary = aiSummary,
                         isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
@@ -1811,15 +1823,6 @@ private fun VideoInfoHeaderSection(
                 )
             },
         )
-        if (info.pages.size > 1) {
-            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-                PagesSelector(
-                    pages = info.pages,
-                    currentPageIndex = currentPageIndex,
-                    onPageSelect = onPageSelect
-                )
-            }
-        }
     }
 }
 
