@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -793,6 +794,7 @@ private fun SearchHistorySectionModern(
 
 internal const val SEARCH_HISTORY_LONG_PRESS_DELETE_MILLIS = 800
 private const val SEARCH_HISTORY_LONG_PRESS_START_DELAY_MILLIS = 100
+private val SearchHistoryItemMinHeight = 44.dp
 
 /** 长按历史项：进度条沿条目自左向右填满，填满即删除；中途松手则回退。 */
 @Composable
@@ -861,11 +863,13 @@ private fun SearchHistoryItem(
                     }
                 )
             }
-            .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = 5.dp)
+            .heightIn(min = SearchHistoryItemMinHeight)
+            .padding(horizontal = AppSpacingTokens.Medium, vertical = 5.dp)
             .semantics {
                 onClick { currentOnClick(); true }
                 onLongClick(label = "删除") { currentOnComplete(); true }
-            }
+            },
+        contentAlignment = Alignment.CenterStart
     ) {
         AppText(
             text = keyword,
