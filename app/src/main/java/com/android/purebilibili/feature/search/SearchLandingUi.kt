@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -47,6 +48,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -146,6 +148,25 @@ internal fun resolveSearchDiscoverOriginalCellColors(
             borderColor = colorScheme.outline.copy(alpha = 0.28f)
         )
     }
+}
+
+private const val SEARCH_HISTORY_BLOCK_TINT_LIGHT = 0.05f
+private const val SEARCH_HISTORY_BLOCK_TINT_DARK = 0.09f
+
+/**
+ * History blocks are the page background nudged a few percent toward the content color,
+ * so they read as blocks under every theme without ever standing apart from the page.
+ */
+internal fun resolveSearchHistoryBlockColor(
+    backgroundColor: Color,
+    contentColor: Color
+): Color {
+    val tint = if (backgroundColor.luminance() > 0.5f) {
+        SEARCH_HISTORY_BLOCK_TINT_LIGHT
+    } else {
+        SEARCH_HISTORY_BLOCK_TINT_DARK
+    }
+    return lerp(backgroundColor, contentColor, tint)
 }
 
 @Composable
@@ -747,7 +768,10 @@ private fun SearchHistorySectionModern(
         Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
         // 与「搜索发现」同构的紧凑网格：历史项 14sp 文字行 + 删除角标，
         // 行间距 4dp，替代此前间距过大的气泡 FlowRow。
-        historyList.chunked(safeColumns).forEach { rowItems ->
+        historyList.chunked(safeColumns).forEachIndexed { rowIndex, rowItems ->
+            if (rowIndex > 0) {
+                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
@@ -770,6 +794,7 @@ private fun SearchHistorySectionModern(
 
 internal const val SEARCH_HISTORY_LONG_PRESS_DELETE_MILLIS = 800
 private const val SEARCH_HISTORY_LONG_PRESS_START_DELAY_MILLIS = 100
+private val SearchHistoryItemMinHeight = 44.dp
 
 /** 长按历史项：进度条沿条目自左向右填满，填满即删除；中途松手则回退。 */
 @Composable
@@ -786,10 +811,15 @@ private fun SearchHistoryItem(
     val currentOnComplete by rememberUpdatedState(onLongPressComplete)
     val fillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
     val shape = AppShapes.container(ContainerLevel.Chip)
+    val blockColor = resolveSearchHistoryBlockColor(
+        backgroundColor = AppSurfaceTokens.groupedListContainer(),
+        contentColor = MaterialTheme.colorScheme.onSurface
+    )
 
     Box(
         modifier = modifier
             .clip(shape)
+            .background(blockColor)
             .drawBehind {
                 val fraction = progress.value
                 if (fraction > 0f) {
@@ -833,11 +863,13 @@ private fun SearchHistoryItem(
                     }
                 )
             }
-            .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = 5.dp)
+            .heightIn(min = SearchHistoryItemMinHeight)
+            .padding(horizontal = AppSpacingTokens.Medium, vertical = 5.dp)
             .semantics {
                 onClick { currentOnClick(); true }
                 onLongClick(label = "删除") { currentOnComplete(); true }
-            }
+            },
+        contentAlignment = Alignment.CenterStart
     ) {
         AppText(
             text = keyword,
