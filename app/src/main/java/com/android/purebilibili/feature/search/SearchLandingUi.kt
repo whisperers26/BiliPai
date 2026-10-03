@@ -767,7 +767,10 @@ private fun SearchHistorySectionModern(
         Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
         // 与「搜索发现」同构的紧凑网格：历史项 14sp 文字行 + 删除角标，
         // 行间距 4dp，替代此前间距过大的气泡 FlowRow。
-        historyList.chunked(safeColumns).forEach { rowItems ->
+        historyList.chunked(safeColumns).forEachIndexed { rowIndex, rowItems ->
+            if (rowIndex > 0) {
+                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
@@ -806,10 +809,15 @@ private fun SearchHistoryItem(
     val currentOnComplete by rememberUpdatedState(onLongPressComplete)
     val fillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
     val shape = AppShapes.container(ContainerLevel.Chip)
+    val blockColor = resolveSearchHistoryBlockColor(
+        backgroundColor = AppSurfaceTokens.groupedListContainer(),
+        contentColor = MaterialTheme.colorScheme.onSurface
+    )
 
     Box(
         modifier = modifier
             .clip(shape)
+            .background(blockColor)
             .drawBehind {
                 val fraction = progress.value
                 if (fraction > 0f) {
