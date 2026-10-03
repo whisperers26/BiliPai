@@ -47,6 +47,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -146,6 +147,25 @@ internal fun resolveSearchDiscoverOriginalCellColors(
             borderColor = colorScheme.outline.copy(alpha = 0.28f)
         )
     }
+}
+
+private const val SEARCH_HISTORY_BLOCK_TINT_LIGHT = 0.05f
+private const val SEARCH_HISTORY_BLOCK_TINT_DARK = 0.09f
+
+/**
+ * History blocks are the page background nudged a few percent toward the content color,
+ * so they read as blocks under every theme without ever standing apart from the page.
+ */
+internal fun resolveSearchHistoryBlockColor(
+    backgroundColor: Color,
+    contentColor: Color
+): Color {
+    val tint = if (backgroundColor.luminance() > 0.5f) {
+        SEARCH_HISTORY_BLOCK_TINT_LIGHT
+    } else {
+        SEARCH_HISTORY_BLOCK_TINT_DARK
+    }
+    return lerp(backgroundColor, contentColor, tint)
 }
 
 @Composable

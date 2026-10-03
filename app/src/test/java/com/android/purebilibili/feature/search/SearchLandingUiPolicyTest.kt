@@ -2,6 +2,8 @@ package com.android.purebilibili.feature.search
 
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.ui.graphics.luminance
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -68,6 +70,20 @@ class SearchLandingUiPolicyTest {
         assertTrue(light.containerColor.red != lightScheme.primary.red || light.containerColor.alpha < 0.3f)
         assertEquals(lightScheme.onSurface, light.titleColor)
         assertEquals(darkScheme.onSurface, dark.titleColor)
+    }
+
+    @Test
+    fun `search history block color stays close to the page background`() {
+        listOf(lightColorScheme(), darkColorScheme()).forEach { scheme ->
+            val block = resolveSearchHistoryBlockColor(
+                backgroundColor = scheme.background,
+                contentColor = scheme.onSurface
+            )
+
+            assertTrue(block != scheme.background)
+            assertEquals(1f, block.alpha)
+            assertTrue(abs(block.luminance() - scheme.background.luminance()) < 0.1f)
+        }
     }
 
     @Test
