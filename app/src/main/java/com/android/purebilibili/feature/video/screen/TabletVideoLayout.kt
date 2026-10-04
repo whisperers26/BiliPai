@@ -1709,8 +1709,8 @@ private fun ScrollableVideoInfoSection(
 
 /**
  * The video info as a header: the title beside the owner, and nothing else until the title is tapped.
- * Tapping it opens the creator team, description, tags, parts selector, AI summary and note across
- * the full width below, and [onExpandedChange] lets the host make room; the header scrolls when they
+ * Tapping it opens the collection and parts selector, then the creator team, description, tags, AI
+ * summary and note across the full width below, and [onExpandedChange] lets the host make room; the header scrolls when they
  * overflow.
  *
  * The closed header must stay at the height of the title and its stats: anything added here goes
@@ -1751,6 +1751,24 @@ private fun VideoInfoHeaderSection(
     onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showCollectionSheet by rememberSaveable(info.bvid) { mutableStateOf(false) }
+    info.ugc_season?.let { season ->
+        if (showCollectionSheet) {
+            CollectionSheet(
+                ugcSeason = season,
+                currentBvid = info.bvid,
+                currentCid = info.cid,
+                onDismiss = { showCollectionSheet = false },
+                onEpisodeClick = { episode ->
+                    showCollectionSheet = false
+                    onRelatedVideoClick(
+                        episode.bvid,
+                        buildVideoNavigationOptions(targetCid = episode.cid)
+                    )
+                }
+            )
+        }
+    }
     Column(modifier = modifier.verticalScroll(rememberScrollState())) {
         VideoTitleWithDesc(
             info = info,
@@ -1766,7 +1784,16 @@ private fun VideoInfoHeaderSection(
             onExpandedChange = onExpandedChange,
             onCreatorTeamMemberClick = onUpClick,
             compactWhenCollapsed = true,
-            expandedContent = {
+            expandedLeadingContent = {
+                info.ugc_season?.let { season ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CollectionRow(
+                        ugcSeason = season,
+                        currentBvid = info.bvid,
+                        currentCid = info.cid,
+                        onClick = { showCollectionSheet = true }
+                    )
+                }
                 if (info.pages.size > 1) {
                     Spacer(modifier = Modifier.height(4.dp))
                     PagesSelector(
@@ -1775,6 +1802,8 @@ private fun VideoInfoHeaderSection(
                         onPageSelect = onPageSelect
                     )
                 }
+            },
+            expandedContent = {
                 if (shouldShowAiSummaryEntry(
                         aiSummary = aiSummary,
                         isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
