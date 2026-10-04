@@ -468,6 +468,8 @@ fun VideoTitleWithDesc(
     onRelatedVideoClick: (String, android.os.Bundle?) -> Unit = { _, _ -> },
     /** Shown below the tags while the title is expanded. */
     expandedContent: (@Composable ColumnScope.() -> Unit)? = null,
+    /** Shown right under the title and stats while the title is expanded, above the other details. */
+    expandedLeadingContent: (@Composable ColumnScope.() -> Unit)? = null,
     /** Told whether the title is expanded, first when it appears and then on every change. */
     onExpandedChange: ((Boolean) -> Unit)? = null,
     /** Beside the title and stats; the expanded details still run the full width below. */
@@ -783,6 +785,24 @@ fun VideoTitleWithDesc(
                 }
             }
             headerTrailingContent?.invoke(this)
+        }
+
+        if (expandedLeadingContent != null) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = expanded,
+                enter = if (animateLayout) {
+                    folmeExpandEnterTransition(useMiuixSpring)
+                } else {
+                    androidx.compose.animation.EnterTransition.None
+                },
+                exit = if (animateLayout) {
+                    folmeExpandExitTransition(useMiuixSpring)
+                } else {
+                    androidx.compose.animation.ExitTransition.None
+                }
+            ) {
+                Column(content = expandedLeadingContent)
+            }
         }
 
         if (showCreatorTeamWhenExpanded && onCreatorTeamMemberClick != null) {
