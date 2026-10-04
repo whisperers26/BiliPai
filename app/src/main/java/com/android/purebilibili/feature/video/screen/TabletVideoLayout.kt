@@ -1709,8 +1709,8 @@ private fun ScrollableVideoInfoSection(
 
 /**
  * The video info as a header: the title beside the owner, and nothing else until the title is tapped.
- * Tapping it opens the creator team, description, tags, collection, parts selector, AI summary and note across
- * the full width below, and [onExpandedChange] lets the host make room; the header scrolls when they
+ * Tapping it opens the collection and parts selector, then the creator team, description, tags, AI
+ * summary and note across the full width below, and [onExpandedChange] lets the host make room; the header scrolls when they
  * overflow.
  *
  * The closed header must stay at the height of the title and its stats: anything added here goes
@@ -1794,8 +1794,6 @@ private fun VideoInfoHeaderSection(
                         onClick = { showCollectionSheet = true }
                     )
                 }
-            },
-            expandedContent = {
                 if (info.pages.size > 1) {
                     Spacer(modifier = Modifier.height(4.dp))
                     PagesSelector(
@@ -1804,6 +1802,8 @@ private fun VideoInfoHeaderSection(
                         onPageSelect = onPageSelect
                     )
                 }
+            },
+            expandedContent = {
                 if (shouldShowAiSummaryEntry(
                         aiSummary = aiSummary,
                         isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
