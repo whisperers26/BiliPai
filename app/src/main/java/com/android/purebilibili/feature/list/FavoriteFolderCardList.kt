@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,10 +16,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -40,8 +43,8 @@ import com.android.purebilibili.core.ui.rememberAppBookmarkIcon
 import com.android.purebilibili.core.ui.rememberAppChevronForwardIcon
 import com.android.purebilibili.core.ui.rememberAppFolderIcon
 import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.data.model.response.FavFolder
+import com.android.purebilibili.feature.personal.resolvePersonalListColumnCount
 
 /**
  * PiliPlus 式收藏夹卡片列表：视频 Tab 下收藏夹以横卡形式罗列，
@@ -58,7 +61,7 @@ internal fun FavoriteFolderCardList(
     onFolderClick: (FavFolder) -> Unit,
     onSubscribedClick: () -> Unit,
     modifier: Modifier = Modifier,
-    listState: LazyListState = rememberLazyListState(),
+    gridState: LazyGridState = rememberLazyGridState(),
 ) {
     if (folders.isEmpty() && subscribedFoldersCount == 0) {
         val message = if (searchQuery.isNotBlank()) "没有找到相关收藏夹" else "暂无收藏夹"
@@ -73,29 +76,36 @@ internal fun FavoriteFolderCardList(
         return
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = modifier
-            .responsiveContentWidth(resolveCommonListSingleColumnMaxWidth())
-            .fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = AppSpacingTokens.Medium,
-            end = AppSpacingTokens.Medium,
-            top = padding.calculateTopPadding() + AppSpacingTokens.Medium,
-            bottom = padding.calculateBottomPadding() + AppSpacingTokens.ExtraLarge,
-        ),
-        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
-    ) {
-        items(items = folders, key = { "favorite_folder_${it.id}_${it.fid}" }) { folder ->
-            FavoriteFolderCard(
-                folder = folder,
-                transitionEnabled = transitionEnabled,
-                onClick = { onFolderClick(folder) },
-            )
-        }
-        if (subscribedFoldersCount > 0 && searchQuery.isBlank()) {
-            item(key = "favorite_folder_subscribed_entry") {
-                FavoriteSubscribedEntryRow(onClick = onSubscribedClick)
+    // 宽屏按可用宽度分多列铺满，先横向排满一行再换行。
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val columns = resolvePersonalListColumnCount(maxWidth.value)
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            state = gridState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = AppSpacingTokens.Medium,
+                end = AppSpacingTokens.Medium,
+                top = padding.calculateTopPadding() + AppSpacingTokens.Medium,
+                bottom = padding.calculateBottomPadding() + AppSpacingTokens.ExtraLarge,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
+            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
+        ) {
+            items(items = folders, key = { "favorite_folder_${it.id}_${it.fid}" }) { folder ->
+                FavoriteFolderCard(
+                    folder = folder,
+                    transitionEnabled = transitionEnabled,
+                    onClick = { onFolderClick(folder) },
+                )
+            }
+            if (subscribedFoldersCount > 0 && searchQuery.isBlank()) {
+                item(
+                    key = "favorite_folder_subscribed_entry",
+                    span = { GridItemSpan(maxLineSpan) },
+                ) {
+                    FavoriteSubscribedEntryRow(onClick = onSubscribedClick)
+                }
             }
         }
     }

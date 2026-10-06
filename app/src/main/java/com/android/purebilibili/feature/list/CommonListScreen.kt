@@ -64,7 +64,6 @@ import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.motion.AppMotionTokens
-import com.android.purebilibili.core.util.responsiveContentWidth
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -256,16 +255,13 @@ fun CommonListScreen(
     val isCompactGridWindow = com.android.purebilibili.feature.home.isCompactHomeFeedScreen(
         windowSizeClass.widthSizeClass
     )
-    val defaultPersonalColumns = if (personalListPage) 1 else 2
+    // 只记录双指缩放后的列数；未缩放时跟随下方解析出的默认列数。
     var pinchColumnsByWindow by rememberSaveable(viewModel) {
-        androidx.compose.runtime.mutableStateOf(
-            mapOf(false to defaultPersonalColumns, true to defaultPersonalColumns)
-        )
+        androidx.compose.runtime.mutableStateOf(emptyMap<Boolean, Int>())
     }
-    val pinchListColumns = pinchColumnsByWindow[isCompactGridWindow] ?: defaultPersonalColumns
     val primaryGridState = rememberLazyGridState()
-    val subscribedFolderListState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val favoriteFolderListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val subscribedFolderGridState = rememberLazyGridState()
+    val favoriteFolderGridState = rememberLazyGridState()
     val favoritePagerGridStates = remember { mutableStateMapOf<Int, androidx.compose.foundation.lazy.grid.LazyGridState>() }
     val historyPagerGridStates = remember { mutableStateMapOf<Int, androidx.compose.foundation.lazy.grid.LazyGridState>() }
 
@@ -295,9 +291,24 @@ fun CommonListScreen(
     val favoriteCollectionSharedTransitionEnabled =
         homeSettings.cardTransitionEnabled && LocalSharedTransitionEnabled.current
 
-    // Video lists expose an explicit single/double-column choice, independent of home.
-    val columns = pinchListColumns
     val configuration = LocalConfiguration.current
+    val defaultListColumns = remember(
+        personalListPage,
+        configuration.screenWidthDp,
+        windowSizeClass.widthSizeClass,
+        homeSettings.gridColumnCount,
+        homeSettings.gridColumnCountCompact,
+        homeSettings.homeFeedCardWidthPreset,
+    ) {
+        resolveCommonListDefaultColumns(
+            isPersonalList = personalListPage,
+            contentWidthDp = configuration.screenWidthDp,
+            widthSizeClass = windowSizeClass.widthSizeClass,
+            homeSettings = homeSettings,
+        )
+    }
+    val pinchListColumns = pinchColumnsByWindow[isCompactGridWindow] ?: defaultListColumns
+    val columns = pinchListColumns
     val commonListViewportWidthPx = with(density) {
         configuration.screenWidthDp.dp.roundToPx()
     }
@@ -577,7 +588,7 @@ fun CommonListScreen(
         liveBottomPadding = liveCommonListBottomPadding,
         isBottomBarVisible = isBottomBarVisibleForPadding,
     )
-    val activeCommonListScrollState = remember(
+    val activeCommonListScrollState: () -> CommonListScrollState = remember(
         favoriteViewModel,
         favoriteSection,
         isSubscribedBrowse,
@@ -585,8 +596,8 @@ fun CommonListScreen(
         historyViewModel,
         historyPagerState.currentPage,
         primaryGridState,
-        subscribedFolderListState,
-        favoriteFolderListState,
+        subscribedFolderGridState,
+        favoriteFolderGridState,
         favoriteCategoryGridState,
         historyPagerGridStates.size
     ) {
@@ -596,9 +607,9 @@ fun CommonListScreen(
                     CommonListScrollState.Grid(primaryGridState)
                 favoriteViewModel != null && favoriteSection != FavoriteSection.VIDEO ->
                     CommonListScrollState.Grid(favoriteCategoryGridState)
-                isSubscribedBrowse -> CommonListScrollState.List(subscribedFolderListState)
+                isSubscribedBrowse -> CommonListScrollState.Grid(subscribedFolderGridState)
                 // 视频 Tab 是收藏夹卡片列表；不要再跟已废弃的 HorizontalPager 网格状态。
-                favoriteViewModel != null -> CommonListScrollState.List(favoriteFolderListState)
+                favoriteViewModel != null -> CommonListScrollState.Grid(favoriteFolderGridState)
                 historyViewModel != null -> {
                     historyPagerGridStates[historyPagerState.currentPage]?.let(CommonListScrollState::Grid)
                         ?: CommonListScrollState.Grid(primaryGridState)
@@ -1200,7 +1211,7 @@ fun CommonListScreen(
                             top = headerHeightDp,
                             bottom = commonListBottomPadding
                         ),
-                        listState = subscribedFolderListState,
+                        gridState = subscribedFolderGridState,
                         spacing = spacing.medium,
                         hasMore = subscribedFolderProgressState.hasMore,
                         isLoadingMore = subscribedFolderProgressState.isLoadingMore,
@@ -1228,7 +1239,7 @@ fun CommonListScreen(
                         searchQuery = searchQuery,
                         padding = PaddingValues(top = headerHeightDp, bottom = commonListBottomPadding),
                         transitionEnabled = favoriteCollectionSharedTransitionEnabled,
-                        listState = favoriteFolderListState,
+                        gridState = favoriteFolderGridState,
                         onFolderClick = { folder ->
                             onFavoriteFolderClick?.invoke(
                                 resolveFavoriteFolderMediaId(folder),
@@ -2576,8 +2587,13 @@ private fun CommonListContent(
             .collectAsStateWithLifecycle(initialValue = HomeFeedCardStyle.BILIPAI)
             .value
     }
-    val cardLayout = remember(homeFeedCardStyle) {
-        com.android.purebilibili.feature.home.resolveHomeFeedCardLayout(homeFeedCardStyle)
+    val widthSizeClass = LocalWindowSizeClass.current.widthSizeClass
+    val cardLayout = remember(homeFeedCardStyle, columns, widthSizeClass) {
+        com.android.purebilibili.feature.home.resolveHomeFeedCardLayout(
+            style = homeFeedCardStyle,
+            gridColumns = columns,
+            widthSizeClass = widthSizeClass,
+        )
     }
     val gridOuterPaddingDp = if (isPersonalList) 12 else cardLayout.outerPaddingDp
     val gridItemSpacingDp = if (isPersonalList) 12 else cardLayout.itemSpacingDp
@@ -3040,7 +3056,7 @@ private fun FavoriteSubscribedFolderList(
     folders: List<com.android.purebilibili.data.model.response.FavFolder>,
     searchQuery: String,
     padding: PaddingValues,
-    listState: androidx.compose.foundation.lazy.LazyListState,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     spacing: androidx.compose.ui.unit.Dp,
     hasMore: Boolean,
     isLoadingMore: Boolean,
@@ -3058,7 +3074,7 @@ private fun FavoriteSubscribedFolderList(
 
     val shouldLoadMore = androidx.compose.runtime.remember {
         androidx.compose.runtime.derivedStateOf {
-            val layoutInfo = listState.layoutInfo
+            val layoutInfo = gridState.layoutInfo
             val total = layoutInfo.totalItemsCount
             val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             total > 0 && lastVisible >= total - 3
@@ -3070,25 +3086,32 @@ private fun FavoriteSubscribedFolderList(
         }
     }
 
-    LazyColumn(
-        modifier = Modifier
-            .responsiveContentWidth(resolveCommonListSingleColumnMaxWidth())
-            .fillMaxSize(),
-        state = listState,
-        contentPadding = PaddingValues(
-            start = spacing,
-            end = spacing,
-            top = padding.calculateTopPadding() + spacing,
-            bottom = padding.calculateBottomPadding() + spacing + AppSpacingTokens.ExtraLarge
-        ),
-        verticalArrangement = Arrangement.spacedBy(spacing)
-    ) {
-        items(items = folders, key = { "favorite_subscribed_${it.id}_${it.fid}" }) { folder ->
-            FavoriteSubscribedFolderRow(
-                folder = folder,
-                transitionEnabled = transitionEnabled,
-                onClick = { onFolderClick(folder) }
-            )
+    // 宽屏按可用宽度分多列铺满，先横向排满一行再换行。
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val columns = com.android.purebilibili.feature.personal.resolvePersonalListColumnCount(maxWidth.value)
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            modifier = Modifier.fillMaxSize(),
+            state = gridState,
+            contentPadding = PaddingValues(
+                start = spacing,
+                end = spacing,
+                top = padding.calculateTopPadding() + spacing,
+                bottom = padding.calculateBottomPadding() + spacing + AppSpacingTokens.ExtraLarge
+            ),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            verticalArrangement = Arrangement.spacedBy(spacing)
+        ) {
+            itemsIndexed(
+                items = folders,
+                key = { _, folder -> "favorite_subscribed_${folder.id}_${folder.fid}" }
+            ) { _, folder ->
+                FavoriteSubscribedFolderRow(
+                    folder = folder,
+                    transitionEnabled = transitionEnabled,
+                    onClick = { onFolderClick(folder) }
+                )
+            }
         }
     }
 }
