@@ -167,7 +167,6 @@ import com.android.purebilibili.core.ui.animation.gl.isThanosEffectSupported
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import com.android.purebilibili.core.ui.blur.recoverableBlurEnabled
 import com.android.purebilibili.core.ui.blur.shouldAllowRenderEffectBackedHazeEffect
-import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.animateScrollToTopContinuously
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
@@ -1307,11 +1306,7 @@ fun HomeScreen(
         }
     }
 
-    val contentWidth = if (windowSizeClass.isExpandedScreen) {
-        minOf(windowSizeClass.widthDp, resolveHomeFeedMaxContentWidth())
-    } else {
-        windowSizeClass.widthDp
-    }
+    val contentWidth = windowSizeClass.widthDp
     
     // 是否为单列模式 (Story or Cinematic)
     val isSingleColumnMode = displayMode == 1
@@ -2025,7 +2020,7 @@ fun HomeScreen(
                                 hideTopTabs = effectiveHomeSettings.hideTopTabs
                             )
                         com.android.purebilibili.core.ui.adaptive.AppHingeSafeContent(
-                            modifier = Modifier.responsiveContentWidth(maxWidth = contentWidth).fillMaxSize(),
+                            modifier = Modifier.fillMaxSize(),
                         ) {
                             val requestedGridColumns = effectiveGridColumns
                             val effectiveGridColumns = if (appWindowAdaptiveInfo.shouldAvoidHinge) {

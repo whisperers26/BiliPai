@@ -26,8 +26,6 @@ class FeedLayoutTokenAdoptionTest {
     @Test
     fun singleColumnFeeds_wireTheirLargeScreenWidthPolicies() {
         val expected = mapOf(
-            "src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt" to
-                ".responsiveContentWidth(maxWidth = contentWidth)",
             "src/main/java/com/android/purebilibili/feature/dynamic/DynamicScreen.kt" to
                 ".responsiveContentWidth(maxWidth = resolveDynamicTimelineMaxWidth())",
             "src/main/java/com/android/purebilibili/feature/following/FollowingListScreen.kt" to
@@ -53,8 +51,6 @@ class FeedLayoutTokenAdoptionTest {
     @Test
     fun featureGeometry_isResolvedByNamedLayoutPolicies() {
         val expected = mapOf(
-            "src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt" to
-                "resolveHomeFeedMaxContentWidth()",
             "src/main/java/com/android/purebilibili/feature/list/CommonListScreen.kt" to
                 "resolveVideoListColumns(",
             "src/main/java/com/android/purebilibili/feature/watchlater/WatchLaterScreen.kt" to
