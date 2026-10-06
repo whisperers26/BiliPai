@@ -2,10 +2,6 @@ package com.android.purebilibili.feature.home
 
 import com.android.purebilibili.core.store.HomeFeedCardWidthPreset
 import com.android.purebilibili.core.util.WindowWidthSizeClass
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-
-internal fun resolveHomeFeedMaxContentWidth(): Dp = 1280.dp
 
 /**
  * 当前窗口是否按"窄屏"档处理列数记忆：折叠屏外屏、手机竖屏（Compact 宽度）。
