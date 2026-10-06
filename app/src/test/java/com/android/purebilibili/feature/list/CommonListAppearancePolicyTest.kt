@@ -7,6 +7,7 @@ import com.android.purebilibili.core.ui.AppSemanticIconFamily
 import com.android.purebilibili.core.ui.AppTopChromePolicy
 import com.android.purebilibili.core.ui.AppTopTabPresentation
 import com.android.purebilibili.core.ui.CompactCapsuleChromeSpec
+import com.android.purebilibili.core.util.WindowWidthSizeClass
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -118,6 +119,48 @@ class CommonListAppearancePolicyTest {
         )
     }
 
+
+    @Test
+    fun defaultColumns_followHomeFeedGridOutsidePersonalLists() {
+        val homeSettings = HomeSettings(gridColumnCount = 5, gridColumnCountCompact = 0)
+
+        assertEquals(
+            1,
+            resolveCommonListDefaultColumns(
+                isPersonalList = true,
+                contentWidthDp = 1480,
+                widthSizeClass = WindowWidthSizeClass.Large,
+                homeSettings = homeSettings,
+            )
+        )
+        assertEquals(
+            5,
+            resolveCommonListDefaultColumns(
+                isPersonalList = false,
+                contentWidthDp = 1480,
+                widthSizeClass = WindowWidthSizeClass.Large,
+                homeSettings = homeSettings,
+            )
+        )
+        assertEquals(
+            2,
+            resolveCommonListDefaultColumns(
+                isPersonalList = false,
+                contentWidthDp = 393,
+                widthSizeClass = WindowWidthSizeClass.Compact,
+                homeSettings = homeSettings,
+            )
+        )
+        assertEquals(
+            7,
+            resolveCommonListDefaultColumns(
+                isPersonalList = false,
+                contentWidthDp = 1480,
+                widthSizeClass = WindowWidthSizeClass.Large,
+                homeSettings = HomeSettings(),
+            )
+        )
+    }
 
     @Test
     fun commonListGridWidth_preservesPhoneDensityAndTabletReadability() {

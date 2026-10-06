@@ -30,8 +30,6 @@ class FeedLayoutTokenAdoptionTest {
                 ".responsiveContentWidth(maxWidth = resolveDynamicTimelineMaxWidth())",
             "src/main/java/com/android/purebilibili/feature/following/FollowingListScreen.kt" to
                 ".responsiveContentWidth(resolveFollowingListMaxWidth())",
-            "src/main/java/com/android/purebilibili/feature/list/CommonListScreen.kt" to
-                ".responsiveContentWidth(resolveCommonListSingleColumnMaxWidth())",
         )
 
         expected.forEach { (path, call) ->

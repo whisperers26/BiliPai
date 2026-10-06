@@ -7,6 +7,9 @@ import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.store.resolveHomeHeaderBlurEnabled
 import com.android.purebilibili.core.ui.AppTopChromePolicy
 import com.android.purebilibili.core.ui.AppTopTabPresentation
+import com.android.purebilibili.core.util.WindowWidthSizeClass
+import com.android.purebilibili.feature.home.resolveHomeFeedGridColumns
+import com.android.purebilibili.feature.home.resolveHomeFeedStoredColumnCount
 
 internal data class CommonListVideoCardAppearance(
     val glassEnabled: Boolean,
@@ -15,8 +18,29 @@ internal data class CommonListVideoCardAppearance(
     val showInfoGlassBadges: Boolean
 )
 
-internal fun resolveCommonListSingleColumnMaxWidth(): Dp =
-    com.android.purebilibili.core.util.resolveSingleColumnFeedMaxWidth()
+/**
+ * 通用视频列表的默认列数。个人列表（历史/收藏搜索）保持单列；
+ * 收藏夹详情、合集等视频网格跟随首页推荐的列数，宽屏不再固定双列。
+ */
+internal fun resolveCommonListDefaultColumns(
+    isPersonalList: Boolean,
+    contentWidthDp: Int,
+    widthSizeClass: WindowWidthSizeClass,
+    homeSettings: HomeSettings,
+): Int {
+    if (isPersonalList) return 1
+    return resolveHomeFeedGridColumns(
+        contentWidthDp = contentWidthDp,
+        displayMode = 0,
+        fixedColumnCount = resolveHomeFeedStoredColumnCount(
+            widthSizeClass = widthSizeClass,
+            compactColumnCount = homeSettings.gridColumnCountCompact,
+            defaultColumnCount = homeSettings.gridColumnCount,
+        ),
+        cardWidthPreset = homeSettings.homeFeedCardWidthPreset,
+        widthSizeClass = widthSizeClass,
+    )
+}
 
 internal fun resolveCommonListGridMinColumnWidth(isExpandedScreen: Boolean): Dp =
     if (isExpandedScreen) 240.dp else 170.dp
