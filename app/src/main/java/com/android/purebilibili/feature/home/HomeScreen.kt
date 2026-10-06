@@ -1371,13 +1371,6 @@ fun HomeScreen(
         useSideNavigation = useSideNavigation
     )
     
-    //  📱 [切换导航模式] 处理函数
-    val onToggleNavigationMode: () -> Unit = {
-        coroutineScope.launch {
-            SettingsManager.setTabletUseSidebar(context, !tabletUseSidebar)
-        }
-    }
-
     //  [修复] 恢复状态栏样式：确保从视频详情页返回后状态栏正确
     // 当使用滑动动画时，Theme.kt 的 SideEffect 可能不会重新执行
     val backgroundColor = AppSurfaceTokens.chromeBackground()

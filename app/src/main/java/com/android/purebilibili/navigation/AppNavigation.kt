@@ -2056,12 +2056,6 @@ fun AppNavigation(
                                     SettingsManager.setSidebarExpanded(context, expanded)
                                 }
                             },
-                            onToggleSidebar = {
-                                // [Tablet] Toggle sidebar mode
-                                coroutineScope.launch {
-                                    SettingsManager.setTabletUseSidebar(context, false)
-                                }
-                            },
                             onAccountSwitchClick = if (
                                 appNavigationSettings.sidebarAccountSwitcherEnabled
                             ) {
@@ -4622,15 +4616,6 @@ fun AppNavigation(
                                     // 共享过渡驱动的开关（点条进详情/返回落位）瞬时切换小横条
                                     // presence，morph 是唯一几何时间轴；仅会话起止播放动画。
                                     animateNowPlayingPresence = !driveBottomBarByProgress,
-                                    onToggleSidebar = if (tabletUseSidebar) {
-                                        {
-                                            coroutineScope.launch {
-                                                SettingsManager.setTabletUseSidebar(context, true)
-                                            }
-                                        }
-                                    } else {
-                                        null
-                                    }
                                 )
                             }
                         } else {
@@ -4674,15 +4659,6 @@ fun AppNavigation(
                                 onLinkedDockPhaseChange = { linkedDockPhase = it },
                                 isTopLevelDestination = currentNavigation3Key == BiliPaiNavKey.MainHost,
                                 animateNowPlayingPresence = !driveBottomBarByProgress,
-                                onToggleSidebar = if (tabletUseSidebar) {
-                                    {
-                                        coroutineScope.launch {
-                                            SettingsManager.setTabletUseSidebar(context, true)
-                                        }
-                                    }
-                                } else {
-                                    null
-                                }
                             )
                         }
                         }
