@@ -12,7 +12,7 @@ class HomeFeedPinchZoomPolicyTest {
             widthSizeClass = WindowWidthSizeClass.Compact,
             contentWidthDp = 412,
         )
-        assertEquals(1..4, bounds)
+        assertEquals(2..4, bounds)
     }
 
     @Test
@@ -20,6 +20,15 @@ class HomeFeedPinchZoomPolicyTest {
         val bounds = resolveHomeFeedPinchColumnBounds(
             widthSizeClass = WindowWidthSizeClass.Compact,
             contentWidthDp = 340,
+        )
+        assertEquals(2..3, bounds)
+    }
+
+    @Test
+    fun resolveHomeFeedPinchColumnBounds_tooNarrowForTwoColumns() {
+        val bounds = resolveHomeFeedPinchColumnBounds(
+            widthSizeClass = WindowWidthSizeClass.Compact,
+            contentWidthDp = 280,
         )
         assertEquals(1..3, bounds)
     }
