@@ -32,7 +32,8 @@ internal fun resolveHomeFeedGridColumns(
 ): Int {
     val isSingleColumnMode = displayMode == 1
     if (!isSingleColumnMode && fixedColumnCount > 0) {
-        return fixedColumnCount
+        // 双列网格下不让窄屏捏合留下的 1 列记忆压过用户选的双列（单列请用「单列视频」）。
+        return fixedColumnCount.coerceAtLeast(resolveHomeFeedGridMinColumns(contentWidthDp))
     }
 
     val minColumnWidthDp = if (isSingleColumnMode) {
@@ -52,9 +53,13 @@ internal fun resolveHomeFeedGridColumns(
         }
     }
     val columns = contentWidthDp / minColumnWidthDp
-    val minColumns = if (!isSingleColumnMode && contentWidthDp >= 300) 2 else 1
+    val minColumns = if (isSingleColumnMode) 1 else resolveHomeFeedGridMinColumns(contentWidthDp)
     return columns.coerceIn(minColumns, maxColumns)
 }
+
+/** 双列网格的最少列数：宽度够放两列（≥300dp）时至少 2 列。 */
+internal fun resolveHomeFeedGridMinColumns(contentWidthDp: Int): Int =
+    if (contentWidthDp >= 300) 2 else 1
 
 /**
  * 根据窗口宽度分档返回封面宽高比。

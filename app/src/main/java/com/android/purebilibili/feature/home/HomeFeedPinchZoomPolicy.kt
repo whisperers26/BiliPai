@@ -66,7 +66,8 @@ internal fun resolveHomeFeedPinchColumnBounds(
         // 单列沉浸模式固定 1 列
         return 1..1
     }
-    val minColumns = if (contentWidthDp >= 900) 2 else 1
+    // 与双列网格的最少列数一致，避免捏到 1 列后又被网格策略弹回 2 列。
+    val minColumns = resolveHomeFeedGridMinColumns(contentWidthDp)
     val maxColumns = when {
         contentWidthDp >= 1200 -> 7
         contentWidthDp >= 840 -> 6
