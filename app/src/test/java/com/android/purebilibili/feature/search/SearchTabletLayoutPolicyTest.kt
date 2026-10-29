@@ -136,4 +136,19 @@ class SearchTabletLayoutPolicyTest {
             )
         )
     }
+
+    @Test
+    fun searchVideoGridColumns_foldCoverScreenIgnoresSavedSingleColumn() {
+        // The cover screen shares the narrow-screen column memory with the home feed;
+        // a saved 1 from a pinch must not turn search results into a single column.
+        assertEquals(
+            2,
+            resolveSearchVideoGridColumns(
+                singleColumn = false,
+                contentWidthDp = 412,
+                fixedColumnCount = 1,
+                widthSizeClass = WindowWidthSizeClass.Compact
+            )
+        )
+    }
 }
