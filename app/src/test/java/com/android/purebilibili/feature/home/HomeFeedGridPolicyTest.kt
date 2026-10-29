@@ -57,6 +57,35 @@ class HomeFeedGridPolicyTest {
     }
 
     @Test
+    fun doubleGridIgnoresSavedSingleColumnOnFoldCoverScreen() {
+        // A pinch on the cover screen can save 1 column; double grid must still show 2.
+        assertEquals(
+            2,
+            resolveHomeFeedGridColumns(
+                contentWidthDp = 412,
+                displayMode = 0,
+                fixedColumnCount = 1,
+                cardWidthPreset = HomeFeedCardWidthPreset.AUTO,
+                widthSizeClass = WindowWidthSizeClass.Compact,
+            )
+        )
+    }
+
+    @Test
+    fun savedSingleColumnStillAppliesBelowTwoColumnWidth() {
+        assertEquals(
+            1,
+            resolveHomeFeedGridColumns(
+                contentWidthDp = 280,
+                displayMode = 0,
+                fixedColumnCount = 1,
+                cardWidthPreset = HomeFeedCardWidthPreset.AUTO,
+                widthSizeClass = WindowWidthSizeClass.Compact,
+            )
+        )
+    }
+
+    @Test
     fun widePresetsReduceTabletColumnsAndMakeCardsWider() {
         val auto = resolveHomeFeedGridColumns(
             contentWidthDp = 1280,
