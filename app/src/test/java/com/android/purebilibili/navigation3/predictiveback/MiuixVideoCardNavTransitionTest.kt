@@ -1,7 +1,12 @@
 package com.android.purebilibili.navigation3.predictiveback
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.Color
 import top.yukonga.miuix.kmp.nav.transition.NavTransitions
 import com.android.purebilibili.navigation3.resolveRelatedReturnSourceRestoreDecision
 import com.android.purebilibili.core.ui.transition.VideoCardTransitionExposure
@@ -28,16 +33,133 @@ import androidx.compose.ui.unit.LayoutDirection
 
 class MiuixVideoCardNavTransitionTest {
     @Test
+    fun releaseRotationStartsWithoutAJumpAndEndsAtTheLandingPose() {
+        val released = VideoCardFollowPose(rotationZ = 2f)
+        assertEquals(released, released.withReleaseImpulse(4f, 1f))
+        assertEquals(VideoCardFollowPose(), released.settle(0f).withReleaseImpulse(4f, 0f))
+        val almostReleased = released.settle(.9999f).withReleaseImpulse(4f, .9999f)
+        assertEquals(released.rotationZ, almostReleased.rotationZ, .002f)
+        assertTrue(released.settle(.5f).withReleaseImpulse(4f, .5f).rotationZ > released.settle(.5f).rotationZ)
+    }
+
+    @Test
+    fun nativeViewportContractsWithBodyFadeWithoutASecondHeightStage() {
+        for ((sourceX, sourceY) in listOf(.46f to .25f, .92f to .12f, .3f to .08f)) {
+            var previousY = sourceY
+            for (i in 0..1000) {
+                val depth = i / 1000f
+                val x = resolveMiuixVideoCardOuterScale(sourceX, depth, 1f)
+                val y = resolveMiuixVideoCardOuterScaleY(sourceX, sourceY, depth, 1f)
+                val body = com.android.purebilibili.core.ui.transition.resolveVideoCardSecondaryContentVisualFrame(
+                    morphDepthProgress = depth,
+                    phase = com.android.purebilibili.core.ui.transition.VideoCardTransitionBackgroundPhase.RETURNING,
+                    isReturnGestureInProgress = true,
+                    motionTier = com.android.purebilibili.core.ui.adaptive.MotionTier.Normal,
+                    preserveNativeViewport = true,
+                )
+                val cardY = x * sourceY / sourceX
+                assertTrue(y >= cardY - .0001f)
+                assertTrue(y <= x + .0001f)
+                // Full content keeps the viewport; as it fades, contraction must already
+                // be underway rather than waiting for an empty page to shrink again.
+                if (body.alpha >= .9999f) assertEquals(x, y, .0001f)
+                if (body.alpha in .1f..0.9f) {
+                    assertTrue(y < x)
+                    assertTrue(y > cardY)
+                }
+                assertTrue(y >= previousY - .0001f)
+                assertTrue(y <= 1.0001f)
+                previousY = y
+            }
+            assertEquals(sourceY, resolveMiuixVideoCardOuterScaleY(sourceX, sourceY, 0f, 1f), .0001f)
+            assertEquals(1f, resolveMiuixVideoCardOuterScaleY(sourceX, sourceY, 1f, 1f), .0001f)
+        }
+    }
+
+    @Test
+    fun relatedVideoBackingDoesNotExposeWhiteThemeSurfaceAtTheWindowEdges() {
+        assertEquals(Color.Black, resolveMiuixVideoCardBackingColor("video/BV123", Color.White))
+        assertEquals(Color.Black, resolveMiuixVideoCardBackingColor("video/BV123?cid=10", Color.White))
+        assertEquals(Color.White, resolveMiuixVideoCardBackingColor("home", Color.White))
+        assertEquals(Color.White, resolveMiuixVideoCardBackingColor(null, Color.White))
+    }
+
+
+    @Test
+    fun coveredPageDepthIsClampedReversibleAndDisabledForReducedMotion() {
+        assertEquals(1f, resolveMiuixVideoCardCoveredScale(-1f, false))
+        assertEquals(1f, resolveMiuixVideoCardCoveredScale(0f, false))
+        assertEquals(0.985f, resolveMiuixVideoCardCoveredScale(0.5f, false), 0.0001f)
+        assertEquals(0.97f, resolveMiuixVideoCardCoveredScale(1f, false), 0.0001f)
+        assertEquals(0.97f, resolveMiuixVideoCardCoveredScale(2f, false), 0.0001f)
+        // An interrupted return reuses its current depth; cancel restores the same path.
+        for (depth in listOf(1f, 0.6f, 0.3f, 0.6f, 1f)) {
+            assertEquals(1f - 0.03f * depth, resolveMiuixVideoCardCoveredScale(depth, false), 0.0001f)
+            assertEquals(1f, resolveMiuixVideoCardCoveredScale(depth, true))
+        }
+    }
+
+    @Test
+    fun coveredBackgroundCornersGrowWithScaleAndReturnWithoutAFirstFrameJump() {
+        for (density in listOf(1f, 1.5f, 3f)) {
+            assertEquals(0f, resolveMiuixVideoCardCoveredCornerPx(0f, false, density))
+            assertTrue(resolveMiuixVideoCardCoveredCornerPx(.001f, false, density) < .1f)
+            for (depth in listOf(0f, .25f, .6f, 1f, .6f, .25f, 0f)) {
+                val scale = resolveMiuixVideoCardCoveredScale(depth, false)
+                val radius = resolveMiuixVideoCardCoveredCornerPx(depth, false, density)
+                // 验证屏幕坐标圆角；冻结 Host 和真实来源页共用同一几何函数。
+                assertEquals(24f * density * depth, radius * scale, .0001f)
+                assertEquals(0f, resolveMiuixVideoCardCoveredCornerPx(depth, true, density))
+            }
+        }
+        val cache = MiuixVideoCardCoveredShapeCache()
+        val first = cache.resolve(4f)
+        assertTrue(first === cache.resolve(4f))
+        val second = cache.resolve(8f)
+        assertTrue(first !== second)
+        assertTrue(first === cache.resolve(12f))
+    }
+    @Test
+    fun ordinaryReturnTracksDepthAndRoleChangesWithinOneFrame() {
+        val scope = object : NavTransitionScope {
+            override var relativeDepth by mutableFloatStateOf(-.4f)
+            override var role by mutableStateOf(NavRole.Outgoing)
+            override val change = NavChange.Pop
+            override val layoutSize = IntSize(1080, 2400)
+            override val layoutDirection = LayoutDirection.Ltr
+            override val density = Density(3f)
+            override val gesture: NavGesture? = null
+            override val settle: NavSettle? = null
+        }
+        val progress = MiuixVideoCardTransitionProgress()
+        progress.bind(scope)
+        assertEquals(.6f, progress.depthOrNull()!!, absoluteTolerance = .001f)
+        assertEquals(.6f, progress.depthOrNull()!!, absoluteTolerance = .001f)
+        scope.relativeDepth = -.8f
+        assertEquals(.2f, progress.depthOrNull()!!, absoluteTolerance = .001f)
+        scope.relativeDepth = 0f
+        assertEquals(1f, progress.depthOrNull())
+        scope.role = NavRole.Top
+        assertEquals(1f, progress.depthOrNull())
+        progress.clear()
+        assertEquals(null, progress.depthOrNull())
+        scope.role = NavRole.Outgoing
+        scope.relativeDepth = -.3f
+        progress.bind(scope)
+        assertEquals(.7f, progress.depthOrNull()!!, absoluteTolerance = .001f)
+    }
+
+    @Test
     fun childPredictiveBackKeepsCoveredVideoFullscreenThroughCommitAndCancel() {
         val scope = object : NavTransitionScope {
-            override var relativeDepth = 0f
+            override var relativeDepth by mutableFloatStateOf(0f)
             override val role get() = if (relativeDepth > 0f) NavRole.Covered else NavRole.Top
             override val change = NavChange.Pop
             override val layoutSize = IntSize(1080, 2400)
             override val layoutDirection = LayoutDirection.Ltr
             override val density = Density(3f)
-            override var gesture: NavGesture? = null
-            override var settle: NavSettle? = null
+            override var gesture: NavGesture? by mutableStateOf(null)
+            override var settle: NavSettle? by mutableStateOf(null)
         }
         val progress = MiuixVideoCardTransitionProgress()
         // The retained video scope is already bound before opening BGM.
@@ -67,7 +189,7 @@ class MiuixVideoCardNavTransitionTest {
 
     @Test
     fun settledEntryRebindsRemovingScopeBeforeReturnStarts() {
-        var depth = -.5f
+        var depth by mutableFloatStateOf(-.5f)
         fun scope(removing: Boolean, lowerPage: Boolean = false) = object : NavTransitionScope {
             override val relativeDepth get() = if (lowerPage) depth + 1f else depth
             override val role get() = when {
@@ -110,21 +232,30 @@ class MiuixVideoCardNavTransitionTest {
         val returning = resolveVideoHeroNavMotion(spec, true)
         assertEquals(360, (entering.programmatic as NavSettleSpec.Tween).durationMillis)
         assertEquals(299, (returning.programmatic as NavSettleSpec.Tween).durationMillis)
+        assertEquals(spec.returnSpatialSpec, (returning.programmatic as NavSettleSpec.Tween).easing)
+        assertEquals(spec.enterSpatialSpec, (entering.programmatic as NavSettleSpec.Tween).easing)
         assertEquals(spec.returnDurationMillis, (returning.commit as NavSettleSpec.Tween).durationMillis)
+        assertTrue((returning.commit as NavSettleSpec.Tween).matchReleaseVelocity)
         assertEquals(spec.cancelStiffness, (returning.cancel as NavSettleSpec.Spring).stiffness)
+        val follow = resolveVideoHeroNavMotion(spec, true, gestureTranslationEnabled = true)
+        assertTrue((follow.cancel as NavSettleSpec.Tween).matchReleaseVelocity)
+        assertEquals(spec.cancelSpatialSpec, (follow.cancel as NavSettleSpec.Tween).easing)
+        val reduced = resolveVideoHeroNavMotion(resolveVideoHeroMotionSpec(360, reducedMotion = true), true)
+        assertTrue(!(reduced.commit as NavSettleSpec.Tween).matchReleaseVelocity)
+        assertTrue(!(returning.programmatic as NavSettleSpec.Tween).matchReleaseVelocity)
     }
 
     @Test
     fun fullGestureLandsManuallyAndCommitHasNoSecondFlight() {
         val scope = object : NavTransitionScope {
-            override var relativeDepth = 0f
-            override var role = NavRole.Top
+            override var relativeDepth by mutableFloatStateOf(0f)
+            override var role by mutableStateOf(NavRole.Top)
             override val change = NavChange.Pop
             override val layoutSize = IntSize(1080, 2400)
             override val layoutDirection = LayoutDirection.Ltr
             override val density = Density(3f)
-            override var gesture: NavGesture? = NavGesture(0f, NavSwipeEdge.Left, 500f)
-            override var settle: NavSettle? = null
+            override var gesture: NavGesture? by mutableStateOf(NavGesture(0f, NavSwipeEdge.Left, 500f))
+            override var settle: NavSettle? by mutableStateOf(null)
         }
         val progress = MiuixVideoCardTransitionProgress()
         progress.bind(scope)
@@ -150,13 +281,13 @@ class MiuixVideoCardNavTransitionTest {
     @Test
     fun interruptingEntryRetainsItsCurrentPositionAndMapsGestureOneToOne() {
         val scope = object : NavTransitionScope {
-            override var relativeDepth = -.5f
+            override var relativeDepth by mutableFloatStateOf(-.5f)
             override val role = NavRole.Incoming
             override val change = NavChange.Push
             override val layoutSize = IntSize(1080, 2400)
             override val layoutDirection = LayoutDirection.Ltr
             override val density = Density(3f)
-            override var gesture: NavGesture? = NavGesture(0f, NavSwipeEdge.Left, 500f)
+            override var gesture: NavGesture? by mutableStateOf(NavGesture(0f, NavSwipeEdge.Left, 500f))
             override val settle: NavSettle? = null
         }
         val progress = MiuixVideoCardTransitionProgress()
@@ -179,14 +310,14 @@ class MiuixVideoCardNavTransitionTest {
     @Test
     fun cancelledGestureReturnsToFullscreenWithoutJumpingAtRelease() {
         val scope = object : NavTransitionScope {
-            override var relativeDepth = -.6f
+            override var relativeDepth by mutableFloatStateOf(-.6f)
             override val role = NavRole.Incoming
             override val change = NavChange.Pop
             override val layoutSize = IntSize(1080, 2400)
             override val layoutDirection = LayoutDirection.Ltr
             override val density = Density(3f)
-            override var gesture: NavGesture? = NavGesture(.6f, NavSwipeEdge.Left, 500f)
-            override var settle: NavSettle? = null
+            override var gesture: NavGesture? by mutableStateOf(NavGesture(.6f, NavSwipeEdge.Left, 500f))
+            override var settle: NavSettle? by mutableStateOf(null)
         }
         val progress = MiuixVideoCardTransitionProgress()
         progress.bind(scope)
@@ -204,29 +335,55 @@ class MiuixVideoCardNavTransitionTest {
     }
 
     @Test
-    fun inverseScaleIsUniformAtLandAndTracksClipDuringMorph() {
-        val sourceX = 0.46f
-        val sourceY = 0.25f
-        val landed = resolveMiuixVideoCardInverseScaleForDepth(sourceX, sourceY, 0f)
-        assertEquals(1f / sourceX, landed.scaleX, 0.0001f)
-        assertEquals(1f / sourceX, landed.scaleY, 0.0001f)
+    fun sourcePixelInverseScaleIsIndependentOfMorphDepth() {
+        // Native chrome can measure once: FillWidthTop cancels the outer morph on BOTH
+        // axes, including highly non-uniform horizontal cards and interrupted returns.
+        for ((sourceX, sourceY) in listOf(.01f to .01f, .46f to .25f, .92f to .12f, 1f to .08f)) {
+            val frozen = resolveMiuixVideoCardInverseScaleForDepth(sourceX, sourceY, 0f)
+            for (autoReturning in listOf(false, true)) {
+                for (step in 0..100) {
+                    val live = resolveMiuixVideoCardInverseScaleForDepth(
+                        sourceX, sourceY, step / 100f, autoReturning,
+                    )
+                    assertEquals(frozen.scaleX, live.scaleX, .0001f)
+                    assertEquals(frozen.scaleY, live.scaleY, .0001f)
+                    assertEquals(1f / sourceX, live.scaleX, .0001f)
+                }
+            }
+        }
+    }
 
-        val mid = resolveMiuixVideoCardInverseScaleForDepth(sourceX, sourceY, 0.18f)
-        assertEquals(1f / sourceX, mid.scaleX, 0.0001f)
-        assertTrue(abs(mid.scaleY - mid.scaleX) > 0.01f)
-
-        val outerY = resolveMiuixVideoCardOuterScale(sourceY, 0.18f, 1f)
-        val compensation = resolveMiuixVideoCardContentCompensation(
-            outerScaleX = resolveMiuixVideoCardOuterScale(sourceX, 0.18f, 1f),
-            outerScaleY = outerY,
-            contentScale = MiuixVideoCardContentScale.FillWidthTop,
-        )
-        // After FillWidthTop + inverse + outer Y, chrome height tracks the current clip.
-        assertEquals(
-            outerY / sourceY,
-            mid.scaleY * compensation.scaleY * outerY,
-            0.0001f,
-        )
+    @Test
+    fun reconstructedCardPixelsStayUndistortedAndFitTheShellAtHandoff() {
+        for ((sourceX, sourceY) in listOf(.46f to .25f, .92f to .12f, .3f to .08f)) {
+            for (autoReturning in listOf(false, true)) {
+                for (step in 0..100) {
+                    val depth = step / 100f
+                    val landing = com.android.purebilibili.core.ui.transition
+                        .resolveVideoHeroLandingScale(depth, autoReturning)
+                    val x = resolveMiuixVideoCardOuterScale(sourceX, depth, landing)
+                    val y = resolveMiuixVideoCardOuterScaleY(sourceX, sourceY, depth, landing)
+                    val compensation = resolveMiuixVideoCardContentCompensation(
+                        outerScaleX = x,
+                        outerScaleY = y,
+                        contentScale = MiuixVideoCardContentScale.FillWidthTop,
+                    )
+                    val inverse = resolveMiuixVideoCardInverseScaleForDepth(
+                        sourceX, sourceY, depth, autoReturning,
+                    )
+                    val pixelX = inverse.scaleX * compensation.scaleX * x
+                    val pixelY = inverse.scaleY * compensation.scaleY * y
+                    // Compose the actual nested layers: equal screen-space scaling
+                    // preserves text glyphs and cover aspect ratio throughout the return.
+                    assertEquals(pixelX, pixelY, .0001f)
+                    if (depth <= .18f) {
+                        // Once source chrome appears, its full card height fills the clip.
+                        // No residual detail-page height may remain as a blank band.
+                        assertEquals(y, sourceY * pixelY, .0001f)
+                    }
+                }
+            }
+        }
     }
 
     @Test
@@ -247,8 +404,8 @@ class MiuixVideoCardNavTransitionTest {
     @Test
     fun ordinaryRelatedSlideKeepsSourceUntilItsActualExitCompletes() {
         val scope = object : NavTransitionScope {
-            override var relativeDepth = -.4f
-            override var role = NavRole.Outgoing
+            override var relativeDepth by mutableFloatStateOf(-.4f)
+            override var role by mutableStateOf(NavRole.Outgoing)
             override val change = NavChange.Pop
             override val layoutSize = IntSize(1080, 2400)
             override val layoutDirection = LayoutDirection.Ltr
@@ -284,14 +441,14 @@ class MiuixVideoCardNavTransitionTest {
     @Test
     fun retainedGestureMetadataDoesNotMisclassifyCommitOrCancelAsSeek() {
         val scope = object : NavTransitionScope {
-            override var relativeDepth = -.4f
-            override var role = NavRole.Top
+            override var relativeDepth by mutableFloatStateOf(-.4f)
+            override var role by mutableStateOf(NavRole.Top)
             override val change = NavChange.Pop
             override val layoutSize = IntSize(1080, 2400)
             override val layoutDirection = LayoutDirection.Ltr
             override val density = Density(3f)
             override val gesture = NavGesture(.4f, NavSwipeEdge.Left, 500f)
-            override var settle: NavSettle? = null
+            override var settle: NavSettle? by mutableStateOf(null)
         }
         val progress = MiuixVideoCardTransitionProgress()
         progress.bind(scope)
@@ -341,7 +498,7 @@ class MiuixVideoCardNavTransitionTest {
         assertEquals(true, transform.contains("resolveMiuixVideoCardGestureVisualOrigin("))
         assertEquals(true, transform.contains("cameraDistance = transform.cameraDistance"))
         assertEquals(true, transform.contains("shadowElevation = MIUIX_VIDEO_CARD_GESTURE_SHADOW_DP.dp.toPx() * poseWeight"))
-        assertEquals(true, transform.contains("floatingCornerPx = MIUIX_VIDEO_CARD_FLOATING_CORNER_DP.dp.toPx()"))
+        assertEquals(true, transform.contains("floatingCornerPx = if (devicePx > 0f) devicePx"))
         assertEquals(true, transform.contains("progress.followPose("))
     }
 
@@ -425,6 +582,93 @@ class MiuixVideoCardNavTransitionTest {
         assertEquals(28f, mid.radiusX * 0.5f, absoluteTolerance = 0.01f)
         assertEquals(28f, mid.radiusY * 0.4f, absoluteTolerance = 0.01f)
 
+    }
+
+    @Test
+    fun horizontalCardCornersReachDeviceRadiusAndReverseToTheirSourceRadius() {
+        for (source in listOf(8f, 12f, 48f)) {
+            for (deviceCorner in listOf(12f, 28f, 96f, 240f)) {
+                val samples = (0..100).map { step ->
+                    resolveMiuixVideoCardGestureCornerPx(
+                        sourceCornerPx = source,
+                        morphProgress = step / 100f,
+                        floatingCornerPx = deviceCorner,
+                        sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+                        currentShortSidePx = source * 10f,
+                    )
+                }
+                assertEquals(source, samples.first(), .0001f)
+                assertEquals(0f, samples.last(), .0001f)
+                assertEquals(minOf(deviceCorner, source * 5f), samples[50], .0001f)
+                assertTrue(samples.all { it in 0f..source * 5f })
+                assertTrue(samples.drop(50).zipWithNext().all { (a, b) -> b <= a })
+                val reversed = (100 downTo 0).map { step ->
+                    resolveMiuixVideoCardGestureCornerPx(
+                        source, step / 100f, deviceCorner,
+                        sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+                        currentShortSidePx = source * 10f,
+                    )
+                }
+                assertEquals(samples, reversed.reversed())
+            }
+        }
+    }
+
+    @Test
+    fun stackedCardCornersMatchHorizontalCardsForEveryDepthAndWindowSize() {
+        for (source in listOf(8f, 16f, 48f)) {
+            for (shortSide in listOf(20f, 120f, 1080f)) {
+                for (deviceCorner in listOf(12f, 28f, 96f, 240f)) {
+                    val samples = (0..100).map { step ->
+                        val depth = step / 100f
+                        val stacked = resolveMiuixVideoCardGestureCornerPx(
+                            source, depth, deviceCorner, sourceLayout = VideoCardSourceLayout.STACKED,
+                            currentShortSidePx = shortSide,
+                        )
+                        assertEquals(resolveMiuixVideoCardGestureCornerPx(
+                            source, depth, deviceCorner, sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+                            currentShortSidePx = shortSide,
+                        ), stacked, .0001f)
+                        assertEquals(resolveMiuixVideoCardGestureCornerPx(
+                            source, depth, deviceCorner, sourceLayout = VideoCardSourceLayout.COVER_ONLY,
+                            currentShortSidePx = shortSide,
+                        ), stacked, .0001f)
+                        assertTrue(stacked in 0f..shortSide / 2f)
+                        stacked
+                    }
+                    assertEquals(minOf(source, shortSide / 2f), samples.first(), .0001f)
+                    assertEquals(0f, samples.last(), .0001f)
+                    assertEquals(minOf(deviceCorner, shortSide / 2f), samples[50], .0001f)
+                    assertTrue(samples.drop(50).zipWithNext().all { (a, b) -> b <= a })
+                }
+            }
+        }
+        // 仅封面的悬浮圆角也受实际窗口短边约束。
+        assertEquals(10f, resolveMiuixVideoCardGestureCornerPx(
+            16f, .5f, 240f, currentShortSidePx = 20f,
+        ), .0001f)
+    }
+
+    @Test
+    fun horizontalCornerFitsItsCurrentShortSideAndRemainsCircularAfterUnequalScaling() {
+        assertEquals(10f, resolveMiuixVideoCardGestureCornerPx(
+            sourceCornerPx = 48f,
+            morphProgress = .25f,
+            floatingCornerPx = 240f,
+            sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+            currentShortSidePx = 20f,
+        ), .0001f)
+        val radii = resolveMiuixVideoCardClipRadii(
+            sourceCornerPx = 16f,
+            outerScaleX = .8f,
+            outerScaleY = .2f,
+            morphProgress = .5f,
+            floatingCornerPx = 96f,
+            sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+            currentShortSidePx = 120f,
+        )
+        assertEquals(60f, radii.radiusX * .8f, .0001f)
+        assertEquals(60f, radii.radiusY * .2f, .0001f)
     }
 
     @Test

@@ -19,22 +19,11 @@ class HorizontalVideoCardLayoutPolicyTest {
     }
 
     @Test
-    fun horizontalCardDoesNotLockInfoColumnToCoverHeight() {
-        val cardSource = java.io.File(
-            "src/main/java/com/android/purebilibili/feature/home/components/cards/HomeStyleSingleColumnVideoCard.kt",
-        ).let { file ->
-            listOf(file, java.io.File("app/${file.path}")).first { it.exists() }.readText()
-        }
-        val frameSource = java.io.File(
-            "src/main/java/com/android/purebilibili/feature/home/components/cards/HorizontalVideoCardFrame.kt",
-        ).let { file ->
-            listOf(file, java.io.File("app/${file.path}")).first { it.exists() }.readText()
-        }
-        assertTrue(cardSource.contains("HorizontalVideoCardFrame("))
-        assertTrue(cardSource.contains("HorizontalVideoStatRow("))
-        assertTrue(frameSource.contains("HORIZONTAL_VIDEO_CARD_COVER_ASPECT_RATIO"))
-        assertTrue(frameSource.contains(".heightIn(min = resolvedMinimumHeight)"))
-        assertFalse(frameSource.contains(".height(resolvedMinimumHeight)"))
+    fun minimumHeightAccommodatesSelectedCoverAndLargeText() {
+        assertEquals(105f, resolveHorizontalVideoCardMinimumHeightDp(1f, 4f / 3f))
+        assertEquals(90f, resolveHorizontalVideoCardMinimumHeightDp(1f, 16f / 10f))
+        assertEquals(90f, resolveHorizontalVideoCardMinimumHeightDp(1f, 16f / 9f))
+        assertEquals(180f, resolveHorizontalVideoCardMinimumHeightDp(2f, 4f / 3f))
     }
 
     @Test
@@ -75,7 +64,7 @@ class HorizontalVideoCardLayoutPolicyTest {
         )
         assertFalse(
             source.substringAfter("if (scrollLitePolicy.showSecondaryStatsRow)")
-                .substringBefore("VideoCardOwnerMetadata(")
+                .substringBefore("VideoCardDurationPublishRow(")
                 .contains("overflow = TextOverflow.Ellipsis")
         )
         assertTrue(source.contains("maxLines = Int.MAX_VALUE"))

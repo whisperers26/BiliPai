@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -18,7 +20,11 @@ import com.android.purebilibili.data.model.response.ReplyPicture
 import com.android.purebilibili.feature.dynamic.components.DynamicSubReplyPreviewHost
 import com.android.purebilibili.feature.dynamic.components.IMAGE_PREVIEW_PAGE_TAG
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewOverlayHost
+import com.android.purebilibili.feature.video.ui.components.COMMENT_PICTURE_TAG_PREFIX
+import com.android.purebilibili.feature.video.ui.components.SUB_REPLY_DETAIL_ITEM_TAG_PREFIX
+import com.android.purebilibili.feature.video.ui.components.SUB_REPLY_DETAIL_ROOT_TAG
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
+import kotlinx.collections.immutable.persistentListOf
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -60,7 +66,7 @@ class DynamicSubReplyImagePreviewUiRegressionTest {
                                     )
                                 )
                             ),
-                            items = listOf(
+                            items = persistentListOf(
                                 ReplyItem(
                                     rpid = 2L,
                                     mid = 3L,
@@ -84,6 +90,8 @@ class DynamicSubReplyImagePreviewUiRegressionTest {
                             )
                         ),
                         onDismiss = {},
+                        onRefresh = {},
+                        onUserClick = {},
                         onLoadMore = {}
                     )
                     ImagePreviewOverlayHost(modifier = Modifier.fillMaxSize())
@@ -92,7 +100,10 @@ class DynamicSubReplyImagePreviewUiRegressionTest {
         }
 
         composeTestRule
-            .onNodeWithTag("subreply_detail_image_1_0")
+            .onNode(
+                hasTestTag("${COMMENT_PICTURE_TAG_PREFIX}0") and
+                    hasAnyAncestor(hasTestTag(SUB_REPLY_DETAIL_ROOT_TAG))
+            )
             .performClick()
 
         composeTestRule
@@ -101,7 +112,7 @@ class DynamicSubReplyImagePreviewUiRegressionTest {
     }
 
     @Test
-    fun clickingChildPictureInsideDynamicSubReply_usesDedicatedDetailImageTag() {
+    fun clickingChildPictureInsideDynamicSubReply_opensChildImage() {
         composeTestRule.setContent {
             MaterialTheme {
                 Box(
@@ -131,7 +142,7 @@ class DynamicSubReplyImagePreviewUiRegressionTest {
                                     )
                                 )
                             ),
-                            items = listOf(
+                            items = persistentListOf(
                                 ReplyItem(
                                     rpid = 2L,
                                     mid = 3L,
@@ -155,6 +166,8 @@ class DynamicSubReplyImagePreviewUiRegressionTest {
                             )
                         ),
                         onDismiss = {},
+                        onRefresh = {},
+                        onUserClick = {},
                         onLoadMore = {}
                     )
                     ImagePreviewOverlayHost(modifier = Modifier.fillMaxSize())
@@ -163,7 +176,10 @@ class DynamicSubReplyImagePreviewUiRegressionTest {
         }
 
         composeTestRule
-            .onNodeWithTag("subreply_detail_image_2_0")
+            .onNode(
+                hasTestTag("${COMMENT_PICTURE_TAG_PREFIX}0") and
+                    hasAnyAncestor(hasTestTag("${SUB_REPLY_DETAIL_ITEM_TAG_PREFIX}2"))
+            )
             .performClick()
 
         composeTestRule

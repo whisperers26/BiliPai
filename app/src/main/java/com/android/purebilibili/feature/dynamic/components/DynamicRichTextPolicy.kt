@@ -99,7 +99,8 @@ internal fun buildDynamicRichTextAnnotatedString(
     primaryColor: Color,
     textColor: Color,
     extraEmoteUrlMap: Map<String, String> = emptyMap(),
-    linkListener: LinkInteractionListener? = null
+    linkListener: LinkInteractionListener? = null,
+    collapseWebLinks: Boolean = false,
 ): AnnotatedString {
     return buildDynamicRichText(
         desc = desc,
@@ -107,6 +108,7 @@ internal fun buildDynamicRichTextAnnotatedString(
         textColor = textColor,
         extraEmoteUrlMap = extraEmoteUrlMap,
         linkListener = linkListener,
+        collapseWebLinks = collapseWebLinks,
     ).annotatedString
 }
 
@@ -115,7 +117,8 @@ internal fun buildDynamicRichText(
     primaryColor: Color,
     textColor: Color,
     extraEmoteUrlMap: Map<String, String> = emptyMap(),
-    linkListener: LinkInteractionListener? = null
+    linkListener: LinkInteractionListener? = null,
+    collapseWebLinks: Boolean = false,
 ): DynamicRichTextBuildResult {
     val nodeEmoteMap = collectDynamicEmojiUrlMap(desc.rich_text_nodes)
     val emoteUrlMap = buildMap {
@@ -145,7 +148,8 @@ internal fun buildDynamicRichText(
                     textColor = textColor,
                     emoteUrlMap = emoteUrlMap,
                     usedEmojiIds = usedEmojiIds,
-                    linkListener = linkListener
+                    linkListener = linkListener,
+                    collapseWebLinks = collapseWebLinks,
                 )
             }
         } else {
@@ -155,7 +159,8 @@ internal fun buildDynamicRichText(
                 textColor = textColor,
                 emoteUrlMap = emoteUrlMap,
                 usedEmojiIds = usedEmojiIds,
-                linkListener = linkListener
+                linkListener = linkListener,
+                collapseWebLinks = collapseWebLinks,
             )
         }
     }
@@ -401,10 +406,11 @@ internal fun resolveDynamicRichTextNodeDisplayText(nodes: List<RichTextNode>): S
 }
 
 internal fun resolveDynamicRichTextNodeToken(node: RichTextNode): String {
+    val emojiText = node.emoji?.text
     return when {
         node.text.isNotBlank() -> node.text
         node.orig_text.isNotBlank() -> node.orig_text
-        node.emoji?.text?.isNotBlank() == true -> node.emoji.text
+        !emojiText.isNullOrBlank() -> emojiText
         else -> ""
     }
 }
@@ -552,6 +558,7 @@ private fun AnnotatedString.Builder.appendDynamicRichTextNode(
     emoteUrlMap: Map<String, String>,
     usedEmojiIds: MutableMap<String, String>,
     linkListener: LinkInteractionListener?,
+    collapseWebLinks: Boolean,
 ) {
     val nodeType = node.type.trim().removePrefix("RICH_TEXT_NODE_TYPE_")
     val displayToken = resolveDynamicRichTextNodeToken(node)
@@ -591,7 +598,8 @@ private fun AnnotatedString.Builder.appendDynamicRichTextNode(
                 displayText = displayToken,
                 targetUrl = resolveDynamicRichTextLinkTarget(node),
                 primaryColor = primaryColor,
-                linkListener = linkListener
+                linkListener = linkListener,
+                collapseWebLinks = collapseWebLinks,
             )
         }
 
@@ -610,7 +618,8 @@ private fun AnnotatedString.Builder.appendDynamicRichTextNode(
                 textColor = textColor,
                 emoteUrlMap = emoteUrlMap,
                 usedEmojiIds = usedEmojiIds,
-                linkListener = linkListener
+                linkListener = linkListener,
+                collapseWebLinks = collapseWebLinks,
             )
         }
     }
@@ -763,7 +772,8 @@ private fun AnnotatedString.Builder.appendDynamicRichTextExpandableText(
     textColor: Color,
     emoteUrlMap: Map<String, String>,
     usedEmojiIds: MutableMap<String, String>,
-    linkListener: LinkInteractionListener? = null
+    linkListener: LinkInteractionListener? = null,
+    collapseWebLinks: Boolean,
 ) {
     if (text.isEmpty()) return
     if (emoteUrlMap.isEmpty()) {
@@ -771,7 +781,8 @@ private fun AnnotatedString.Builder.appendDynamicRichTextExpandableText(
             appendDynamicRichTextPlainText(
                 text = text,
                 primaryColor = primaryColor,
-                linkListener = linkListener
+                linkListener = linkListener,
+                collapseWebLinks = collapseWebLinks,
             )
         }
         return
@@ -784,7 +795,8 @@ private fun AnnotatedString.Builder.appendDynamicRichTextExpandableText(
                 appendDynamicRichTextPlainText(
                     text = text.substring(lastIndex, match.range.first),
                     primaryColor = primaryColor,
-                    linkListener = linkListener
+                    linkListener = linkListener,
+                    collapseWebLinks = collapseWebLinks,
                 )
             }
         }
@@ -805,7 +817,8 @@ private fun AnnotatedString.Builder.appendDynamicRichTextExpandableText(
             appendDynamicRichTextPlainText(
                 text = text.substring(lastIndex),
                 primaryColor = primaryColor,
-                linkListener = linkListener
+                linkListener = linkListener,
+                collapseWebLinks = collapseWebLinks,
             )
         }
     }
@@ -827,7 +840,8 @@ private data class DynamicPlainTextToken(
 private fun AnnotatedString.Builder.appendDynamicRichTextPlainText(
     text: String,
     primaryColor: Color,
-    linkListener: LinkInteractionListener? = null
+    linkListener: LinkInteractionListener? = null,
+    collapseWebLinks: Boolean,
 ) {
     val tokens = mutableListOf<DynamicPlainTextToken>()
     DYNAMIC_RICH_TEXT_URL_PATTERN.findAll(text).forEach { match ->
@@ -881,6 +895,7 @@ private fun AnnotatedString.Builder.appendDynamicRichTextPlainText(
                 targetUrl = token.value,
                 primaryColor = primaryColor,
                 linkListener = linkListener,
+                collapseWebLinks = collapseWebLinks,
             )
             DynamicPlainTextTokenKind.TOPIC -> {
                 val kw = token.keyword.orEmpty()
@@ -924,6 +939,7 @@ private fun AnnotatedString.Builder.appendDynamicRichTextLink(
     targetUrl: String?,
     primaryColor: Color,
     linkListener: LinkInteractionListener?,
+    collapseWebLinks: Boolean,
 ) {
     val resolvedUrl = targetUrl?.trim().takeUnless { it.isNullOrEmpty() } ?: displayText
     withLink(
@@ -939,8 +955,22 @@ private fun AnnotatedString.Builder.appendDynamicRichTextLink(
                 textDecoration = TextDecoration.Underline
             )
         ) {
-            append(displayText)
+            append(resolveDynamicWebLinkDisplayText(displayText, collapseWebLinks))
         }
+    }
+}
+
+internal fun resolveDynamicWebLinkDisplayText(
+    displayText: String,
+    collapseWebLinks: Boolean,
+): String {
+    if (!collapseWebLinks) return displayText
+    val normalized = normalizeDynamicRichTextUrl(displayText).orEmpty()
+    val isWebUrl = normalized.startsWith("https://") || normalized.startsWith("http://")
+    return if (isWebUrl && DYNAMIC_RICH_TEXT_URL_PATTERN.matches(normalized)) {
+        displayText.replace(displayText.trim(), "网页链接")
+    } else {
+        displayText
     }
 }
 

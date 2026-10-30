@@ -132,18 +132,23 @@ class OfficialQrAuthorizationServiceTest {
     }
 
     @Test
-    fun `TV authorizes the request ID with cookie csrf and scanning type`() = runTest {
+    fun `TV authorizes the request ID with signed app credential and scanning type`() = runTest {
         val api = mockk<PassportApi>()
         val qr = request(BilibiliLoginQrType.TV)
         coEvery { api.validateCookieSession(cookie) } returns loggedIn
-        coEvery { api.confirmTvQrCode(key, cookie, csrf = "csrf", referer = qr.confirmationPage, buvidHeader = "buvid") } returns QrAuthorizationResponse(0)
+        coEvery { api.confirmTvQrCode(any(), any()) } returns QrAuthorizationResponse(0)
         val service = OfficialQrAuthorizationService(api, ::session)
         val prepared = service.prepare(qr)
-        coVerify(exactly = 0) { api.confirmTvQrCode(any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { api.confirmTvQrCode(any(), any()) }
         service.confirm(prepared)
         coVerify(exactly = 1) {
-            api.confirmTvQrCode(key, cookie, build = 8430300, csrf = "csrf", scanningType = 1,
-                referer = qr.confirmationPage, mobiApp = "android", buvidHeader = "buvid")
+            api.confirmTvQrCode(
+                match {
+                    it["auth_code"] == key && it["access_key"] == "access-key" &&
+                        it["scanning_type"] == "1" && it.containsKey("sign")
+                },
+                buvidHeader = "buvid",
+            )
         }
     }
 
@@ -156,7 +161,7 @@ class OfficialQrAuthorizationServiceTest {
         val prepared = service.prepare(request(BilibiliLoginQrType.TV))
         current = QrAuthorizationSession("other-session", "other-csrf", 7, "buvid")
         assertFailsWith<QrAuthorizationException> { service.confirm(prepared) }
-        coVerify(exactly = 0) { api.confirmTvQrCode(any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { api.confirmTvQrCode(any(), any()) }
     }
 
     @Test
@@ -175,7 +180,7 @@ class OfficialQrAuthorizationServiceTest {
     fun `valid cookie can still be rejected by TV authorization endpoint`() = runTest {
         val api = mockk<PassportApi>()
         coEvery { api.validateCookieSession(cookie) } returns loggedIn
-        coEvery { api.confirmTvQrCode(any(), any(), any(), any(), any(), any(), any(), any()) } returns QrAuthorizationResponse(-101)
+        coEvery { api.confirmTvQrCode(any(), any()) } returns QrAuthorizationResponse(-101)
         val service = OfficialQrAuthorizationService(api, ::session)
         val prepared = service.prepare(request(BilibiliLoginQrType.TV))
         val error = assertFailsWith<QrAuthorizationException> { service.confirm(prepared) }
@@ -189,7 +194,7 @@ class OfficialQrAuthorizationServiceTest {
         val service = OfficialQrAuthorizationService(api, ::session)
         val prepared = service.prepare(request(BilibiliLoginQrType.TV))
         assertFailsWith<QrAuthorizationException> { service.confirm(prepared) }
-        coVerify(exactly = 0) { api.confirmTvQrCode(any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { api.confirmTvQrCode(any(), any()) }
     }
 
     @Test
