@@ -45,6 +45,8 @@ internal fun HorizontalVideoCardFrame(
     compactPartition: Boolean = false,
     allowPortraitCover: Boolean = false,
     fillInfoHeight: Boolean = compactPartition,
+    /** Shrinks the side-by-side cover (and with it the row height); 1 keeps the shared size. */
+    coverWidthScale: Float = 1f,
 ) {
     // MD3、Miuix 和玻璃共用布局；封面保持所选比例。
     val effectiveAspectRatio = coverAspectRatio.takeIf {
@@ -133,7 +135,8 @@ internal fun HorizontalVideoCardFrame(
                         (width - gap - minOf(92.dp.roundToPx(), (width - gap).coerceAtLeast(0) / 2)).coerceAtLeast(0),
                     )
                 } else {
-                    (width * widthFraction).toInt().coerceAtMost(width - gap)
+                    (width * widthFraction * coverWidthScale.coerceIn(0f, 1f)).toInt()
+                        .coerceAtMost(width - gap)
                 }
                 val coverHeight = (coverWidth / effectiveAspectRatio).toInt()
                 val infoWidth = (width - gap - coverWidth).coerceAtLeast(0)
