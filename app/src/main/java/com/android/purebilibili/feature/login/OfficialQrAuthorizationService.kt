@@ -56,15 +56,16 @@ internal class OfficialQrAuthorizationService(
         // CookieJar can initialize buvid during validation; it does not change account identity.
         val verifiedSession = readSession()
         if (!session.matches(verifiedSession)) throw QrAuthorizationException("当前账号已变化，请重新扫码")
+        // Both web and TV confirmation endpoints authenticate via access_key + app sign.
+        require(session.accessToken.isNotBlank()) {
+            "本机缺少 App 登录凭证（access_key），请用 App 方式重新登录本应用后再扫码"
+        }
         var location: String? = null
         var locationDiffers = false
         var transient = false
         if (qr.type == BilibiliLoginQrType.WEB) {
             // Web scan-authorization authenticates via access_key + android64 app sign;
             // SESSDATA cookies are ignored by these endpoints (PiliPlus issue #2933).
-            require(session.accessToken.isNotBlank()) {
-                "本机缺少 App 登录凭证（access_key），请用 App 方式重新登录本应用后再扫码"
-            }
             // Official flow registers the scan with GET check before POST confirm.
             requireSuccess(api.checkWebQrCode(
                 signedWebParams(qr.key, session)
@@ -111,27 +112,32 @@ internal class OfficialQrAuthorizationService(
                 )
             )
             BilibiliLoginQrType.TV -> api.confirmTvQrCode(
-                authCode = qr.key, cookieHeader = prepared.cookie, csrf = session.csrf,
-                referer = qr.confirmationPage, buvidHeader = session.buvid,
+                signedWebParams(
+                    qr.key, session,
+                    codeField = "auth_code",
+                    extra = mapOf("scanning_type" to "1"),
+                ),
+                buvidHeader = session.buvid,
             )
         }
         requireSuccess(response, endpoint = if (qr.type == BilibiliLoginQrType.WEB) "confirm" else "tv-confirm")
     }
 
-    /** Signed query/form params shared by the web check, scene and confirm endpoints. */
+    /** Signed query/form params shared by the web check, scene, confirm and TV confirm endpoints. */
     private fun signedWebParams(
         key: String,
         session: QrAuthorizationSession,
         extra: Map<String, String> = emptyMap(),
+        codeField: String = "qrcode_key",
     ): Map<String, String> {
         val params = mapOf(
             "access_key" to session.accessToken,
+            codeField to key,
             "build" to "8430300",
             "csrf" to session.csrf,
             "disable_rcmd" to "0",
             "mobi_app" to "android",
             "platform" to "android",
-            "qrcode_key" to key,
             "statistics" to """{"appId":1,"platform":3,"version":"8.43.0","abtest":""}""",
             "ts" to com.android.purebilibili.core.network.AppSignUtils.getTimestamp().toString(),
         ) + extra

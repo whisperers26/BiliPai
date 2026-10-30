@@ -59,10 +59,18 @@ fun StoryScreen(
     LaunchedEffect(context) {
         engagementViewModel.initWithContext(context)
     }
+    val coinSuccessHaptic = androidx.compose.runtime.rememberUpdatedState(
+        com.android.purebilibili.feature.video.ui.components.rememberVideoActionSuccessHaptic(isActive)
+    )
     LaunchedEffect(engagementViewModel) {
         engagementViewModel.events.collect { event ->
             when (event) {
                 is VideoEngagementEvent.Message -> playerViewModel.toast(event.text)
+                is VideoEngagementEvent.CoinSucceeded -> {
+                    if (engagementViewModel.uiState.value.subject == event.subject &&
+                        com.android.purebilibili.feature.video.viewmodel.matchesVideoEngagementAccount(event.accountSession)
+                    ) coinSuccessHaptic.value()
+                }
                 is VideoEngagementEvent.OpenFollowGroups ->
                     playerViewModel.showFollowGroupDialogForUser(event.mid)
                 is VideoEngagementEvent.LoadVideo ->
@@ -84,6 +92,9 @@ fun StoryScreen(
             null
         }
     }
+    LaunchedEffect(viewModel, seedBvid) {
+        viewModel.startFeed(seedBvid)
+    }
     val portraitFeed = remember(uiState.items, seed) {
         buildStoryPortraitFeed(uiState.items, seed = seed)
     }
@@ -95,14 +106,14 @@ fun StoryScreen(
             .background(Color.Black)
     ) {
         when {
-            uiState.isLoading && uiState.items.isEmpty() -> {
+            portraitFeed == null && uiState.isLoading -> {
                 com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
                     modifier = Modifier.align(Alignment.Center),
                     color = Color.White
                 )
             }
 
-            uiState.error != null && uiState.items.isEmpty() -> {
+            portraitFeed == null && uiState.error != null -> {
                 StoryErrorState(
                     message = uiState.error ?: "加载失败",
                     onRetry = viewModel::refresh,
@@ -123,6 +134,10 @@ fun StoryScreen(
                     initialBvid = portraitFeed.initialInfo.bvid,
                     initialInfo = portraitFeed.initialInfo,
                     recommendations = portraitFeed.recommendations,
+                    recommendationsManagedExternally = true,
+                    recommendationLoadInProgress = uiState.isLoading,
+                    recommendationLoadError = uiState.error,
+                    onLoadMoreRecommendations = viewModel::loadMoreStories,
                     onlyVerticalRecommendations = onlyVerticalRecommendations,
                     isActive = isActive,
                     onBack = onBack,

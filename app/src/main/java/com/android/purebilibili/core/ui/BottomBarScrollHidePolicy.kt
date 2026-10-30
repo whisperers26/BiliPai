@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import com.android.purebilibili.core.store.SettingsManager
@@ -120,6 +121,19 @@ fun rememberStickyBottomBarContentPadding(
     return if (autoHideEnabled) stickyBottomPadding else liveBottomPadding
 }
 
+/** 听视频小横条悬浮在内容上方时，列表/悬浮按钮需要上浮的额外避让高度。 */
+val NowPlayingBarOverlayAvoidancePadding: androidx.compose.ui.unit.Dp =
+    androidx.compose.ui.unit.Dp(76f)
+
+/** 订阅听视频小横条是否悬浮在内容上方（AppNavigation 全局发布）。 */
+@Composable
+fun rememberNowPlayingBarOverlayVisible(): Boolean {
+    return com.android.purebilibili.feature.audio.player.AudioNowPlayingSession
+        .barOverlayVisible
+        .collectAsStateWithLifecycle()
+        .value
+}
+
 /**
  * 列表页共用 nested-scroll：连续累计偏移（搜索胶囊）+ 底栏显隐意图。
  */
@@ -134,6 +148,8 @@ class BottomBarScrollHideConnection(
 ) : NestedScrollConnection {
 
     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        // 预加载或保留页面不能更新底栏连续偏移，也不能参与显隐判断。
+        if (!isActivePage()) return Offset.Zero
         val nextOffset = resolveNextHomeGlobalScrollOffset(
             currentOffset = chromeScrollOffset.floatValue,
             scrollDeltaY = available.y,
@@ -142,7 +158,7 @@ class BottomBarScrollHideConnection(
         if (nextOffset != null) {
             chromeScrollOffset.floatValue = nextOffset
         }
-        if (!autoHideEnabled() || !isActivePage()) return Offset.Zero
+        if (!autoHideEnabled()) return Offset.Zero
 
         val update = reduceBottomBarScrollHideDelta(
             previousState = hideState.value,

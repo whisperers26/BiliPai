@@ -28,16 +28,16 @@ class ListBottomBarScrollHideStructureTest {
         assertTrue(commonListSource.contains("shouldAutoHideBottomBarOnScroll("))
         assertTrue(watchLaterSource.contains("shouldAutoHideBottomBarOnScroll("))
 
-        // 收藏分区与收藏夹卡片列表必须把真实滚动状态交回 CommonList 追踪。
+        // 收藏分区与收藏夹卡片网格（fork 的全宽网格）必须把真实滚动状态交回 CommonList 追踪。
         assertTrue(commonListSource.contains("gridState = favoriteCategoryGridState"))
-        assertTrue(commonListSource.contains("listState = favoriteFolderListState"))
+        assertTrue(commonListSource.contains("gridState = favoriteFolderGridState"))
         assertTrue(favoriteCategorySource.contains("state = gridState"))
 
         // 视频 Tab 卡片列表不得再被 FavoriteContentMode.PAGER 误路由到废弃网格状态。
         val activeScrollStateSource = commonListSource
-            .substringAfter("val activeCommonListScrollState = remember(")
+            .substringAfter("val activeCommonListScrollState: () -> CommonListScrollState = remember(")
             .substringBefore("LaunchedEffect(activeCommonListScrollState)")
-        assertTrue(activeScrollStateSource.contains("CommonListScrollState.List(favoriteFolderListState)"))
+        assertTrue(activeScrollStateSource.contains("CommonListScrollState.FolderGrid(favoriteFolderGridState)"))
         assertFalse(activeScrollStateSource.contains("FavoriteContentMode.PAGER"))
     }
 

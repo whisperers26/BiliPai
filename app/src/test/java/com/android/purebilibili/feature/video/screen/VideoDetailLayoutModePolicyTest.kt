@@ -11,6 +11,32 @@ import kotlin.test.assertTrue
 
 class VideoDetailLayoutModePolicyTest {
     @Test
+    fun inheritedFullscreenUsesTargetVideoOrientationForAllFourDirectionPairs() {
+        for (sourceVertical in listOf(false, true)) {
+            for (targetVertical in listOf(false, true)) {
+                assertEquals(
+                    if (targetVertical) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+                    resolvePhoneVideoRequestedOrientation(
+                        autoRotateEnabled = true,
+                        fullscreenMode = FullscreenMode.AUTO,
+                        isCompactDevice = true,
+                        isOrientationDrivenFullscreen = true,
+                        isFullscreenMode = !sourceVertical,
+                        manualFullscreenRequested = true,
+                        isVerticalVideo = targetVertical,
+                        currentRequestedOrientation = if (sourceVertical) {
+                            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        } else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+                        isCurrentlyLandscape = !sourceVertical,
+                    ),
+                    "sourceVertical=$sourceVertical targetVertical=$targetVertical",
+                )
+            }
+        }
+    }
+
+    @Test
     fun sensorLandscapeConfiguration_doesNotBecomeAnOppositeFixedSide() {
         assertEquals(
             null,
@@ -270,7 +296,6 @@ class VideoDetailLayoutModePolicyTest {
     }
 
     @Test
-    @Test
     fun floatingWindowFallback_detectsCurrentBoundsSmallerThanMaximum() {
         assertTrue(
             isWindowBoundsSmallerThanMaximum(
@@ -323,17 +348,6 @@ class VideoDetailLayoutModePolicyTest {
                 userRequestedFullscreen = false,
                 isInMultiWindowMode = false,
                 manualPortraitHoldActive = true,
-            )
-        )
-    }
-
-    @Test
-    fun systemSmallWindowFullscreenPolicy_requestsLandscapeOrientation() {
-        assertTrue(
-            shouldApplyStartFullscreenOrientationRequest(
-                startInFullscreen = true,
-                isOrientationDrivenFullscreen = true,
-                isLandscape = false
             )
         )
     }
@@ -486,27 +500,28 @@ class VideoDetailLayoutModePolicyTest {
     }
 
     @Test
-    fun phoneOrientationPolicy_autoRotateDisabled_followsSystemThroughFullscreen() {
-        assertEquals(
-            ActivityInfo.SCREEN_ORIENTATION_USER,
-            resolvePhoneVideoRequestedOrientation(
-                autoRotateEnabled = false,
-                fullscreenMode = FullscreenMode.AUTO,
-                isCompactDevice = true,
-                isOrientationDrivenFullscreen = true,
-                isFullscreenMode = false
-            )
-        )
-        assertEquals(
-            ActivityInfo.SCREEN_ORIENTATION_USER,
-            resolvePhoneVideoRequestedOrientation(
-                autoRotateEnabled = false,
-                fullscreenMode = FullscreenMode.AUTO,
-                isCompactDevice = true,
-                isOrientationDrivenFullscreen = true,
-                isFullscreenMode = true
-            )
-        )
+    fun phoneOrientationPolicy_autoRotateDisabled_staysPortraitDespiteSystemRotation() {
+        for (systemRotation in listOf(false, true)) {
+            for (fullscreen in listOf(false, true)) {
+                for (mode in listOf(FullscreenMode.AUTO, FullscreenMode.HORIZONTAL)) {
+                    assertEquals(
+                        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                        resolvePhoneVideoRequestedOrientation(
+                            autoRotateEnabled = false,
+                            systemAutoRotateEnabled = systemRotation,
+                            fullscreenMode = mode,
+                            isCompactDevice = true,
+                            isOrientationDrivenFullscreen = true,
+                            isFullscreenMode = fullscreen,
+                            manualFullscreenRequested = false,
+                            // 包括关闭开关时残留的横屏配置与方向请求。
+                            isCurrentlyLandscape = fullscreen,
+                            currentRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+                        )
+                    )
+                }
+            }
+        }
     }
 
     @Test

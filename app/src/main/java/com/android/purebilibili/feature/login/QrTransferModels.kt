@@ -31,17 +31,7 @@ data class BiliPaiTransferEnvelope(
     val expiresAt: Long,
 )
 
-@Serializable
-data class BiliPaiSessionBundle(
-    val mid: Long,
-    val sessData: String,
-    val csrf: String = "",
-    val accessToken: String = "",
-    val refreshToken: String = "",
-    val accessTokenPlatform: String = "tv",
-    val buvid3: String = "",
-    val isVip: Boolean = false,
-)
+typealias BiliPaiSessionBundle = com.android.purebilibili.data.session.BiliPaiSessionBundle
 
 /** Version bump of the encrypted payload; receivers reject mismatches explicitly. */
 const val BILIPAI_TRANSFER_PAYLOAD_VERSION = 2
@@ -50,7 +40,7 @@ const val BILIPAI_TRANSFER_PAYLOAD_VERSION = 2
 data class BiliPaiTransferredJsPlugin(
     val manifest: com.android.purebilibili.core.plugin.js.BiliPaiJsPluginManifest,
     val script: String,
-    val grantedCapabilities: Set<com.android.purebilibili.core.plugin.PluginCapability> = emptySet(),
+    val grantedCapabilities: Set<com.android.purebilibili.plugin.sdk.PluginCapability> = emptySet(),
     val enabled: Boolean = false,
 )
 
@@ -107,6 +97,13 @@ object BiliPaiTransferCodec {
     fun encodeEnvelope(envelope: BiliPaiTransferEnvelope): String =
         "bilipai://transfer/envelope?payload=${encode(json.encodeToString(BiliPaiTransferEnvelope.serializer(), envelope))}"
 
+    /** Keep the QR capacity decision in the codec, before the UI attempts to draw it. */
+    internal fun encodeEnvelopeQrs(envelope: BiliPaiTransferEnvelope): List<String> {
+        val encoded = encodeEnvelope(envelope)
+        return if (encoded.length <= SINGLE_QR_MAX_CHARS) listOf(encoded)
+            else BiliPaiTransferChunks.split(envelope.transferId, encoded)
+    }
+
     fun decodeEnvelope(raw: String): BiliPaiTransferEnvelope {
         require(raw.length <= CHUNKED_ENVELOPE_MAX_CHARS) { "传输内容过大" }
         require(raw.startsWith("bilipai://transfer/envelope?payload=")) { "不是 BiliPai 加密传输二维码" }
@@ -129,8 +126,8 @@ object BiliPaiTransferCodec {
     private const val MAX_QR_CHARS = 100_000
 
     /** Single-QR envelope cap; larger envelopes go through [BiliPaiTransferChunks]. */
-    internal const val SINGLE_QR_MAX_CHARS = 90_000
+    internal const val SINGLE_QR_MAX_CHARS = 1_800
 
-    /** Reassembled envelope may span 128 x 1_500 chunk chars of base64. */
-    private const val CHUNKED_ENVELOPE_MAX_CHARS = 200_000
+    /** 128 x 1,500 base64 chunk characters decode to at most 144,000 envelope bytes. */
+    private const val CHUNKED_ENVELOPE_MAX_CHARS = 144_000
 }

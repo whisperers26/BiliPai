@@ -85,6 +85,7 @@ internal fun LargeScreenDetailRailPane(
     infoHeaderContent: @Composable (Modifier, onExpandedChange: (Boolean) -> Unit) -> Unit,
     relatedContent: @Composable (Modifier) -> Unit,
     commentsContent: @Composable (Modifier) -> Unit,
+    chromeAlphaProvider: () -> Float = { 1f },
     modifier: Modifier = Modifier,
 ) {
     val bvid = success.info.bvid
@@ -152,9 +153,14 @@ internal fun LargeScreenDetailRailPane(
             onCommentSearchClick = { showCommentSearch = true },
             modifier = Modifier
                 .width(LARGE_SCREEN_DETAIL_RAIL_WIDTH_DP.dp)
-                .fillMaxHeight(),
+                .fillMaxHeight()
+                .videoDetailTransitionChrome(chromeAlphaProvider),
         )
-        VerticalDivider(modifier = Modifier.fillMaxHeight(), color = dividerColor, thickness = 1.dp)
+        VerticalDivider(
+            modifier = Modifier.fillMaxHeight().videoDetailTransitionChrome(chromeAlphaProvider),
+            color = dividerColor,
+            thickness = 1.dp,
+        )
         HorizontalPager(
             state = pagerState,
             key = { index -> "${bvid}_${pages[index].name}" },
@@ -182,7 +188,10 @@ internal fun LargeScreenDetailRailPane(
                                 },
                             ) { expanded -> infoExpanded = expanded }
                             if (!infoExpanded) {
-                                HorizontalDivider(color = dividerColor)
+                                HorizontalDivider(
+                                    modifier = Modifier.videoDetailTransitionChrome(chromeAlphaProvider),
+                                    color = dividerColor,
+                                )
                                 relatedStateHolder.SaveableStateProvider("${bvid}_related") {
                                     relatedContent(
                                         Modifier
@@ -252,6 +261,7 @@ private fun LargeScreenDetailRail(
             tapPressRefractionEnabled = false,
             indicatorPositionProvider = pagePositionProvider,
             isScrollInProgressProvider = isPageScrollInProgress,
+            role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
         )
         Spacer(modifier = Modifier.height(8.dp))
         HorizontalDivider(
@@ -266,6 +276,7 @@ private fun LargeScreenDetailRail(
                     info = info,
                     isFavorited = engagementState.isFavorited,
                     isLiked = engagementState.isLiked,
+                    likeStatusKnown = engagementState.likeStatusKnown,
                     isDisliked = engagementState.isDisliked,
                     coinCount = engagementState.coinCount,
                     downloadProgress = downloadProgress,
@@ -304,6 +315,7 @@ private fun LargeScreenDetailRail(
                     compactMiuixWhenTwoOptions = true,
                     dragSelectionEnabled = true,
                     tapPressRefractionEnabled = false,
+                    role = com.android.purebilibili.core.ui.components.AppTabRowRole.FILTER,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {

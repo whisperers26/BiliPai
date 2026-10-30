@@ -536,19 +536,6 @@ internal fun resolveVideoDetailFullscreenMode(
     return isLandscape
 }
 
-internal fun shouldApplyStartFullscreenOrientationRequest(
-    startInFullscreen: Boolean,
-    isOrientationDrivenFullscreen: Boolean,
-    isLandscape: Boolean
-): Boolean {
-    if (!startInFullscreen) return false
-    if (!isOrientationDrivenFullscreen) return false
-    if (isLandscape) return false
-    // 系统小窗和分屏也应像普通手机全屏一样请求横屏；可调整窗口的实际边界
-    // 由 Android/ROM 根据 Activity 的方向请求处理。
-    return true
-}
-
 internal fun resolvePhoneFullscreenEnterOrientation(
     fullscreenMode: com.android.purebilibili.core.store.FullscreenMode,
     isVerticalVideo: Boolean,
@@ -645,6 +632,13 @@ internal fun resolvePhoneVideoRequestedOrientation(
     if (isPortraitFullscreen) {
         return null
     }
+    // Freeform bounds can still report landscape from the previous window. A normal
+    // phone detail entry stays portrait until the user explicitly enters fullscreen.
+    if (isInMultiWindowMode && isCompactDevice &&
+        !isFullscreenMode && !manualFullscreenRequested
+    ) {
+        return ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
     if (!shouldApplyPhoneAutoRotatePolicy(isCompactDevice)) {
         return when {
             isFullscreenMode || manualFullscreenRequested -> {
@@ -656,7 +650,7 @@ internal fun resolvePhoneVideoRequestedOrientation(
                 resolveStableOrientationWhenAutoRotateDisabled(
                     requestedOrientation = fullscreenOrientation,
                     currentRequestedOrientation = currentRequestedOrientation,
-                    autoRotateEnabled = systemAutoRotateEnabled
+                    autoRotateEnabled = autoRotateEnabled || systemAutoRotateEnabled
                 )
             }
             autoRotateEnabled -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
@@ -720,7 +714,7 @@ internal fun resolvePhoneVideoRequestedOrientation(
         ) ?: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         // The app switch controls portrait/fullscreen transitions. A manual fullscreen
         // still follows both landscape sides when system rotation is enabled.
-        if (systemAutoRotateEnabled) {
+        if (autoRotateEnabled || systemAutoRotateEnabled) {
             preserveCurrentExactLandscapeSideWhileFullscreen(
                 requestedOrientation = fullscreenOrientation,
                 currentRequestedOrientation = currentRequestedOrientation,
@@ -735,8 +729,9 @@ internal fun resolvePhoneVideoRequestedOrientation(
             )
         }
     } else {
-        // System rotation can now enter and leave landscape fullscreen on its own.
-        ActivityInfo.SCREEN_ORIENTATION_USER
+        // 应用关闭自动横竖屏后，内嵌播放必须固定竖屏。USER 会继续跟随系统旋转，
+        // 绕过应用开关进入横屏，而自动返回竖屏的监听已关闭，导致单向切换。
+        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     }
 }
 
@@ -990,7 +985,7 @@ internal fun shouldObservePhoneAutoRotate(
     manualFullscreenRequested: Boolean = false,
     systemAutoRotateEnabled: Boolean = true,
 ): Boolean {
-    if (!systemAutoRotateEnabled) return false
+    if (!systemAutoRotateEnabled && !autoRotateEnabled) return false
     // A cover display may be classified as a compact phone when its metrics refresh.
     // Keep tracking both landscape sides throughout fullscreen, regardless of that label.
     // Even with the app's auto-rotate switch off, an explicit fullscreen exit holds

@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.ui.AppContentColors
+
 import coil3.request.crossfade
 
 import android.widget.Toast
@@ -9,9 +11,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,9 +22,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
+import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppGlassMenuSource
+import com.android.purebilibili.core.ui.components.appGlassMenuSource
+import com.android.purebilibili.core.ui.components.rememberAppGlassMenuSource
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,7 +45,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -76,6 +84,7 @@ import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellShared
 import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.core.util.CardPositionManager
+import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
@@ -121,7 +130,7 @@ fun RelatedVideosHeader() {
             AppText(
                 text = "\u66f4\u591a\u63a8\u8350",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = AppContentColors.primaryText()
             )
         }
     }
@@ -151,6 +160,13 @@ internal fun resolveRelatedVideoSharedElementSourceRoute(sourceRoute: String?): 
         ?: VideoRoute.base
 }
 
+/** 同页切集只改变播放内容；来源身份始终属于承载相关推荐的导航 entry。 */
+internal fun resolveRelatedVideoCardHostRoute(entryRoute: String?, displayedBvid: String): String {
+    val route = entryRoute?.substringBefore('?')?.trim()
+    return route?.takeIf { it.startsWith("video/") && it.removePrefix("video/").isNotBlank() }
+        ?: "video/${displayedBvid.trim()}"
+}
+
 internal fun chunkRelatedVideosForHomeStyleGrid(
     videos: List<RelatedVideo>,
 ): List<List<RelatedVideo>> {
@@ -160,6 +176,7 @@ internal fun chunkRelatedVideosForHomeStyleGrid(
 
 @Composable
 internal fun rememberRelatedVideoCardLayout(): HomeFeedCardLayout {
+    LocalRelatedVideoCardLayout.current?.let { return it }
     val context = LocalContext.current
     val homeFeedCardStyle by SettingsManager
         .getHomeFeedCardStyle(context)
@@ -169,7 +186,13 @@ internal fun rememberRelatedVideoCardLayout(): HomeFeedCardLayout {
     }
 }
 
+/** 详情加载、占位交接和真实推荐共用页面已读取的卡片样式。 */
+internal val LocalRelatedVideoCardLayout = androidx.compose.runtime.staticCompositionLocalOf<HomeFeedCardLayout?> { null }
 
+internal const val RELATED_VIDEO_SKELETON_ROW_COUNT = 3
+
+/** 点击前同步读取父页的跳转锁，避免被拒绝的连点先覆盖来源卡片快照。 */
+internal val LocalRelatedVideoNavigationAllowed = compositionLocalOf<() -> Boolean> { { true } }
 
 /**
  * 相关推荐单列横卡：点击时冻结来源标识、几何与 chrome，供整卡 Morph 及逐层返回。
@@ -181,11 +204,12 @@ fun RelatedVideoItem(
     video: RelatedVideo,
     isFollowed: Boolean = false,
     showUpBadge: Boolean = true,
-    coverAspectRatio: Float = RELATED_VIDEO_CARD_COVER_ASPECT_RATIO,
+    coverAspectRatio: Float = com.android.purebilibili.core.ui.videoCardCoverAspectRatio(),
     stacked: Boolean = false,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
-    onMoreClick: (() -> Unit)? = null
+    onMoreClick: (() -> Unit)? = null,
+    moreMenuSource: AppGlassMenuSource? = null,
 ) {
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
@@ -226,7 +250,10 @@ fun RelatedVideoItem(
     )
     val cardCoordinatesRef = remember { object { var value: LayoutCoordinates? = null } }
     val coverCoordinatesRef = remember { object { var value: LayoutCoordinates? = null } }
-    val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(video.bvid)
+    val infoCoordinatesRef = remember { object { var value: LayoutCoordinates? = null } }
+    val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(
+        video.bvid, enabled = sharedTransitionEnabled,
+    )
     val cardShape = AppShapes.container(ContainerLevel.Card)
     val cardCornerRadiusDp = AppShapes.containerCornerDp(ContainerLevel.Card).value.roundToInt()
     val context = LocalContext.current
@@ -242,14 +269,16 @@ fun RelatedVideoItem(
             .diskCacheKey(stationaryCoverUrl)
             .build()
     }
-    val triggerRelatedVideoClick = {
+    val relatedVideoNavigationAllowed = LocalRelatedVideoNavigationAllowed.current
+    val triggerRelatedVideoClick = relatedClick@{
+        if (!relatedVideoNavigationAllowed()) return@relatedClick
         cardCoordinatesRef.value
             ?.takeIf { it.isAttached }
-            ?.boundsInRoot()
+            ?.videoCardSourceBoundsInRoot()
             ?.let { bounds ->
                 val sourceCoverBounds = coverCoordinatesRef.value
                     ?.takeIf { it.isAttached }
-                    ?.boundsInRoot()
+                    ?.videoCardSourceBoundsInRoot()
                 CardPositionManager.recordVideoCardPosition(
                     bvid = video.bvid,
                     sourceRoute = sourceRoute,
@@ -264,6 +293,9 @@ fun RelatedVideoItem(
                     } else {
                         VideoCardSourceLayout.SIDE_BY_SIDE
                     },
+                    infoBounds = infoCoordinatesRef.value
+                        ?.takeIf { it.isAttached }
+                        ?.videoCardSourceBoundsInRoot(),
                     sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
                         title = video.title,
                         ownerName = video.owner.name,
@@ -292,10 +324,8 @@ fun RelatedVideoItem(
         Unit
     }
     // 排版对齐首页单列卡片:标题用 feed 紧凑级,统计用 labelSmall。
-    val contentTypography = com.android.purebilibili.core.ui.feedContentTypography(
-        com.android.purebilibili.core.ui.FeedTitleHierarchy.Standard,
-    )
-    val moreHaptic = rememberHapticFeedback()
+    val contentTypography = com.android.purebilibili.feature.home.components.cards.horizontalVideoCardTypography()
+    val moreHaptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.MENUS)
 
     Box(
         modifier = modifier
@@ -314,16 +344,20 @@ fun RelatedVideoItem(
                 clipShape = cardShape,
                 crossfadeSourceContent = true,
             )
-            .clip(cardShape)
             .then(nativeCardSnapshot.modifier)
+            .clip(cardShape)
             .background(AppSurfaceTokens.cardContainer())
             .clickable(onClick = triggerRelatedVideoClick)
     ) {
         HorizontalVideoCardFrame(
             coverAspectRatio = coverAspectRatio,
             stacked = stacked,
+            fillInfoHeight = true,
             coverModifier = Modifier.onGloballyPositioned { coordinates ->
                 coverCoordinatesRef.value = coordinates
+            },
+            infoModifier = Modifier.onGloballyPositioned { coordinates ->
+                infoCoordinatesRef.value = coordinates
             },
             coverOverlayModifier = nativeCardSnapshot.coverOverlayModifier,
             coverContent = {
@@ -336,20 +370,9 @@ fun RelatedVideoItem(
                 )
             },
             coverOverlayContent = {
-                AppText(
+                com.android.purebilibili.feature.home.components.cards.VideoCardCoverDurationText(
                     text = FormatUtils.formatDuration(video.duration),
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        shadow = Shadow(
-                            color = Color.Black.copy(alpha = 0.6f),
-                            blurRadius = 4f,
-                            offset = Offset(0f, 1f),
-                        ),
-                    ),
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp),
                 )
             },
             infoContent = {
@@ -359,9 +382,12 @@ fun RelatedVideoItem(
                     maxLines = videoCardTitleMaxLines(),
                     minLines = 1,
                     overflow = videoCardTitleOverflow(),
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = AppContentColors.primaryText(),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (!stacked) {
+                    Spacer(Modifier.weight(1f))
+                }
                 Column(verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -375,7 +401,7 @@ fun RelatedVideoItem(
                             AppText(
                                 text = publishTime,
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = AppContentColors.secondaryText(),
                                 maxLines = 1,
                                 softWrap = false,
                                 overflow = TextOverflow.Ellipsis,
@@ -384,7 +410,7 @@ fun RelatedVideoItem(
                         }
                         UpBadgeName(
                             name = video.owner.name,
-                            inlineTrailingContent = if (isFollowed) {
+                            nameLeadingContent = if (isFollowed) {
                                 {
                                     val followVisualPolicy = resolveVideoFollowVisualPolicy(
                                         isFollowing = true,
@@ -396,8 +422,8 @@ fun RelatedVideoItem(
                                             fontWeight = FontWeight.Medium,
                                         ),
                                         color = when (followVisualPolicy.relatedBadgeTone) {
-                                            FollowBadgeTone.PRIMARY -> MaterialTheme.colorScheme.primary
-                                            null -> MaterialTheme.colorScheme.onSurfaceVariant
+                                            FollowBadgeTone.PRIMARY -> AppContentColors.accent()
+                                            null -> AppContentColors.secondaryText()
                                         },
                                     )
                                 }
@@ -411,7 +437,9 @@ fun RelatedVideoItem(
                                 {
                                     AsyncImage(
                                         model = ImageRequest.Builder(context)
-                                            .data(FormatUtils.fixImageUrl(video.owner.face))
+                                            .data(FormatUtils.fixImageUrl(
+                                                video.owner.face
+                                            ))
                                             .crossfade(false)
                                             .build(),
                                         contentDescription = null,
@@ -426,9 +454,9 @@ fun RelatedVideoItem(
                                 null
                             },
                             nameStyle = MaterialTheme.typography.labelMedium,
-                            nameColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            badgeTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                            badgeBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                            nameColor = AppContentColors.secondaryText(),
+                            badgeTextColor = AppContentColors.secondaryText().copy(alpha = 0.85f),
+                            badgeBorderColor = AppContentColors.secondaryText().copy(alpha = 0.35f),
                             showUpBadge = showUpBadge,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -445,8 +473,8 @@ fun RelatedVideoItem(
                 {
                     Box(
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
                             .size(48.dp)
+                            .then(moreMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = moreClick) } ?: Modifier)
                             .clip(CircleShape)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
@@ -457,12 +485,11 @@ fun RelatedVideoItem(
                             },
                         contentAlignment = Alignment.Center,
                     ) {
-                        AppText(
-                            text = "⋮",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 2.dp),
+                        AppIcon(
+                            imageVector = Icons.Filled.MoreVert,
+                            contentDescription = "更多操作",
+                            tint = AppContentColors.secondaryText(),
+                            modifier = Modifier.size(18.dp),
                         )
                     }
                 }
@@ -475,7 +502,7 @@ fun RelatedVideoItem(
 internal fun RelatedVideoGridRow(
     videos: List<RelatedVideo>,
     cardLayout: HomeFeedCardLayout,
-    cardPresentation: RelatedVideoCardLayout? = null,
+    cardPresentation: RelatedVideoCardLayout,
     followingMids: Set<Long> = emptySet(),
     showUpBadge: Boolean = true,
     onVideoClick: (RelatedVideo) -> Unit,
@@ -484,31 +511,29 @@ internal fun RelatedVideoGridRow(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var actionVideo by remember { mutableStateOf<RelatedVideo?>(null) }
+    val actionMenuSource = rememberAppGlassMenuSource()
     var blockCreatorRequest by remember {
         mutableStateOf<RelatedVideoBlockRequest?>(null)
     }
     var isBlockingCreator by remember { mutableStateOf(false) }
     val blockedUpRepository = remember { BlockedUpRepository.getInstance(context) }
-    BoxWithConstraints(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = cardLayout.outerPaddingDp.dp, vertical = 2.dp)
     ) {
-        val resolvedCardPresentation = cardPresentation
-            ?: resolveRelatedVideoCardLayout(maxWidth.value.toInt())
-        Row(modifier = Modifier.fillMaxWidth()) {
         videos.firstOrNull()?.let { video ->
             RelatedVideoItem(
                 video = video,
                 isFollowed = video.owner.mid in followingMids,
                 showUpBadge = showUpBadge,
                 coverAspectRatio = cardLayout.coverAspectRatio,
-                stacked = resolvedCardPresentation == RelatedVideoCardLayout.STACKED,
+                stacked = cardPresentation == RelatedVideoCardLayout.STACKED,
                 modifier = Modifier.fillMaxWidth(),
                 onClick = { onVideoClick(video) },
-                onMoreClick = { actionVideo = video }
+                onMoreClick = { actionVideo = video },
+                moreMenuSource = actionMenuSource,
             )
-        }
         }
     }
 
@@ -516,6 +541,7 @@ internal fun RelatedVideoGridRow(
     if (pendingVideo != null) {
         RelatedVideoActionSheet(
             video = pendingVideo,
+            source = actionMenuSource,
             onWatchLater = {
                 scope.launch {
                     val result = withContext(Dispatchers.IO) {
@@ -596,7 +622,7 @@ internal fun RelatedVideoGridRow(
                         }
                     }
                 ) {
-                    AppText("屏蔽", color = Color.Red)
+                    AppText("屏蔽", color = AppContentColors.error())
                 }
             },
             dismissButton = {
