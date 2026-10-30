@@ -570,6 +570,18 @@ enum class HomeFeedCardStyle(val value: Int, val label: String, val subtitle: St
     }
 }
 
+/** 视频页下方「更多推荐」卡片的高度；[HIGH] 即原有尺寸。 */
+enum class RelatedVideoCardHeight(val value: Int, val label: String) {
+    LOW(0, "低"),
+    MEDIUM(1, "中"),
+    HIGH(2, "高");
+
+    companion object {
+        fun fromValue(value: Int): RelatedVideoCardHeight =
+            entries.find { it.value == value } ?: HIGH
+    }
+}
+
 enum class HomeDurationStyle(val value: Int, val label: String) {
     OUTSIDE_COVER(0, "封面外"),
     OVERLAY_TEXT_ONLY(1, "封面内无底色"),
@@ -695,6 +707,7 @@ data class HomeSettings(
     val pinchToChangeGridColumnsEnabled: Boolean = true, // [新增] 双指缩放切换网格列数
     val homeFeedCardWidthPreset: HomeFeedCardWidthPreset = HomeFeedCardWidthPreset.AUTO,
     val homeFeedCardStyle: HomeFeedCardStyle = HomeFeedCardStyle.BILIPAI,
+    val relatedVideoCardHeight: RelatedVideoCardHeight = RelatedVideoCardHeight.HIGH,
     val homeHeroCarouselEnabled: Boolean = true,
     val homeHeroCarouselAutoplayEnabled: Boolean = false,
     val homeRefreshTipVisible: Boolean = true, // 推荐流刷新后在旧内容分界处显示提示
@@ -1631,6 +1644,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_HOME_FEED_CARD_WIDTH_PRESET =
         intPreferencesKey("home_feed_card_width_preset")
     private val KEY_HOME_FEED_CARD_STYLE = intPreferencesKey("home_feed_card_style")
+    private val KEY_RELATED_VIDEO_CARD_HEIGHT = intPreferencesKey("related_video_card_height")
     private val KEY_HOME_HERO_CAROUSEL_ENABLED =
         booleanPreferencesKey("home_hero_carousel_enabled")
     private val KEY_HOME_HERO_CAROUSEL_AUTOPLAY_ENABLED =
@@ -1900,6 +1914,9 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             ),
             homeFeedCardStyle = HomeFeedCardStyle.fromValue(
                 preferences[KEY_HOME_FEED_CARD_STYLE] ?: HomeFeedCardStyle.BILIPAI.value
+            ),
+            relatedVideoCardHeight = RelatedVideoCardHeight.fromValue(
+                preferences[KEY_RELATED_VIDEO_CARD_HEIGHT] ?: RelatedVideoCardHeight.HIGH.value
             ),
             homeHeroCarouselEnabled = preferences[KEY_HOME_HERO_CAROUSEL_ENABLED] ?: false,
             homeHeroCarouselAutoplayEnabled =
@@ -3442,6 +3459,19 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     suspend fun setHomeFeedCardStyle(context: Context, style: HomeFeedCardStyle) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_HOME_FEED_CARD_STYLE] = style.value
+        }
+    }
+
+    fun getRelatedVideoCardHeight(context: Context): Flow<RelatedVideoCardHeight> =
+        context.settingsDataStore.data.map { preferences ->
+            RelatedVideoCardHeight.fromValue(
+                preferences[KEY_RELATED_VIDEO_CARD_HEIGHT] ?: RelatedVideoCardHeight.HIGH.value
+            )
+        }
+
+    suspend fun setRelatedVideoCardHeight(context: Context, height: RelatedVideoCardHeight) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_RELATED_VIDEO_CARD_HEIGHT] = height.value
         }
     }
 
@@ -8787,6 +8817,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 SettingsShareSection.APPEARANCE
             ),
             IntShareablePreferenceDefinition(KEY_HOME_FEED_CARD_STYLE, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(KEY_RELATED_VIDEO_CARD_HEIGHT, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HOME_HERO_CAROUSEL_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HOME_HERO_CAROUSEL_AUTOPLAY_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_CARD_ANIMATION_ENABLED, SettingsShareSection.APPEARANCE),
