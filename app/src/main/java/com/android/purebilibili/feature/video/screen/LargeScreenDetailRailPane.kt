@@ -259,9 +259,6 @@ private fun LargeScreenDetailRail(
             modifier = Modifier.fillMaxWidth(),
             labelFontSize = 13.sp,
             compactMiuixWhenTwoOptions = true,
-            // The rail is a fixed 104dp; split it evenly so both labels stay readable.
-            forceEqualWidth = true,
-            minTabWidth = LARGE_SCREEN_DETAIL_RAIL_TAB_MIN_WIDTH_DP.dp,
             dragSelectionEnabled = true,
             tapPressRefractionEnabled = false,
             indicatorPositionProvider = pagePositionProvider,
