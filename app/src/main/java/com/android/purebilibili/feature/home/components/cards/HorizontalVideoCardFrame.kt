@@ -123,9 +123,7 @@ internal fun HorizontalVideoCardFrame(
             ) { measurables, constraints ->
                 val width = constraints.maxWidth
                 val gap = HORIZONTAL_VIDEO_CARD_COVER_INFO_GAP_DP.dp.roundToPx().coerceAtMost(width)
-                // 窄列表为封面留出更多空间；宽列表保留文字和操作区的空间。
-                val widthDp = width.toDp().value
-                val widthFraction = 0.55f - 0.10f * ((widthDp - 320f) / 160f).coerceIn(0f, 1f)
+                val widthFraction = resolveHorizontalVideoCardCoverWidthFraction(width.toDp().value)
                 // 同宽列表的封面尺寸固定，不随标题换行、关注标记或统计信息的高度变化。
                 val coverWidth = if (compactPartition) {
                     // 封面以 88dp 高度为基准，压缩封面宽度换取标题单行容量；窄窗口仍为文字保留空间。
