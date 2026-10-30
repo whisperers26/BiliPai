@@ -33,6 +33,7 @@ import com.android.purebilibili.core.ui.blur.hazeSourceCompat
 import com.android.purebilibili.core.ui.blur.topSolidProgressiveFade
 import com.android.purebilibili.core.ui.components.AppLiquidGlassBackToTopButton
 import com.android.purebilibili.core.ui.rememberBackToTopButtonEnabled
+import com.android.purebilibili.core.util.animateScrollToTopContinuously
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewSourceAnchor
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
@@ -231,7 +232,7 @@ internal fun BangumiCommentPanel(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = 20.dp, bottom = bottomPadding),
-                onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                onClick = { scope.launch { listState.animateScrollToTopContinuously() } },
             )
         }
     }
