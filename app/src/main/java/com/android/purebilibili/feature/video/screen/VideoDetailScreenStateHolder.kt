@@ -5885,6 +5885,8 @@ internal fun VideoDetailScreenStateHolder(
     androidx.compose.runtime.CompositionLocalProvider(
         LocalPlaybackResumeFeedback provides playbackEventState,
         com.android.purebilibili.feature.video.ui.components.LocalRelatedVideoCardLayout provides relatedVideoCardLayout,
+        com.android.purebilibili.feature.video.ui.components.LocalRelatedVideoCardHeight provides
+            homeSettings.relatedVideoCardHeight,
     ) {
     VideoDetailScreenContent(
         transitionState = transitionState,

@@ -498,6 +498,7 @@ fun AppearanceSettingsContent(
     val homeCardFrostedGlassEnabled = homeConfiguration.homeCardFrostedGlassEnabled
     val homeDurationStyle = homeConfiguration.homeDurationStyle
     val homeFeedCardStyle = homeConfiguration.homeFeedCardStyle
+    val relatedVideoCardHeight = homeConfiguration.relatedVideoCardHeight
     val homeHeroCarouselEnabled = homeConfiguration.homeHeroCarouselEnabled
     val homeHeroCarouselAutoplayEnabled = homeConfiguration.homeHeroCarouselAutoplayEnabled
     val storedThemeRoleOverrides = themeConfiguration.themeRoleOverrides
@@ -1875,6 +1876,30 @@ fun AppearanceSettingsContent(
                                 onSelectionChange = {
                                     scope.launch {
                                         SettingsManager.setHomeFeedCardStyle(context, it)
+                                    }
+                                }
+                            )
+                        }
+
+                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                        SettingsItemAnchor("appearance.related_video_card_height") {
+                            SettingsSingleChoicePreference(
+                                title = context.getString(R.string.related_video_card_height_title),
+                                subtitle = context.getString(R.string.related_video_card_height_subtitle),
+                                options = com.android.purebilibili.core.store.RelatedVideoCardHeight.entries.map {
+                                    AppSegmentOption(it, context.getString(when (it) {
+                                        com.android.purebilibili.core.store.RelatedVideoCardHeight.LOW ->
+                                            R.string.related_video_card_height_low
+                                        com.android.purebilibili.core.store.RelatedVideoCardHeight.MEDIUM ->
+                                            R.string.related_video_card_height_medium
+                                        com.android.purebilibili.core.store.RelatedVideoCardHeight.HIGH ->
+                                            R.string.related_video_card_height_high
+                                    }))
+                                },
+                                selectedValue = relatedVideoCardHeight,
+                                onSelectionChange = {
+                                    scope.launch {
+                                        SettingsManager.setRelatedVideoCardHeight(context, it)
                                     }
                                 }
                             )

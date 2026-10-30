@@ -45,6 +45,8 @@ internal fun HorizontalVideoCardFrame(
     compactPartition: Boolean = false,
     allowPortraitCover: Boolean = false,
     fillInfoHeight: Boolean = compactPartition,
+    /** Shrinks the side-by-side cover (and with it the row height); 1 keeps the shared size. */
+    coverWidthScale: Float = 1f,
 ) {
     // MD3、Miuix 和玻璃共用布局；封面保持所选比例。
     val effectiveAspectRatio = coverAspectRatio.takeIf {
@@ -123,9 +125,7 @@ internal fun HorizontalVideoCardFrame(
             ) { measurables, constraints ->
                 val width = constraints.maxWidth
                 val gap = HORIZONTAL_VIDEO_CARD_COVER_INFO_GAP_DP.dp.roundToPx().coerceAtMost(width)
-                // 窄列表为封面留出更多空间；宽列表保留文字和操作区的空间。
-                val widthDp = width.toDp().value
-                val widthFraction = 0.55f - 0.10f * ((widthDp - 320f) / 160f).coerceIn(0f, 1f)
+                val widthFraction = resolveHorizontalVideoCardCoverWidthFraction(width.toDp().value)
                 // 同宽列表的封面尺寸固定，不随标题换行、关注标记或统计信息的高度变化。
                 val coverWidth = if (compactPartition) {
                     // 封面以 88dp 高度为基准，压缩封面宽度换取标题单行容量；窄窗口仍为文字保留空间。
@@ -135,7 +135,8 @@ internal fun HorizontalVideoCardFrame(
                         (width - gap - minOf(92.dp.roundToPx(), (width - gap).coerceAtLeast(0) / 2)).coerceAtLeast(0),
                     )
                 } else {
-                    (width * widthFraction).toInt().coerceAtMost(width - gap)
+                    (width * widthFraction * coverWidthScale.coerceIn(0f, 1f)).toInt()
+                        .coerceAtMost(width - gap)
                 }
                 val coverHeight = (coverWidth / effectiveAspectRatio).toInt()
                 val infoWidth = (width - gap - coverWidth).coerceAtLeast(0)

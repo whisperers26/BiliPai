@@ -28,6 +28,10 @@ internal fun resolveHorizontalVideoCoverHeightDp(
     return coverWidthDp / safeRatio
 }
 
+/** 窄列表为封面留出更多空间；宽列表保留文字和操作区的空间。 */
+internal fun resolveHorizontalVideoCardCoverWidthFraction(cardWidthDp: Float): Float =
+    0.55f - 0.10f * ((cardWidthDp - 320f) / 160f).coerceIn(0f, 1f)
+
 internal fun resolveHorizontalVideoCardMinimumHeightDp(
     fontScale: Float,
     coverAspectRatio: Float = HORIZONTAL_VIDEO_CARD_COVER_ASPECT_RATIO,

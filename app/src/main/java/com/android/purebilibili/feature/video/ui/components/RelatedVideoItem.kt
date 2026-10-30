@@ -189,6 +189,11 @@ internal fun rememberRelatedVideoCardLayout(): HomeFeedCardLayout {
 /** 详情加载、占位交接和真实推荐共用页面已读取的卡片样式。 */
 internal val LocalRelatedVideoCardLayout = androidx.compose.runtime.staticCompositionLocalOf<HomeFeedCardLayout?> { null }
 
+/** 更多推荐卡片高度（设置 > 首页与动态 > 首页与列表），真实卡片与占位卡片共用。 */
+internal val LocalRelatedVideoCardHeight = androidx.compose.runtime.staticCompositionLocalOf {
+    com.android.purebilibili.core.store.RelatedVideoCardHeight.HIGH
+}
+
 internal const val RELATED_VIDEO_SKELETON_ROW_COUNT = 3
 
 /** 点击前同步读取父页的跳转锁，避免被拒绝的连点先覆盖来源卡片快照。 */
@@ -326,6 +331,7 @@ fun RelatedVideoItem(
     // 排版对齐首页单列卡片:标题用 feed 紧凑级,统计用 labelSmall。
     val contentTypography = com.android.purebilibili.feature.home.components.cards.horizontalVideoCardTypography()
     val moreHaptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.MENUS)
+    val cardHeight = LocalRelatedVideoCardHeight.current
 
     Box(
         modifier = modifier
@@ -353,6 +359,7 @@ fun RelatedVideoItem(
             coverAspectRatio = coverAspectRatio,
             stacked = stacked,
             fillInfoHeight = true,
+            coverWidthScale = resolveRelatedVideoCoverWidthScale(cardHeight),
             coverModifier = Modifier.onGloballyPositioned { coordinates ->
                 coverCoordinatesRef.value = coordinates
             },
@@ -379,7 +386,9 @@ fun RelatedVideoItem(
                 AppText(
                     text = video.title,
                     style = contentTypography.title,
-                    maxLines = videoCardTitleMaxLines(),
+                    maxLines = videoCardTitleMaxLines(
+                        resolveRelatedVideoTitleTruncatedMaxLines(cardHeight),
+                    ),
                     minLines = 1,
                     overflow = videoCardTitleOverflow(),
                     color = AppContentColors.primaryText(),

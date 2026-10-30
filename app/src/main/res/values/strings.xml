@@ -808,6 +808,11 @@
     <string name="home_settings_card_ratio_official">更高列表框，左右居中裁切</string>
     <string name="home_settings_card_ratio_bilipai">默认信息流封面比例</string>
     <string name="home_settings_card_ratio_sync">（首页、搜索、相关推荐、历史、收藏和稍后再看等视频卡片同步）</string>
+    <string name="related_video_card_height_title">更多推荐卡片高度</string>
+    <string name="related_video_card_height_subtitle">只调整视频页下方更多推荐的卡片；低档标题显示一行</string>
+    <string name="related_video_card_height_low">低</string>
+    <string name="related_video_card_height_medium">中</string>
+    <string name="related_video_card_height_high">高</string>
     <string name="home_settings_search_full_card_title">完整显示标题</string>
     <string name="home_settings_search_card_ratio_title">卡片封面比例</string>
 
