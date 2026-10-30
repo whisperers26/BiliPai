@@ -28,7 +28,10 @@ internal interface WallpaperArchiveApi {
 
 /** Public archive requests use a separate client without Bilibili account headers or cookies. */
 internal object WallpaperArchiveRepository {
-    private val api = Retrofit.Builder()
+    // Keep the Retrofit instance, not the service proxy, in this object: a service stored in a
+    // static final field crashes the ART JIT on some Android 17 builds (see
+    // RetrofitServiceFieldStructureTest).
+    private val retrofit = Retrofit.Builder()
         .baseUrl("https://api.github.com/")
         .client(
             OkHttpClient.Builder()
@@ -40,7 +43,9 @@ internal object WallpaperArchiveRepository {
         )
         .addConverterFactory(Json { ignoreUnknownKeys = true }.asConverterFactory("application/json".toMediaType()))
         .build()
-        .create(WallpaperArchiveApi::class.java)
+
+    private val api: WallpaperArchiveApi
+        get() = retrofit.create(WallpaperArchiveApi::class.java)
 
     suspend fun loadSplashArchive(): List<SplashItem> = parseWallpaperArchiveTree(
         api.getIndex("https://api.github.com/repos/zjkwdy/bili_app_splash/git/trees/main?recursive=1"),

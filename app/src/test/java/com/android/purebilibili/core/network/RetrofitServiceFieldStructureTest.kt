@@ -46,10 +46,27 @@ class RetrofitServiceFieldStructureTest {
             }
     }
 
-    /** Class file paths (`com/example/Foo.class`) from the jar or directory holding the app classes. */
+    /**
+     * Class file paths (`com/example/Foo.class`) from the jars or directories holding the classes
+     * that read NetworkModule services. NetworkModule now lives in :core-data, so the scan anchors
+     * one class per module and walks the :core-data, :core-player and :app class outputs.
+     */
     private fun appClassFilePaths(): Sequence<String> {
-        val location = File(NetworkModule::class.java.protectionDomain.codeSource.location.toURI())
-        val paths = if (location.isDirectory) {
+        val anchors = listOf(
+            NetworkModule::class.java, // :core-data
+            com.android.purebilibili.core.player.SharedPlaybackRepository::class.java, // :core-player
+            com.android.purebilibili.data.repository.VideoRepository::class.java // :app
+        )
+        return anchors
+            .map { File(it.protectionDomain.codeSource.location.toURI()) }
+            .distinct()
+            .asSequence()
+            .flatMap { location -> classFilePathsIn(location).asSequence() }
+            .filter { it.endsWith(".class") }
+    }
+
+    private fun classFilePathsIn(location: File): List<String> =
+        if (location.isDirectory) {
             location.walkTopDown()
                 .filter { it.isFile }
                 .map { it.relativeTo(location).invariantSeparatorsPath }
@@ -57,8 +74,6 @@ class RetrofitServiceFieldStructureTest {
         } else {
             JarFile(location).use { jar -> jar.entries().asSequence().map { it.name }.toList() }
         }
-        return paths.asSequence().filter { it.endsWith(".class") }
-    }
 
     private fun Class<*>.declaredFieldsOrEmpty(): Sequence<Field> =
         try {

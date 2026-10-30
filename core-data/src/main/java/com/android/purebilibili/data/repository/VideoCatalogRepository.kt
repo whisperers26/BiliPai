@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap
  * TV 首页与详情页消费同一链路，故下沉共享；手机端原入口保留并委托。
  */
 object VideoCatalogRepository {
-    private val api = NetworkModule.api
+    private val api get() = NetworkModule.api
     private data class RelatedKey(val accountScope: String, val bvid: String)
     private val relatedCache = OnDemandRequestCache<RelatedKey, Result<List<RelatedVideo>>>(
         maxEntries = 32,
