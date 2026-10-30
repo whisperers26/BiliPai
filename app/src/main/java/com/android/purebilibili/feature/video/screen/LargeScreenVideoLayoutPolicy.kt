@@ -180,9 +180,6 @@ internal fun shouldUseLargeScreenDetailRail(mode: LargeScreenVideoLayoutMode): B
 }
 
 internal const val LARGE_SCREEN_DETAIL_RAIL_WIDTH_DP = 104f
-
-/** Two rail tabs must fit inside the rail; upstream's 52dp compact minimum plus padding does not. */
-internal const val LARGE_SCREEN_DETAIL_RAIL_TAB_MIN_WIDTH_DP = 40f
 internal const val LARGE_SCREEN_DETAIL_RAIL_ACTION_COLUMNS = 2
 
 /**

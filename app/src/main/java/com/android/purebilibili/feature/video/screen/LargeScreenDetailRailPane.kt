@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.screen
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -258,9 +259,6 @@ private fun LargeScreenDetailRail(
             modifier = Modifier.fillMaxWidth(),
             labelFontSize = 13.sp,
             compactMiuixWhenTwoOptions = true,
-            // The rail is a fixed 104dp; split it evenly so both labels stay readable.
-            forceEqualWidth = true,
-            minTabWidth = LARGE_SCREEN_DETAIL_RAIL_TAB_MIN_WIDTH_DP.dp,
             dragSelectionEnabled = true,
             tapPressRefractionEnabled = false,
             indicatorPositionProvider = pagePositionProvider,
@@ -307,22 +305,10 @@ private fun LargeScreenDetailRail(
                     maxLines = 1,
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                AppThemeAdaptiveTabRow(
-                    options = remember {
-                        listOf(CommentSortMode.HOT, CommentSortMode.NEWEST)
-                            .map { AppSegmentOption(it, it.label) }
-                    },
-                    selectedValue = commentState.sortMode,
-                    onSelectionChange = onSortModeChange,
+                LargeScreenDetailRailSortToggle(
+                    selected = commentState.sortMode,
+                    onSelect = onSortModeChange,
                     modifier = Modifier.fillMaxWidth(),
-                    labelFontSize = 13.sp,
-                    compactMiuixWhenTwoOptions = true,
-                    // The rail is a fixed 104dp; split it evenly so both labels stay readable.
-                    forceEqualWidth = true,
-                    minTabWidth = LARGE_SCREEN_DETAIL_RAIL_TAB_MIN_WIDTH_DP.dp,
-                    dragSelectionEnabled = true,
-                    tapPressRefractionEnabled = false,
-                    role = com.android.purebilibili.core.ui.components.AppTabRowRole.FILTER,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
@@ -339,6 +325,61 @@ private fun LargeScreenDetailRail(
                         modifier = Modifier.weight(1f),
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * 最热 / 最新 switch sized for the fixed rail. The shared tab row reserves 48dp touch slots plus
+ * spacing per tab, which does not fit two tabs in the rail and truncates the labels; this switch
+ * splits the rail width evenly and never ellipsizes.
+ */
+@Composable
+private fun LargeScreenDetailRailSortToggle(
+    selected: CommentSortMode,
+    onSelect: (CommentSortMode) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .height(48.dp)
+            .clip(AppShapes.container(ContainerLevel.Chip))
+            .background(com.android.purebilibili.core.ui.AppSurfaceTokens.surfaceContainerHigh())
+            .padding(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        listOf(CommentSortMode.HOT, CommentSortMode.NEWEST).forEach { mode ->
+            val isSelected = mode == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(AppShapes.container(ContainerLevel.Chip))
+                    .background(
+                        if (isSelected) com.android.purebilibili.core.ui.AppSurfaceTokens.selectionContainer()
+                        else androidx.compose.ui.graphics.Color.Transparent,
+                    )
+                    .clickable { if (!isSelected) onSelect(mode) },
+                contentAlignment = Alignment.Center,
+            ) {
+                AppText(
+                    text = mode.label,
+                    fontSize = 13.sp,
+                    fontWeight = if (isSelected) {
+                        androidx.compose.ui.text.font.FontWeight.SemiBold
+                    } else {
+                        androidx.compose.ui.text.font.FontWeight.Medium
+                    },
+                    color = if (isSelected) {
+                        com.android.purebilibili.core.ui.AppContentColors.accent()
+                    } else {
+                        com.android.purebilibili.core.ui.AppContentColors.secondaryText()
+                    },
+                    maxLines = 1,
+                    softWrap = false,
+                    tapToCopyEnabled = false,
+                )
             }
         }
     }
