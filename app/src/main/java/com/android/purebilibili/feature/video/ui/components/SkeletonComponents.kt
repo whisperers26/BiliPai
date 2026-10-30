@@ -339,9 +339,11 @@ private fun RelatedVideoItemSkeleton(
     coverAspectRatio: Float = com.android.purebilibili.core.ui.videoCardCoverAspectRatio(),
     stacked: Boolean = false,
 ) {
+    val cardHeight = LocalRelatedVideoCardHeight.current
     HorizontalVideoCardFrame(
         coverAspectRatio = coverAspectRatio,
         stacked = stacked,
+        coverWidthScale = resolveRelatedVideoCoverWidthScale(cardHeight),
         trailingContent = { Spacer(Modifier.size(48.dp)) },
         modifier = modifier
             .clip(AppShapes.container(ContainerLevel.Card))
@@ -357,7 +359,9 @@ private fun RelatedVideoItemSkeleton(
             RelatedSkeletonText(
                 text = "推荐视频标题占位\n第二行标题占位",
                 style = typography.title,
-                maxLines = videoCardTitleMaxLines(),
+                maxLines = videoCardTitleMaxLines(
+                    resolveRelatedVideoTitleTruncatedMaxLines(cardHeight),
+                ),
                 modifier = Modifier.fillMaxWidth(),
             )
             Column(verticalArrangement = Arrangement.spacedBy(com.android.purebilibili.core.ui.AppSpacingTokens.ExtraSmall)) {
