@@ -359,9 +359,7 @@ private fun RelatedVideoItemSkeleton(
             RelatedSkeletonText(
                 text = "推荐视频标题占位\n第二行标题占位",
                 style = typography.title,
-                maxLines = videoCardTitleMaxLines(
-                    resolveRelatedVideoTitleTruncatedMaxLines(cardHeight),
-                ),
+                maxLines = videoCardTitleMaxLines(),
                 modifier = Modifier.fillMaxWidth(),
             )
             Column(verticalArrangement = Arrangement.spacedBy(com.android.purebilibili.core.ui.AppSpacingTokens.ExtraSmall)) {

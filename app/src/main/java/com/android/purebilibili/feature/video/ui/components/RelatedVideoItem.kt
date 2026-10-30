@@ -386,15 +386,13 @@ fun RelatedVideoItem(
                 AppText(
                     text = video.title,
                     style = contentTypography.title,
-                    maxLines = videoCardTitleMaxLines(
-                        resolveRelatedVideoTitleTruncatedMaxLines(cardHeight),
-                    ),
+                    maxLines = videoCardTitleMaxLines(),
                     minLines = 1,
                     overflow = videoCardTitleOverflow(),
                     color = AppContentColors.primaryText(),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                if (!stacked) {
+                if (!stacked && shouldPinRelatedVideoMetaToBottom(cardHeight)) {
                     Spacer(Modifier.weight(1f))
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall)) {
