@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -152,7 +153,7 @@ internal fun LargeScreenDetailRailPane(
             },
             onCommentSearchClick = { showCommentSearch = true },
             modifier = Modifier
-                .width(LARGE_SCREEN_DETAIL_RAIL_WIDTH_DP.dp)
+                .requiredWidth(LARGE_SCREEN_DETAIL_RAIL_WIDTH_DP.dp)
                 .fillMaxHeight()
                 .videoDetailTransitionChrome(chromeAlphaProvider),
         )
@@ -257,6 +258,9 @@ private fun LargeScreenDetailRail(
             modifier = Modifier.fillMaxWidth(),
             labelFontSize = 13.sp,
             compactMiuixWhenTwoOptions = true,
+            // The rail is a fixed 104dp; split it evenly so both labels stay readable.
+            forceEqualWidth = true,
+            minTabWidth = LARGE_SCREEN_DETAIL_RAIL_TAB_MIN_WIDTH_DP.dp,
             dragSelectionEnabled = true,
             tapPressRefractionEnabled = false,
             indicatorPositionProvider = pagePositionProvider,
@@ -313,6 +317,9 @@ private fun LargeScreenDetailRail(
                     modifier = Modifier.fillMaxWidth(),
                     labelFontSize = 13.sp,
                     compactMiuixWhenTwoOptions = true,
+                    // The rail is a fixed 104dp; split it evenly so both labels stay readable.
+                    forceEqualWidth = true,
+                    minTabWidth = LARGE_SCREEN_DETAIL_RAIL_TAB_MIN_WIDTH_DP.dp,
                     dragSelectionEnabled = true,
                     tapPressRefractionEnabled = false,
                     role = com.android.purebilibili.core.ui.components.AppTabRowRole.FILTER,
