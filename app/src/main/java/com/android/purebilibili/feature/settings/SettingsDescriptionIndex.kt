@@ -58,7 +58,7 @@ internal val settingsStaticDescriptionIndex: Map<String, String> = mapOf(
     GRID_COMPACT_SETTING_ID to "手机竖屏、折叠屏外屏与窄分屏的默认列数，支持自动或固定列数",
     "appearance.grid_column_count" to "平板、折叠屏内屏与宽窗口的默认列数，按内容宽度限制上限",
     "appearance.pinch_to_change_grid_columns_enabled" to "在视频列表上双指捏合即可调节列数",
-    "appearance.related_video_card_height" to "只调整视频页下方更多推荐的卡片；低档标题显示一行",
+    "appearance.related_video_card_height" to "只调整视频页下方更多推荐的卡片",
     "appearance.show_online_count" to "在视频卡片显示“xx 人正在看”；独立于视频页观看人数开关",
     "appearance.show_pgc_timeline" to "番剧与影视页显示最近更新时间表",
     "appearance.show_profile_edit_button" to "个人主页显示“编辑资料”按钮；个人主页隐藏“编辑资料”按钮",

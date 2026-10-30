@@ -386,9 +386,7 @@ fun RelatedVideoItem(
                 AppText(
                     text = video.title,
                     style = contentTypography.title,
-                    maxLines = videoCardTitleMaxLines(
-                        resolveRelatedVideoTitleTruncatedMaxLines(cardHeight),
-                    ),
+                    maxLines = videoCardTitleMaxLines(),
                     minLines = 1,
                     overflow = videoCardTitleOverflow(),
                     color = AppContentColors.primaryText(),

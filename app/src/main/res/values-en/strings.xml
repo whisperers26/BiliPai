@@ -807,7 +807,7 @@
     <string name="home_settings_card_ratio_bilipai">Default feed cover ratio.</string>
     <string name="home_settings_card_ratio_sync">(Applies to video cards on Home, Search, Related, History, Favorites, and Watch Later.)</string>
     <string name="related_video_card_height_title">Recommended card height</string>
-    <string name="related_video_card_height_subtitle">Only changes the recommended videos under the player; low shows one-line titles</string>
+    <string name="related_video_card_height_subtitle">Only changes the recommended videos under the player</string>
     <string name="related_video_card_height_low">Low</string>
     <string name="related_video_card_height_medium">Medium</string>
     <string name="related_video_card_height_high">High</string>

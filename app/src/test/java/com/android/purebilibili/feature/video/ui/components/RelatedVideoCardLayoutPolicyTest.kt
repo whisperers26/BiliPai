@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.video.ui.components
 
 import com.android.purebilibili.core.store.RelatedVideoCardHeight
-import com.android.purebilibili.core.ui.VIDEO_CARD_TRUNCATED_TITLE_MAX_LINES
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -74,10 +73,6 @@ class RelatedVideoCardLayoutPolicyTest {
     @Test
     fun `high card height keeps the original cover size`() {
         assertEquals(1f, resolveRelatedVideoCoverWidthScale(RelatedVideoCardHeight.HIGH))
-        assertEquals(
-            VIDEO_CARD_TRUNCATED_TITLE_MAX_LINES,
-            resolveRelatedVideoTitleTruncatedMaxLines(RelatedVideoCardHeight.HIGH),
-        )
     }
 
     @Test
@@ -86,15 +81,6 @@ class RelatedVideoCardLayoutPolicyTest {
         val medium = resolveRelatedVideoCoverWidthScale(RelatedVideoCardHeight.MEDIUM)
         val low = resolveRelatedVideoCoverWidthScale(RelatedVideoCardHeight.LOW)
         assertTrue(low < medium && medium < high)
-    }
-
-    @Test
-    fun `only the low card height cuts the title to one line`() {
-        assertEquals(1, resolveRelatedVideoTitleTruncatedMaxLines(RelatedVideoCardHeight.LOW))
-        assertEquals(
-            VIDEO_CARD_TRUNCATED_TITLE_MAX_LINES,
-            resolveRelatedVideoTitleTruncatedMaxLines(RelatedVideoCardHeight.MEDIUM),
-        )
     }
 
     @Test
