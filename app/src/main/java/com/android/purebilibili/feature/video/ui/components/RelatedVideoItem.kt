@@ -392,7 +392,7 @@ fun RelatedVideoItem(
                     color = AppContentColors.primaryText(),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                if (!stacked) {
+                if (!stacked && shouldPinRelatedVideoMetaToBottom(cardHeight)) {
                     Spacer(Modifier.weight(1f))
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall)) {

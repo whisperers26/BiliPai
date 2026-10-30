@@ -13,6 +13,13 @@ internal fun resolveRelatedVideoCoverWidthScale(height: RelatedVideoCardHeight):
         RelatedVideoCardHeight.LOW -> 0.7f
     }
 
+/**
+ * 高档保持原样：作者与统计贴在封面底部。中、低档封面变矮后，作者紧跟标题，
+ * 不再用空白把元信息推到底部。
+ */
+internal fun shouldPinRelatedVideoMetaToBottom(height: RelatedVideoCardHeight): Boolean =
+    height == RelatedVideoCardHeight.HIGH
+
 /** The narrow half-opened pane cannot leave enough room for title and stats beside a cover. */
 internal const val RELATED_VIDEO_HORIZONTAL_MIN_WIDTH_DP = 320
 

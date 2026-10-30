@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.video.ui.components
 import com.android.purebilibili.core.store.RelatedVideoCardHeight
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class RelatedVideoCardLayoutPolicyTest {
@@ -81,6 +82,13 @@ class RelatedVideoCardLayoutPolicyTest {
         val medium = resolveRelatedVideoCoverWidthScale(RelatedVideoCardHeight.MEDIUM)
         val low = resolveRelatedVideoCoverWidthScale(RelatedVideoCardHeight.LOW)
         assertTrue(low < medium && medium < high)
+    }
+
+    @Test
+    fun `only the high card height pins the author row to the bottom`() {
+        assertTrue(shouldPinRelatedVideoMetaToBottom(RelatedVideoCardHeight.HIGH))
+        assertFalse(shouldPinRelatedVideoMetaToBottom(RelatedVideoCardHeight.MEDIUM))
+        assertFalse(shouldPinRelatedVideoMetaToBottom(RelatedVideoCardHeight.LOW))
     }
 
     @Test
