@@ -313,7 +313,7 @@ class SpaceScreenStructureTest {
 
         assertTrue(source.contains("AppLiquidGlassBackToTopButton("))
         assertTrue(source.contains("rememberBackToTopButtonEnabled()"))
-        assertTrue(source.contains("gridState.animateScrollToTop()"))
+        assertTrue(source.contains("gridState.animateScrollToTopContinuously()"))
         assertTrue(source.contains("shouldShowScrollToTop("))
     }
 
