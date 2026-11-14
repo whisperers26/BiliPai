@@ -2891,6 +2891,11 @@ private fun VideoPageItem(
         showUpPreview || commentSheetVisibilityProgress > 0.001f || upPreviewVisibilityProgress > 0.001f ||
         portraitAnyMenuVisible || portraitScreenLocked || portraitComposerVisible ||
         danmakuInputVisible
+    com.android.purebilibili.core.ui.performance.VideoSurfaceFrameRateVoteEffect(
+        player = exoPlayer,
+        danmakuEnabled = danmakuEnabled,
+        active = isCurrentPage,
+    )
     com.android.purebilibili.core.ui.performance.VideoPlaybackRefreshRateEffect(
         player = exoPlayer,
         eligible = isCurrentPage && isPortraitPlaybackAllowed && isPlayerReadyForThisVideo &&
