@@ -175,3 +175,22 @@ internal fun VideoPlaybackRefreshRateEffect(player: ExoPlayer, eligible: Boolean
         if (mode.refreshRate <= current.refreshRate + 0.1f) request.apply(mode.modeId)
     }
 }
+
+/** 详情页与竖屏覆盖层可能同时持有同一播放器，按持有者计数，最后一个离开才恢复默认。 */
+private val danmakuFrameRateHolders = java.util.WeakHashMap<ExoPlayer, Int>()
+
+private fun ExoPlayer.updateDanmakuFrameRateHolders(delta: Int) {
+    val holders = ((danmakuFrameRateHolders[this] ?: 0) + delta).coerceAtLeast(0)
+    if (holders == 0) danmakuFrameRateHolders.remove(this) else danmakuFrameRateHolders[this] = holders
+    videoChangeFrameRateStrategy = resolveVideoChangeFrameRateStrategy(danmakuEnabled = holders > 0)
+}
+
+/** 开弹幕时不让视频 Surface 按片源帧率压低面板刷新率；离开时恢复 Media3 默认策略。 */
+@Composable
+internal fun VideoSurfaceFrameRateVoteEffect(player: ExoPlayer, danmakuEnabled: Boolean, active: Boolean = true) {
+    if (!active || !danmakuEnabled) return
+    DisposableEffect(player) {
+        player.updateDanmakuFrameRateHolders(+1)
+        onDispose { player.updateDanmakuFrameRateHolders(-1) }
+    }
+}
