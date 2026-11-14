@@ -3132,6 +3132,10 @@ private fun VideoPlayerSectionContent(
                 lifecycle = lifecycleOwner.lifecycle
             )
         val danmakuEnabled = danmakuSettings.enabled
+        com.android.purebilibili.core.ui.performance.VideoSurfaceFrameRateVoteEffect(
+            player = playerState.player,
+            danmakuEnabled = danmakuEnabled,
+        )
         com.android.purebilibili.core.ui.performance.VideoPlaybackRefreshRateEffect(
             player = playerState.player,
             eligible = !danmakuEnabled && danmakuHostActive && hostLifecycleStarted &&

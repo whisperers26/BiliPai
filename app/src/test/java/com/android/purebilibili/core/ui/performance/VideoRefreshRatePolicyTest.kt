@@ -1,5 +1,6 @@
 package com.android.purebilibili.core.ui.performance
 
+import androidx.media3.common.C
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -52,5 +53,16 @@ class VideoRefreshRatePolicyTest {
         for (speed in listOf(0f, -1f, Float.NaN, Float.POSITIVE_INFINITY)) {
             assertNull(select(rates, 30f, speed))
         }
+    }
+
+    @Test
+    fun danmakuKeepsTheVideoSurfaceFromVotingTheDisplayDown() {
+        // A 30fps surface vote drops LTPO panels to 30-60Hz; scrolling danmaku then judders
+        // until a touch boost (e.g. holding for 2x) temporarily restores the full rate.
+        assertEquals(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF, resolveVideoChangeFrameRateStrategy(danmakuEnabled = true))
+        assertEquals(
+            C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_ONLY_IF_SEAMLESS,
+            resolveVideoChangeFrameRateStrategy(danmakuEnabled = false)
+        )
     }
 }
