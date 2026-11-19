@@ -3494,12 +3494,13 @@ internal fun VideoDetailScreenStateHolder(
         isScreenActive
     ) {
         resolveVideoDetailSystemBarsVisibilityPolicy(
-            // 半折叠全屏只隐藏顶部状态栏；折痕下方的详情仍保留导航栏。
-            isFullscreenMode = isFullscreenMode && !isTabletopHalfFullscreen,
-            hideVideoPageStatusBar = immersiveVideoPageStatusBar || isTabletopHalfFullscreen,
+            isFullscreenMode = isFullscreenMode,
+            hideVideoPageStatusBar = immersiveVideoPageStatusBar,
             isInPipMode = isPipMode,
             isScreenActive = isScreenActive,
-            isPortraitFullscreen = isPortraitFullscreen
+            isPortraitFullscreen = isPortraitFullscreen,
+            // 半折叠全屏只隐藏顶部状态栏；折痕下方的详情仍保留导航栏。
+            isTabletopHalfFullscreen = isTabletopHalfFullscreen,
         )
     }
     val systemBarsApplySpec = remember(

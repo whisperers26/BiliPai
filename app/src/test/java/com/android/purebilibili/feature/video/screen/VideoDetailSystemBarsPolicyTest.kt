@@ -413,4 +413,29 @@ class VideoDetailSystemBarsPolicyTest {
             )
         )
     }
+
+    @Test
+    fun visibilityPolicy_halfFoldFullscreenHidesOnlyTheStatusBar() {
+        val policy = resolveVideoDetailSystemBarsVisibilityPolicy(
+            isFullscreenMode = true,
+            hideVideoPageStatusBar = false,
+            isInPipMode = false,
+            isScreenActive = true,
+            isTabletopHalfFullscreen = true,
+        )
+        assertTrue(policy.hideStatusBars)
+        assertFalse(policy.hideNavigationBars)
+        assertEquals(
+            VideoDetailHiddenSystemBars.STATUS_BARS,
+            resolveVideoDetailSystemBarsApplySpec(
+                visibilityPolicy = policy,
+                useTabletLayout = true,
+                isLightBackground = true,
+                backgroundColor = 0,
+                transparentColor = 0,
+                blackColor = 0,
+                transientBarsBehavior = 2,
+            ).hiddenBars,
+        )
+    }
 }
