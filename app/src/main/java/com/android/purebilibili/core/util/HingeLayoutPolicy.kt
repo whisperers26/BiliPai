@@ -207,6 +207,39 @@ internal fun resolveAppFoldPosture(
     return AppFoldPosture.Flat
 }
 
+/**
+ * Builds the folding info that layouts consume.
+ *
+ * A half-opened horizontal fold (tabletop) is laid out exactly like the fully unfolded screen: its
+ * horizontal hinges are reported as flat and non-separating, so no screen gives the lower half its
+ * own layout or splits content around the fold. A hinge that physically occludes pixels still does.
+ */
+internal fun resolveLayoutFoldingFeatureInfo(
+    isTabletop: Boolean,
+    hinges: List<AppHingeFeature>,
+): AppFoldingFeatureInfo {
+    val layoutHinges = if (resolveAppFoldPosture(isTabletop, hinges) == AppFoldPosture.Tabletop) {
+        hinges.map { hinge ->
+            if (hinge.orientation == AppHingeOrientation.Horizontal) {
+                hinge.copy(isFlat = true, isSeparating = hinge.isOccluding)
+            } else {
+                hinge
+            }
+        }
+    } else {
+        hinges
+    }
+    val primary = selectPrimaryHingeFeature(layoutHinges) ?: return AppFoldingFeatureInfo()
+    return AppFoldingFeatureInfo(
+        posture = resolveAppFoldPosture(isTabletop = false, hinges = layoutHinges),
+        hingeOrientation = primary.orientation,
+        hingeBounds = primary.bounds,
+        isSeparating = layoutHinges.any { hinge -> hinge.isSeparating },
+        isOccluding = layoutHinges.any { hinge -> hinge.isOccluding },
+        hinges = layoutHinges,
+    )
+}
+
 private fun sortedUniqueEdges(
     start: Int,
     end: Int,
