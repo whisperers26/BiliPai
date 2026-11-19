@@ -18,6 +18,7 @@ package com.bytedance.danmaku.render.engine
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
+import android.os.Build
 import android.os.Looper
 import android.os.SystemClock
 import android.view.Choreographer
@@ -101,6 +102,7 @@ class DanmakuView @JvmOverloads constructor(context: Context,
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        updateRequestedFrameRate()
         requestRenderFrame()
     }
 
@@ -129,12 +131,26 @@ class DanmakuView @JvmOverloads constructor(context: Context,
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
+        if (changed) updateRequestedFrameRate()
         controller.onLayoutSizeChanged(right - left, bottom - top)
     }
 
     override fun draw(canvas: Canvas) {
         super.draw(canvas)
         controller.draw(this, canvas)
+    }
+
+    /** The vote only counts while this view invalidates, so an idle or blank overlay costs nothing. */
+    private fun updateRequestedFrameRate() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return
+        val display = display ?: return
+        val current = display.mode
+        val rate = resolveDanmakuFrameRate(
+            modes = display.supportedModes.map { DanmakuDisplayMode(it.physicalWidth, it.physicalHeight, it.refreshRate) },
+            width = current.physicalWidth,
+            height = current.physicalHeight,
+        ) ?: return
+        if (requestedFrameRate != rate) requestedFrameRate = rate
     }
 
     @SuppressLint("ClickableViewAccessibility")
