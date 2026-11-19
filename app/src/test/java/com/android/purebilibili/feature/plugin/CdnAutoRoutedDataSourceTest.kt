@@ -154,7 +154,7 @@ class CdnAutoRoutedDataSourceTest {
             }
             uri = dataSpec.uri
             position = dataSpec.position.toInt()
-            end = if (dataSpec.length == C.LENGTH_UNSET.toLong()) data.size else (position + dataSpec.length).toInt()
+            end = if (dataSpec.length == C.LENGTH_UNSET.toLong()) data.size else minOf(data.size.toLong(), position + dataSpec.length).toInt()
             headers = mapOf("content-range" to listOf("bytes $position-${end - 1}/${totalFor(url)}"))
             return (end - position).toLong()
         }

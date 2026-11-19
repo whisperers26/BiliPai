@@ -148,7 +148,7 @@ class CdnPlaybackDataSourceTest {
             openPosition = dataSpec.position
             spec = dataSpec
             position = dataSpec.position.toInt()
-            end = if (dataSpec.length == C.LENGTH_UNSET.toLong()) bytes.size else position + dataSpec.length.toInt()
+            end = if (dataSpec.length == C.LENGTH_UNSET.toLong()) bytes.size else minOf(bytes.size.toLong(), position + dataSpec.length).toInt()
             return (end - position).toLong()
         }
         override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
