@@ -238,8 +238,14 @@ fun BangumiPlayerScreen(
     }
     val autoRotateEnabled by com.android.purebilibili.core.store.SettingsManager
         .getAutoRotateEnabled(context).collectAsStateWithLifecycle(initialValue = false)
-    // The app switch explicitly opts into sensor rotation, independently of the system lock.
-    val sensorAutoRotateEnabled = autoRotateEnabled
+    val systemAutoRotateEnabled by com.android.purebilibili.feature.video.screen
+        .rememberSystemAutoRotateEnabled()
+    // The app switch opts into sensor rotation, but the system rotation lock always wins.
+    val sensorAutoRotateEnabled = com.android.purebilibili.feature.video.screen
+        .resolveSensorAutoRotateEnabled(
+            appAutoRotateEnabled = autoRotateEnabled,
+            systemAutoRotateEnabled = systemAutoRotateEnabled,
+        )
 
     // 创建 ExoPlayer
     val exoPlayer = remember {
