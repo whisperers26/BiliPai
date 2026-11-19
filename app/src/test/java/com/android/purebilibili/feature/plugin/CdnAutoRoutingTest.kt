@@ -225,6 +225,19 @@ class CdnAutoRoutingTest {
         assertEquals("upos-sz-mirrorali.bilivideo.com", router.activeHost)
         assertTrue(router.register(listOf(cosov.replace("/22/", "/44/")), emptyList(), sessionKey = "v2"))
         assertNull(router.activeHost)
+        // A keyless video in between: v2 played again is a new video.
+        router.register(listOf(akam.replace("/22/", "/55/")), emptyList())
+        assertTrue(router.register(listOf(cosov.replace("/22/", "/44/")), emptyList(), sessionKey = "v2"))
+    }
+
+    @Test
+    fun `a manual quality downgrade lowers the required rate`() {
+        val router = router()
+        router.register(listOf(cosov), emptyList(), sessionKey = "v1", videoBandwidthBps = 20_000_000)
+        router.noteVideoBitrate(18_000_000)
+        assertEquals(20_000_000L, router.requiredVideoBps)
+        router.register(listOf(cosov.replace("v.m4s", "v480.m4s")), emptyList(), sessionKey = "v1", videoBandwidthBps = 1_000_000)
+        assertEquals(1_000_000L, router.requiredVideoBps)
     }
 
     @Test

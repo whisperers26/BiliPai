@@ -197,10 +197,16 @@ internal class CdnAutoRouter(
      * counts as a new video. Returns true when this starts a new video.
      */
     @Synchronized
-    fun register(issuedVideo: List<String>, issuedAudio: List<String>, sessionKey: String? = null): Boolean {
+    fun register(
+        issuedVideo: List<String>,
+        issuedAudio: List<String>,
+        sessionKey: String? = null,
+        videoBandwidthBps: Long = 0,
+    ): Boolean {
         val byPath = (issuedVideo + issuedAudio).filter { it.isNotBlank() }.groupBy(::pathOf)
         val newSession = if (sessionKey != null) sessionKey != this.sessionKey else byPath.keys.none { it in issuedByPath }
-        if (sessionKey != null) this.sessionKey = sessionKey
+        // Kept even when null, so a keyed video played again after a keyless one starts afresh.
+        this.sessionKey = sessionKey
         if (newSession) {
             // A new video starts on its own assignment: host speed depends on the file.
             activeHost = null
@@ -210,6 +216,9 @@ internal class CdnAutoRouter(
             nextRaceAtMs = Long.MIN_VALUE / 2
             requiredVideoBps = 0
         }
+        // A (re)selected quality sets the bar, so a manual downgrade is judged at its own bitrate;
+        // the player's formats can only raise it from there.
+        if (videoBandwidthBps > 0) requiredVideoBps = videoBandwidthBps
         issuedVideo.filter { it.isNotBlank() }.map(::pathOf).filterTo(videoPaths) { it.isNotBlank() }
         byPath.forEach { (path, urls) ->
             if (path.isNotBlank()) {
