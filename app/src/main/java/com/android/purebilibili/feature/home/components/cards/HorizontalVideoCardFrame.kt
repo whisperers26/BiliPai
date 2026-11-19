@@ -45,8 +45,8 @@ internal fun HorizontalVideoCardFrame(
     compactPartition: Boolean = false,
     allowPortraitCover: Boolean = false,
     fillInfoHeight: Boolean = compactPartition,
-    /** Shrinks the side-by-side cover (and with it the row height); 1 keeps the shared size. */
-    coverWidthScale: Float = 1f,
+    /** How the side-by-side cover (and with it the row height) is sized. */
+    coverSizing: HorizontalVideoCoverSizing = HorizontalVideoCoverSizing.WidthFraction,
 ) {
     // MD3、Miuix 和玻璃共用布局；封面保持所选比例。
     val effectiveAspectRatio = coverAspectRatio.takeIf {
@@ -135,8 +135,16 @@ internal fun HorizontalVideoCardFrame(
                         (width - gap - minOf(92.dp.roundToPx(), (width - gap).coerceAtLeast(0) / 2)).coerceAtLeast(0),
                     )
                 } else {
-                    (width * widthFraction * coverWidthScale.coerceIn(0f, 1f)).toInt()
-                        .coerceAtMost(width - gap)
+                    resolveHorizontalVideoCoverWidthPx(
+                        sizing = coverSizing,
+                        maxCoverWidthPx = (width * widthFraction).toInt().coerceAtMost(width - gap),
+                        aspectRatio = effectiveAspectRatio,
+                        density = density,
+                        infoHeightForWidth = { infoWidthPx ->
+                            measurables[1].maxIntrinsicHeight((infoWidthPx).coerceAtLeast(0))
+                        },
+                        infoWidthForCover = { coverWidthPx -> width - gap - coverWidthPx },
+                    )
                 }
                 val coverHeight = (coverWidth / effectiveAspectRatio).toInt()
                 val infoWidth = (width - gap - coverWidth).coerceAtLeast(0)
@@ -173,6 +181,48 @@ internal fun HorizontalVideoCardFrame(
                 contentAlignment = Alignment.Center,
                 content = trailingContent,
             )
+        }
+    }
+}
+
+/** How a side-by-side cover is sized; the cover always keeps its aspect ratio. */
+internal sealed interface HorizontalVideoCoverSizing {
+    /** Shared default: the cover takes a share of the card width, so it grows with the card. */
+    data object WidthFraction : HorizontalVideoCoverSizing
+
+    /** A fixed cover height, so the row height does not follow the card width (rotation). */
+    data class FixedHeight(val heightDp: Float) : HorizontalVideoCoverSizing
+
+    /** The cover is as tall as the info column, leaving no space under the last info row. */
+    data object FitInfo : HorizontalVideoCoverSizing
+}
+
+/**
+ * Cover width for [sizing], never wider than [maxCoverWidthPx] (the [HorizontalVideoCoverSizing.WidthFraction]
+ * width), so narrow cards keep room for the title.
+ */
+internal fun resolveHorizontalVideoCoverWidthPx(
+    sizing: HorizontalVideoCoverSizing,
+    maxCoverWidthPx: Int,
+    aspectRatio: Float,
+    density: Float,
+    infoHeightForWidth: (Int) -> Int,
+    infoWidthForCover: (Int) -> Int,
+): Int {
+    val maxWidth = maxCoverWidthPx.coerceAtLeast(0)
+    return when (sizing) {
+        HorizontalVideoCoverSizing.WidthFraction -> maxWidth
+        is HorizontalVideoCoverSizing.FixedHeight ->
+            (sizing.heightDp * density * aspectRatio).toInt().coerceIn(0, maxWidth)
+        HorizontalVideoCoverSizing.FitInfo -> {
+            // The info height depends on its width, which depends on the cover width; two
+            // passes settle it to within a pixel or two for wrapped text.
+            var coverWidth = maxWidth / 2
+            repeat(2) {
+                val infoHeight = infoHeightForWidth(infoWidthForCover(coverWidth))
+                coverWidth = (infoHeight * aspectRatio).toInt().coerceIn(0, maxWidth)
+            }
+            coverWidth
         }
     }
 }

@@ -359,7 +359,7 @@ fun RelatedVideoItem(
             coverAspectRatio = coverAspectRatio,
             stacked = stacked,
             fillInfoHeight = true,
-            coverWidthScale = resolveRelatedVideoCoverWidthScale(cardHeight),
+            coverSizing = resolveRelatedVideoCoverSizing(cardHeight),
             coverModifier = Modifier.onGloballyPositioned { coordinates ->
                 coverCoordinatesRef.value = coordinates
             },
@@ -383,11 +383,12 @@ fun RelatedVideoItem(
                 )
             },
             infoContent = {
+                val titleMaxLines = videoCardTitleMaxLines()
                 AppText(
                     text = video.title,
                     style = contentTypography.title,
-                    maxLines = videoCardTitleMaxLines(),
-                    minLines = 1,
+                    maxLines = titleMaxLines,
+                    minLines = if (stacked) 1 else resolveRelatedVideoTitleMinLines(cardHeight, titleMaxLines),
                     overflow = videoCardTitleOverflow(),
                     color = AppContentColors.primaryText(),
                     modifier = Modifier.fillMaxWidth(),

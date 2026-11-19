@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.video.ui.components
 
 import com.android.purebilibili.core.store.RelatedVideoCardHeight
+import com.android.purebilibili.feature.home.components.cards.HorizontalVideoCoverSizing
+import com.android.purebilibili.feature.home.components.cards.resolveHorizontalVideoCoverWidthPx
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -72,16 +74,59 @@ class RelatedVideoCardLayoutPolicyTest {
     }
 
     @Test
-    fun `high card height keeps the original cover size`() {
-        assertEquals(1f, resolveRelatedVideoCoverWidthScale(RelatedVideoCardHeight.HIGH))
+    fun `card heights use a fixed cover height that does not follow the card width`() {
+        val high = resolveRelatedVideoCoverSizing(RelatedVideoCardHeight.HIGH)
+        val medium = resolveRelatedVideoCoverSizing(RelatedVideoCardHeight.MEDIUM)
+        assertTrue(high is HorizontalVideoCoverSizing.FixedHeight)
+        assertTrue(medium is HorizontalVideoCoverSizing.FixedHeight)
+        assertTrue(medium.heightDp < high.heightDp)
+        assertEquals(HorizontalVideoCoverSizing.FitInfo, resolveRelatedVideoCoverSizing(RelatedVideoCardHeight.LOW))
+
+        // Portrait and landscape card widths give the same cover height.
+        listOf(600, 1400).forEach { maxCoverWidthPx ->
+            val width = resolveHorizontalVideoCoverWidthPx(
+                sizing = high,
+                maxCoverWidthPx = maxCoverWidthPx,
+                aspectRatio = 1.6f,
+                density = 2f,
+                infoHeightForWidth = { 0 },
+                infoWidthForCover = { 0 },
+            )
+            assertEquals(384, width)
+        }
     }
 
     @Test
-    fun `lower card heights shrink the cover step by step`() {
-        val high = resolveRelatedVideoCoverWidthScale(RelatedVideoCardHeight.HIGH)
-        val medium = resolveRelatedVideoCoverWidthScale(RelatedVideoCardHeight.MEDIUM)
-        val low = resolveRelatedVideoCoverWidthScale(RelatedVideoCardHeight.LOW)
-        assertTrue(low < medium && medium < high)
+    fun `low card height makes the cover as tall as the info column`() {
+        val width = resolveHorizontalVideoCoverWidthPx(
+            sizing = HorizontalVideoCoverSizing.FitInfo,
+            maxCoverWidthPx = 600,
+            aspectRatio = 1.6f,
+            density = 2f,
+            infoHeightForWidth = { 200 },
+            infoWidthForCover = { cover -> 1000 - cover },
+        )
+        assertEquals(320, width)
+    }
+
+    @Test
+    fun `cover never grows past the width fraction on narrow cards`() {
+        val width = resolveHorizontalVideoCoverWidthPx(
+            sizing = HorizontalVideoCoverSizing.FixedHeight(120f),
+            maxCoverWidthPx = 200,
+            aspectRatio = 1.6f,
+            density = 2f,
+            infoHeightForWidth = { 0 },
+            infoWidthForCover = { 0 },
+        )
+        assertEquals(200, width)
+    }
+
+    @Test
+    fun `low card height reserves the full title height`() {
+        assertEquals(2, resolveRelatedVideoTitleMinLines(RelatedVideoCardHeight.LOW, 2))
+        assertEquals(2, resolveRelatedVideoTitleMinLines(RelatedVideoCardHeight.LOW, Int.MAX_VALUE))
+        assertEquals(1, resolveRelatedVideoTitleMinLines(RelatedVideoCardHeight.HIGH, 2))
     }
 
     @Test
