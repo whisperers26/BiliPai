@@ -1359,14 +1359,17 @@ internal fun VideoDetailScreenStateHolder(
                 .getHideVideoPageStatusBarSync(context),
             lifecycle = lifecycleOwner.lifecycle
         )
-    val useTabletLayout = appWindowAdaptiveInfo.shouldAvoidHinge || (
-        horizontalAdaptationEnabled && shouldUseLargeScreenVideoLayout(
-            windowWidthDp = configuration.screenWidthDp.toFloat(),
-            windowHeightDp = configuration.screenHeightDp.toFloat(),
-            horizontalAdaptationEnabled = true,
-            isFoldableCoverWindow = displayContext.isFoldableCoverWindow,
-        )
+    val useLargeScreenVideoLayout = horizontalAdaptationEnabled && shouldUseLargeScreenVideoLayout(
+        windowWidthDp = configuration.screenWidthDp.toFloat(),
+        windowHeightDp = configuration.screenHeightDp.toFloat(),
+        horizontalAdaptationEnabled = true,
+        isFoldableCoverWindow = displayContext.isFoldableCoverWindow,
     )
+    val useTabletLayout = appWindowAdaptiveInfo.shouldAvoidHinge || useLargeScreenVideoLayout
+    // Half folded: keep the unfolded layout, with the player moved above the fold.
+    val largeScreenTabletopFold = if (useLargeScreenVideoLayout) {
+        resolveLargeScreenTabletopFold(appWindowAdaptiveInfo)
+    } else null
 
     val activity = remember { context.findActivity() }
     val isActivityInMultiWindowMode = activity?.let {
@@ -3954,7 +3957,7 @@ internal fun VideoDetailScreenStateHolder(
                     }
                     //  📐 [大屏适配] 根据设备类型选择布局
                     if (useTabletLayout) {
-                        if (appWindowAdaptiveInfo.shouldAvoidHinge) {
+                        if (appWindowAdaptiveInfo.shouldAvoidHinge && largeScreenTabletopFold == null) {
                             // 半开折痕和展开后的实体铰链都按实际安全区域切分。
                             TabletVideoLayout(
                                 playerState = playerState,
@@ -4100,6 +4103,7 @@ internal fun VideoDetailScreenStateHolder(
                             externalQueueContent = tabletExternalQueueContent,
                             playerContent = continuousPlayerSlot,
                             transitionChromeAlphaProvider = videoCardDetailChromeAlphaProvider,
+                            tabletopFold = largeScreenTabletopFold,
                             )
                         }
                     } else {
