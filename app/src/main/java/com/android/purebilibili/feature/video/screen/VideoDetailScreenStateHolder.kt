@@ -1985,8 +1985,11 @@ internal fun VideoDetailScreenStateHolder(
             lifecycle = lifecycleOwner.lifecycle
         )
     val systemAutoRotateEnabled by rememberSystemAutoRotateEnabled()
-    // The app switch explicitly opts into sensor rotation, independently of the system lock.
-    val sensorAutoRotateEnabled = autoRotateEnabled
+    // The app switch opts into sensor rotation, but the system rotation lock always wins.
+    val sensorAutoRotateEnabled = resolveSensorAutoRotateEnabled(
+        appAutoRotateEnabled = autoRotateEnabled,
+        systemAutoRotateEnabled = systemAutoRotateEnabled,
+    )
 
     DisposableEffect(Unit) {
         //  [沉浸式] 启用边到边显示，让内容延伸到状态栏下方
