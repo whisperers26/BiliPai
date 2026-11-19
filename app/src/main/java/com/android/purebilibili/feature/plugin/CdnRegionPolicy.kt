@@ -544,6 +544,10 @@ internal fun resolvePlaybackCdnDisplayName(host: String, index: Int): String {
         }
 }
 
+/** Label for a host the auto router picked: the known CDN name, else the bare host. */
+internal fun resolveAutoCdnHostLabel(host: String): String =
+    PILIPLUS_CDN_DISPLAY_NAMES[host.lowercase()] ?: host
+
 private val PILIPLUS_CDN_DISPLAY_NAMES = mapOf(
     "upos-sz-mirrorali.bilivideo.com" to "ali（阿里云）",
     "upos-sz-mirroralib.bilivideo.com" to "alib（阿里云）",

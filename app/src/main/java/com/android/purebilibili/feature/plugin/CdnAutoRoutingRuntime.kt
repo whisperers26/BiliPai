@@ -8,6 +8,12 @@ import com.android.purebilibili.core.util.Logger
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
@@ -47,6 +53,16 @@ internal object CdnAutoRoutingRuntime {
     var enabled: Boolean = false
         private set
 
+    /** A host switch made by a race: [originalUrl] is the issued URL that was being read. */
+    data class Switch(val originalUrl: String, val fromHost: String, val toHost: String)
+
+    private val _currentHost = MutableStateFlow<String?>(null)
+    /** The host the foreground player is reading from right now, or null before the first read. */
+    val currentHost: StateFlow<String?> = _currentHost.asStateFlow()
+
+    private val _switches = MutableSharedFlow<Switch>(extraBufferCapacity = 4)
+    val switches: SharedFlow<Switch> = _switches.asSharedFlow()
+
     /** The generation of the latest host switch; open sources compare it to reroute mid-stream. */
     val generation: Int get() = switchGeneration.get()
 
@@ -66,13 +82,17 @@ internal object CdnAutoRoutingRuntime {
         totalsByPath.clear()
         sources.clear()
         lastRead = null
+        _currentHost.value = null
         playbackSample = null
         bufferingSinceMs = null
     }
 
     fun configure(enabled: Boolean) {
         this.enabled = enabled
-        if (!enabled) router.reset()
+        if (!enabled) {
+            router.reset()
+            _currentHost.value = null
+        }
     }
 
     fun register(videoUrls: List<String>, audioUrls: List<String>) {
@@ -112,6 +132,7 @@ internal object CdnAutoRoutingRuntime {
 
     fun noteRead(originalUrl: String, host: String, position: Long, total: Long?) {
         lastRead = ReadPosition(originalUrl, host, position, total)
+        _currentHost.value = host
     }
 
     /** Fed about once a second by the foreground player. */
@@ -166,6 +187,8 @@ internal object CdnAutoRoutingRuntime {
             Logger.d(TAG, "race from=${read.host} stuck=$stuck results=${results.map { "${it.host}:${it.elapsedMs}ms:${it.success}" }} switched=$switched")
             if (switched != null) {
                 switchGeneration.incrementAndGet()
+                _currentHost.value = switched
+                _switches.tryEmit(Switch(read.originalUrl, read.host, switched))
                 synchronized(sources) { sources.toList() }.forEach { it.preemptIfOn(read.host) }
             }
         } catch (error: Throwable) {
