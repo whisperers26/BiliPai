@@ -141,6 +141,8 @@ internal data class CdnPlaybackSignal(
     val bitrateBps: Long,
     val stuck: Boolean = false,
     val metered: Boolean = false,
+    /** Short stalls keep recurring in ordinary playback (see [CdnRebufferTracker]). */
+    val rebuffering: Boolean = false,
 )
 
 internal data class CdnRaceResult(val host: String, val bytes: Long, val elapsedMs: Long, val success: Boolean)
@@ -255,7 +257,7 @@ internal class CdnAutoRouter(
         if (raceInFlight || now < limitedUntilMs) return false
         if (now - lastRaceAtMs < RACE_MIN_INTERVAL_MS || racesThisVideo >= RACE_MAX_PER_VIDEO) return false
         val buffer = signal.bufferMs ?: return false
-        if (signal.stuck) return true
+        if (signal.stuck || signal.rebuffering) return true
         if (signal.metered) return false
         val current = stats[signal.currentHost]?.estimator ?: return false
         val rate = current.estimateBps() ?: return false
@@ -307,10 +309,17 @@ internal class CdnAutoRouter(
     /**
      * Applies a finished race. The fastest finisher becomes active only if it moved the race bytes
      * in at most two-thirds of the time [currentRateBps] needs; otherwise nothing changes. Losers and
-     * the host being left rest for a minute. Returns the new active host, or null for no switch.
+     * the host being left rest for a minute. A winner slower than [minWinnerBps] never switches,
+     * so a stall race does not trade one host that cannot carry the stream for another. Returns
+     * the new active host, or null for no switch.
      */
     @Synchronized
-    fun finishRace(currentHost: String, currentRateBps: Long, results: List<CdnRaceResult>): String? {
+    fun finishRace(
+        currentHost: String,
+        currentRateBps: Long,
+        results: List<CdnRaceResult>,
+        minWinnerBps: Long = 0,
+    ): String? {
         raceInFlight = false
         val now = clock()
         results.filter { it.success }.forEach { recordTransfer(it.host, it.bytes, it.elapsedMs) }
@@ -320,6 +329,7 @@ internal class CdnAutoRouter(
         val winnerMs = winner.elapsedMs * CDN_RACE_BYTES / winner.bytes.coerceAtLeast(1)
         val currentMs = if (currentRateBps <= 0) Long.MAX_VALUE else CDN_RACE_BYTES * 1_000 / currentRateBps
         if (currentMs != Long.MAX_VALUE && winnerMs * 3 > currentMs * 2) return null
+        if (minWinnerBps > 0 && CDN_RACE_BYTES * 1_000 < minWinnerBps * winnerMs) return null
         stats.getOrPut(currentHost, ::HostStats).restUntilMs = now + REST_MS
         activeHost = winner.host
         return winner.host

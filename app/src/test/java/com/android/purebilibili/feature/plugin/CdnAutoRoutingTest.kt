@@ -131,6 +131,30 @@ class CdnAutoRoutingTest {
     }
 
     @Test
+    fun `repeated stalls race even on metered networks without throughput evidence`() {
+        val router = router()
+        val host = "upos-sz-mirrorcosov.bilivideo.com"
+        assertTrue(router.shouldRace(CdnPlaybackSignal(host, bufferMs = 20_000, bitrateBps = 8_000_000, rebuffering = true, metered = true)))
+        assertFalse(router.shouldRace(CdnPlaybackSignal(host, bufferMs = null, bitrateBps = 8_000_000, rebuffering = true)))
+    }
+
+    @Test
+    fun `a stall race switches only to a host that can carry the stream`() {
+        val router = router()
+        router.register(listOf(cosov), emptyList())
+        // 1 MB/s carries an 8 Mbit/s stream with the 1.2x margin; 786 KB in 1 s does not reach 1.2 MB/s.
+        router.beginRace()
+        assertNull(router.finishRace("upos-sz-mirrorcosov.bilivideo.com", 0,
+            listOf(CdnRaceResult("upos-sz-mirrorali.bilivideo.com", CDN_RACE_BYTES, 1_000, true)),
+            minWinnerBps = 1_200_000))
+        now += 13_000
+        router.beginRace()
+        assertEquals("upos-sz-mirrorhw.bilivideo.com", router.finishRace("upos-sz-mirrorcosov.bilivideo.com", 0,
+            listOf(CdnRaceResult("upos-sz-mirrorhw.bilivideo.com", CDN_RACE_BYTES, 500, true)),
+            minWinnerBps = 1_200_000))
+    }
+
+    @Test
     fun `rate limits stop racing for minutes`() {
         val router = router()
         router.recordFailure("upos-sz-mirrorali.bilivideo.com", cosov, 429, swapped = true)
