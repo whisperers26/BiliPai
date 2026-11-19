@@ -343,7 +343,7 @@ private fun RelatedVideoItemSkeleton(
     HorizontalVideoCardFrame(
         coverAspectRatio = coverAspectRatio,
         stacked = stacked,
-        coverWidthScale = resolveRelatedVideoCoverWidthScale(cardHeight),
+        coverSizing = resolveRelatedVideoCoverSizing(cardHeight),
         trailingContent = { Spacer(Modifier.size(48.dp)) },
         modifier = modifier
             .clip(AppShapes.container(ContainerLevel.Card))
