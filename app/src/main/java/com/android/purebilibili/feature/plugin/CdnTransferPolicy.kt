@@ -3,6 +3,8 @@ package com.android.purebilibili.feature.plugin
 internal const val CDN_WINDOW_BYTES = 1024L * 1024L
 internal const val CDN_MIN_PARALLEL_BYTES = 256L * 1024L
 internal const val CDN_MAX_CONNECTIONS = 4
+/** Bilibili media CDNs refuse open-ended ranges; unbounded reads use ranges of this size. */
+internal const val CDN_MEDIA_CHUNK_BYTES = 8L * 1024L * 1024L
 
 internal data class CdnContentRange(val start: Long, val end: Long, val total: Long)
 

@@ -32,7 +32,8 @@ internal class CdnPlaybackDataSource(
     private val upstream: DataSource,
     private val background: Boolean = false,
     private val client: OkHttpClient? = null,
-    private val isWifi: () -> Boolean = { NetworkModule.appContext?.let { NetworkUtils.isWifi(it) } == true }
+    private val isWifi: () -> Boolean = { NetworkModule.appContext?.let { NetworkUtils.isWifi(it) } == true },
+    private val mediaChunkBytes: Long = CDN_MEDIA_CHUNK_BYTES
 ) : BaseDataSource(true) {
     private var spec: DataSpec? = null
     private var candidates: List<String> = emptyList()
@@ -60,6 +61,12 @@ internal class CdnPlaybackDataSource(
     private var sampleBytes = 0L
     private var sampleNs = 0L
     private var samplePosition = 0L
+    // Bounded-range state for unbounded media reads; chunkBase is null when not chunking.
+    private var chunkBase: DataSpec? = null
+    private var chunkTotal: Long? = null
+    private var chunkPosition = 0L
+    private var chunkRequested = 0L
+    private var chunkReceived = 0L
 
     override fun open(dataSpec: DataSpec): Long {
         closed = false
@@ -101,6 +108,7 @@ internal class CdnPlaybackDataSource(
             try {
                 inUpstreamRead = true
                 count = upstream.read(buffer, offset, length)
+                if (count > 0) chunkReceived += count
             } catch (error: IOException) {
                 inUpstreamRead = false
                 if (!closed && autoRoute != null && reopenCount < MAX_REROUTES_PER_OPEN) {
@@ -114,6 +122,7 @@ internal class CdnPlaybackDataSource(
             } finally {
                 inUpstreamRead = false
             }
+            if (count == C.RESULT_END_OF_INPUT && openNextChunkIfAny()) return read(buffer, offset, length)
             if (count > 0 && monitored) recordDelegateBytes(count)
             if (count > 0) recordRoutedBytes(current, count, System.nanoTime() - readStartedNs)
         } else {
@@ -176,6 +185,7 @@ internal class CdnPlaybackDataSource(
             if (autoRoute != null) CdnAutoRoutingRuntime.detach(this)
             autoRoute = null
             preemptRequested = false
+            chunkBase = null
             delegateOpen = false
             window = ByteArray(0)
             spec = null
@@ -191,10 +201,54 @@ internal class CdnPlaybackDataSource(
         if (monitored) CdnTransferRuntime.start(delegateHost)
         // Set before open so failed opens can still release upstream resources in close().
         delegateOpen = true
-        return try { upstream.open(dataSpec) } catch (error: IOException) {
+        // Bilibili's media CDNs refuse open-ended requests (no Range, or `bytes=N-`) with
+        // 403/567, so an unbounded media read goes out as consecutive bounded ranges.
+        val chunked = dataSpec.length == C.LENGTH_UNSET.toLong() && dataSpec.position >= 0 &&
+            dataSpec.httpMethod == DataSpec.HTTP_METHOD_GET && isDiagnosticMediaUrl(dataSpec.uri.toString())
+        chunkBase = if (chunked) dataSpec else null
+        chunkTotal = null
+        if (!chunked) {
+            return try { upstream.open(dataSpec) } catch (error: IOException) {
+                if (monitored) finishDelegate(false, closed)
+                throw error
+            }
+        }
+        try {
+            openChunk(dataSpec.position)
+        } catch (error: IOException) {
             if (monitored) finishDelegate(false, closed)
             throw error
         }
+        return chunkTotal?.let { (it - dataSpec.position).coerceAtLeast(0) } ?: C.LENGTH_UNSET.toLong()
+    }
+
+    /** Opens the bounded range starting at [position] of the current unbounded media read. */
+    private fun openChunk(position: Long) {
+        val base = chunkBase ?: return
+        val remaining = chunkTotal?.let { it - position }
+        val length = remaining?.let { minOf(it, mediaChunkBytes) } ?: mediaChunkBytes
+        upstream.open(base.buildUpon().setPosition(position).setLength(length).build())
+        delegateOpen = true
+        if (chunkTotal == null) {
+            chunkTotal = upstream.responseHeaders.entries
+                .firstOrNull { it.key.equals("Content-Range", ignoreCase = true) }
+                ?.value?.firstOrNull()?.let(::parseCdnContentRange)?.total
+        }
+        chunkPosition = position
+        chunkRequested = length
+        chunkReceived = 0
+    }
+
+    /** Opens the next range when the current one ended and the file has more bytes. */
+    private fun openNextChunkIfAny(): Boolean {
+        if (chunkBase == null || closed) return false
+        val next = chunkPosition + chunkReceived
+        val more = chunkTotal?.let { next < it } ?: (chunkReceived >= chunkRequested)
+        if (!more) return false
+        runCatching { upstream.close() }
+        delegateOpen = false
+        openChunk(next)
+        return true
     }
 
     private fun recordDelegateBytes(count: Int) {
