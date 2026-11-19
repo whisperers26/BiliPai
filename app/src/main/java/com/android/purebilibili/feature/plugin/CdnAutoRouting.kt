@@ -25,11 +25,13 @@ private const val EWMA_SLOW_HALF_LIFE_S = 5.0
 private const val MIN_SAMPLE_BYTES = 16_000L
 private const val MIN_TOTAL_BYTES = 128_000L
 
-private const val SHORTFALL_RATE_FACTOR = 1.2
-private const val SHORTFALL_MIN_BYTES = 4L * 1024L * 1024L
+// Race once throughput is under 1.5x the stream bitrate, so a host is replaced before it stalls.
+private const val SHORTFALL_RATE_FACTOR = 1.5
+private const val SHORTFALL_MIN_BYTES = 2L * 1024L * 1024L
 private const val SHORTFALL_BUFFER_MS = 30_000L
-private const val RACE_MIN_INTERVAL_MS = 12_000L
-private const val RACE_MAX_PER_VIDEO = 6
+private const val STALL_WINNER_RATE_FACTOR = 1.2
+private const val RACE_MIN_INTERVAL_MS = 8_000L
+private const val RACE_MAX_PER_VIDEO = 10
 private const val REST_MS = 60_000L
 private const val FAILURE_WINDOW_MS = 30_000L
 private const val FAILURE_MEMORY_MS = 60 * 60_000L
@@ -100,9 +102,9 @@ internal fun buildCdnRouteCandidates(issuedUrls: List<String>): List<CdnRoute> {
     return issued + swaps
 }
 
-/** Bytes per second a host needs to carry a [bitrateBps] stream with the shortfall margin. */
+/** Bytes per second a host needs to carry a [bitrateBps] stream with a 1.2x margin. */
 internal fun cdnStreamNeedBps(bitrateBps: Long): Long =
-    if (bitrateBps <= 0) 0L else (bitrateBps * SHORTFALL_RATE_FACTOR / 8).toLong()
+    if (bitrateBps <= 0) 0L else (bitrateBps * STALL_WINNER_RATE_FACTOR / 8).toLong()
 
 /** Shaka Player's bandwidth estimator: the lower of a fast and a slow EWMA, in bytes per second. */
 internal class CdnThroughputEstimator {

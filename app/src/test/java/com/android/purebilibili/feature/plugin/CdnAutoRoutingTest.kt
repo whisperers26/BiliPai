@@ -131,6 +131,25 @@ class CdnAutoRoutingTest {
     }
 
     @Test
+    fun `shortfall races below one and a half times the bitrate, eight seconds apart, ten per video`() {
+        val router = router()
+        val host = "upos-sz-mirrorcosov.bilivideo.com"
+        // 1.3 MB/s after 2.6 MB: 10.4 Mbit/s against an 8 Mbit/s stream is under the 1.5x margin.
+        repeat(2) { router.recordTransfer(host, 1_300_000, 1_000) }
+        val signal = CdnPlaybackSignal(host, bufferMs = 10_000, bitrateBps = 8_000_000)
+        assertTrue(router.shouldRace(signal))
+        assertFalse(router.shouldRace(signal.copy(bitrateBps = 6_000_000)))
+        repeat(10) {
+            assertTrue(router.beginRace())
+            router.cancelRace()
+            assertFalse(router.shouldRace(signal))
+            now += 8_000
+        }
+        assertFalse(router.shouldRace(signal))
+        assertEquals(1_200_000L, cdnStreamNeedBps(8_000_000))
+    }
+
+    @Test
     fun `repeated stalls race even on metered networks without throughput evidence`() {
         val router = router()
         val host = "upos-sz-mirrorcosov.bilivideo.com"
