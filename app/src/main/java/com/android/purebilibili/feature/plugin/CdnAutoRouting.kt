@@ -99,3 +99,37 @@ internal fun buildCdnRouteCandidates(issuedUrls: List<String>): List<CdnRoute> {
     }
     return issued + swaps
 }
+
+/** Shaka Player's bandwidth estimator: the lower of a fast and a slow EWMA, in bytes per second. */
+internal class CdnThroughputEstimator {
+    private val fast = Ewma(EWMA_FAST_HALF_LIFE_S)
+    private val slow = Ewma(EWMA_SLOW_HALF_LIFE_S)
+    var totalBytes: Long = 0
+        private set
+
+    fun sample(durationMs: Long, bytes: Long) {
+        if (bytes < MIN_SAMPLE_BYTES || durationMs <= 0) return
+        val bytesPerSecond = bytes * 1_000.0 / durationMs
+        val weight = durationMs / 1_000.0
+        fast.sample(weight, bytesPerSecond)
+        slow.sample(weight, bytesPerSecond)
+        totalBytes += bytes
+    }
+
+    fun estimateBps(): Long? {
+        if (totalBytes < MIN_TOTAL_BYTES) return null
+        return minOf(fast.estimate(), slow.estimate()).toLong()
+    }
+
+    private class Ewma(halfLifeS: Double) {
+        private val alpha = exp(ln(0.5) / halfLifeS)
+        private var value = 0.0
+        private var totalWeight = 0.0
+        fun sample(weight: Double, sample: Double) {
+            val adjusted = alpha.pow(weight)
+            value = sample * (1 - adjusted) + adjusted * value
+            totalWeight += weight
+        }
+        fun estimate(): Double = value / (1 - alpha.pow(totalWeight))
+    }
+}

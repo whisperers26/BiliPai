@@ -57,4 +57,15 @@ class CdnAutoRoutingTest {
         val pcdn = "https://xy1x2x3x4xy.mcdn.bilivideo.cn:4483/upgcxcode/11/v.m4s?os=mcdn"
         assertEquals(listOf(akam, pcdn), buildCdnRouteCandidates(listOf(akam, pcdn)).map { it.url })
     }
+
+    @Test
+    fun `estimator needs enough bytes and falls fast`() {
+        val estimator = CdnThroughputEstimator()
+        estimator.sample(durationMs = 100, bytes = 10_000)
+        assertNull(estimator.estimateBps())
+        repeat(4) { estimator.sample(durationMs = 1_000, bytes = 1_000_000) }
+        assertEquals(1_000_000.0, estimator.estimateBps()!!.toDouble(), 1_000.0)
+        estimator.sample(durationMs = 2_000, bytes = 200_000)
+        assertTrue(estimator.estimateBps()!! < 700_000)
+    }
 }
