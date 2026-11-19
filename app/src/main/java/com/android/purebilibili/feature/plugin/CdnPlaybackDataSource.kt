@@ -207,6 +207,10 @@ internal class CdnPlaybackDataSource(
             dataSpec.httpMethod == DataSpec.HTTP_METHOD_GET && isDiagnosticMediaUrl(dataSpec.uri.toString())
         chunkBase = if (chunked) dataSpec else null
         chunkTotal = null
+        com.android.purebilibili.core.util.Logger.d(
+            "CdnPlaybackDataSource",
+            "open host=$delegateHost position=${dataSpec.position} length=${dataSpec.length} chunked=$chunked"
+        )
         if (!chunked) {
             return try { upstream.open(dataSpec) } catch (error: IOException) {
                 if (monitored) finishDelegate(false, closed)
