@@ -9817,6 +9817,16 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     }
 
     init {
+        // 自动选线换了节点时，像手动线路切换一样提示；只提示本页视频的切换。
+        viewModelScope.launch {
+            com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.switches.collect { switch ->
+                val current = _uiState.value as? VideoPlaybackUiState.Success ?: return@collect
+                if (switch.originalUrl !in current.allVideoUrls && switch.originalUrl !in current.allAudioUrls &&
+                    switch.originalUrl != current.playUrl && switch.originalUrl != current.audioUrl
+                ) return@collect
+                toast("已自动切换到线路：${com.android.purebilibili.feature.plugin.resolveAutoCdnHostLabel(switch.toHost)}")
+            }
+        }
         viewModelScope.launch {
             combine(
                 PluginManager.pluginsFlow,
