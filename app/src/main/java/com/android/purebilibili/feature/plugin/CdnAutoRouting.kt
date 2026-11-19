@@ -100,6 +100,10 @@ internal fun buildCdnRouteCandidates(issuedUrls: List<String>): List<CdnRoute> {
     return issued + swaps
 }
 
+/** Bytes per second a host needs to carry a [bitrateBps] stream with the shortfall margin. */
+internal fun cdnStreamNeedBps(bitrateBps: Long): Long =
+    if (bitrateBps <= 0) 0L else (bitrateBps * SHORTFALL_RATE_FACTOR / 8).toLong()
+
 /** Shaka Player's bandwidth estimator: the lower of a fast and a slow EWMA, in bytes per second. */
 internal class CdnThroughputEstimator {
     private val fast = Ewma(EWMA_FAST_HALF_LIFE_S)

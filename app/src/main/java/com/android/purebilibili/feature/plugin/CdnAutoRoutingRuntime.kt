@@ -7,7 +7,9 @@ import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.util.Logger
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -26,7 +28,6 @@ import java.util.concurrent.atomic.AtomicInteger
 
 private const val TAG = "CdnAutoRouting"
 private const val PLAYBACK_SIGNAL_TTL_MS = 2_500L
-private const val STUCK_BUFFERING_MS = 1_200L
 
 /**
  * Process-wide glue between [CdnAutoRouter] and the media data sources. Signed URLs stay in
@@ -36,6 +37,8 @@ private const val STUCK_BUFFERING_MS = 1_200L
 internal object CdnAutoRoutingRuntime {
     @androidx.annotation.VisibleForTesting
     internal var router = CdnAutoRouter(clock = ::nowMs)
+    @androidx.annotation.VisibleForTesting
+    internal var rebuffers = CdnRebufferTracker(clock = ::nowMs)
     private val totalsByPath = ConcurrentHashMap<String, Long>()
     private val sources = Collections.synchronizedSet(
         Collections.newSetFromMap(WeakHashMap<CdnPlaybackDataSource, Boolean>())
@@ -45,9 +48,11 @@ internal object CdnAutoRoutingRuntime {
     private data class PlaybackSample(val bufferMs: Long, val bitrateBps: Long, val atMs: Long)
     private data class ReadPosition(val originalUrl: String, val host: String, val position: Long, val total: Long?)
 
+    private enum class Trigger { SHORTFALL, STUCK, REBUFFER }
+
     @Volatile private var playbackSample: PlaybackSample? = null
-    @Volatile private var bufferingSinceMs: Long? = null
     @Volatile private var lastRead: ReadPosition? = null
+    @Volatile private var stuckCheck: Job? = null
 
     @Volatile
     var enabled: Boolean = false
@@ -79,12 +84,14 @@ internal object CdnAutoRoutingRuntime {
     @androidx.annotation.VisibleForTesting
     internal fun resetForTest() {
         router = CdnAutoRouter(clock = ::nowMs)
+        rebuffers = CdnRebufferTracker(clock = ::nowMs)
+        stuckCheck?.cancel()
+        stuckCheck = null
         totalsByPath.clear()
         sources.clear()
         lastRead = null
         _currentHost.value = null
         playbackSample = null
-        bufferingSinceMs = null
     }
 
     fun configure(enabled: Boolean) {
@@ -96,7 +103,9 @@ internal object CdnAutoRoutingRuntime {
     }
 
     fun register(videoUrls: List<String>, audioUrls: List<String>) {
-        if (enabled) router.register(videoUrls, audioUrls)
+        if (!enabled) return
+        router.register(videoUrls, audioUrls)
+        rebuffers.newSource()
     }
 
     /** The route to open for an issued [url], or null when the URL is not auto-routed. */
@@ -127,7 +136,7 @@ internal object CdnAutoRoutingRuntime {
 
     fun recordTransfer(host: String, bytes: Long, activeReadMs: Long, foreground: Boolean) {
         router.recordTransfer(host, bytes, activeReadMs)
-        if (foreground) maybeRace(stuck = false)
+        if (foreground) maybeRace(Trigger.SHORTFALL)
     }
 
     fun noteRead(originalUrl: String, host: String, position: Long, total: Long?) {
@@ -135,20 +144,41 @@ internal object CdnAutoRoutingRuntime {
         _currentHost.value = host
     }
 
-    /** Fed about once a second by the foreground player. */
-    fun playback(bufferMs: Long, bitrateBps: Long, buffering: Boolean) {
+    /**
+     * Fed by the foreground player on every playback state change and about once a second.
+     * [buffering] means it is buffering while it wants to play.
+     */
+    fun playback(bufferMs: Long, bitrateBps: Long, buffering: Boolean, ready: Boolean) {
         if (!enabled) return
-        val now = nowMs()
-        playbackSample = PlaybackSample(bufferMs.coerceAtLeast(0), bitrateBps.coerceAtLeast(0), now)
+        playbackSample = PlaybackSample(bufferMs.coerceAtLeast(0), bitrateBps.coerceAtLeast(0), nowMs())
+        val episode = rebuffers.episode
+        if (rebuffers.observe(buffering, ready)) maybeRace(Trigger.REBUFFER)
         if (!buffering) {
-            bufferingSinceMs = null
+            stuckCheck?.cancel()
+            stuckCheck = null
             return
         }
-        val since = bufferingSinceMs ?: now.also { bufferingSinceMs = it }
-        if (now - since >= STUCK_BUFFERING_MS) maybeRace(stuck = true)
+        if (rebuffers.stuck()) maybeRace(Trigger.STUCK)
+        if (rebuffers.episode != episode) scheduleStuckCheck(rebuffers.episode)
     }
 
-    private fun maybeRace(stuck: Boolean) {
+    /** A seek, skip or other position jump in the foreground player: its rebuffer is expected. */
+    fun positionJumped() {
+        if (!enabled) return
+        rebuffers.jumped()
+    }
+
+    /** Checks a buffering episode exactly when it turns stuck, rather than at the next tick. */
+    private fun scheduleStuckCheck(episode: Int) {
+        stuckCheck?.cancel()
+        stuckCheck = AppScope.ioScope.launch {
+            delay(rebuffers.stuckThresholdMs())
+            while (rebuffers.episode == episode && !rebuffers.stuck()) delay(100)
+            if (rebuffers.episode == episode) maybeRace(Trigger.STUCK)
+        }
+    }
+
+    private fun maybeRace(trigger: Trigger) {
         if (!enabled) return
         val read = lastRead ?: return
         val sample = playbackSample?.takeIf { nowMs() - it.atMs <= PLAYBACK_SIGNAL_TTL_MS }
@@ -157,16 +187,19 @@ internal object CdnAutoRoutingRuntime {
             currentHost = read.host,
             bufferMs = sample?.bufferMs,
             bitrateBps = sample?.bitrateBps ?: 0,
-            stuck = stuck,
-            metered = metered
+            stuck = trigger == Trigger.STUCK,
+            metered = metered,
+            rebuffering = trigger == Trigger.REBUFFER
         )
         if (!router.shouldRace(signal)) return
         val challengers = router.pickChallengers(router.routesFor(read.originalUrl), read.host, metered)
         if (challengers.isEmpty() || !router.beginRace()) return
-        AppScope.ioScope.launch { race(read, challengers, stuck) }
+        rebuffers.raced()
+        val bitrateBps = signal.bitrateBps
+        AppScope.ioScope.launch { race(read, challengers, trigger, bitrateBps) }
     }
 
-    private suspend fun race(read: ReadPosition, challengers: List<CdnRoute>, stuck: Boolean) {
+    private suspend fun race(read: ReadPosition, challengers: List<CdnRoute>, trigger: Trigger, bitrateBps: Long) {
         try {
             val range = raceRange(read.position, read.total)
             val results = coroutineScope {
@@ -182,10 +215,14 @@ internal object CdnAutoRoutingRuntime {
                     }
                 }.awaitAll()
             }
-            val currentRate = if (stuck) 0L else router.estimateBps(read.host) ?: 0L
-            val switched = router.finishRace(read.host, currentRate, results)
-            Logger.d(TAG, "race from=${read.host} stuck=$stuck results=${results.map { "${it.host}:${it.elapsedMs}ms:${it.success}" }} switched=$switched")
+            // A stuck or stalling host already proved it cannot keep up, so its average rate is no
+            // bar; a stall winner must still carry the stream with the shortfall margin.
+            val currentRate = if (trigger == Trigger.SHORTFALL) router.estimateBps(read.host) ?: 0L else 0L
+            val minWinnerBps = if (trigger == Trigger.REBUFFER) cdnStreamNeedBps(bitrateBps) else 0L
+            val switched = router.finishRace(read.host, currentRate, results, minWinnerBps)
+            Logger.d(TAG, "race from=${read.host} trigger=$trigger results=${results.map { "${it.host}:${it.elapsedMs}ms:${it.success}" }} switched=$switched")
             if (switched != null) {
+                rebuffers.jumped()
                 switchGeneration.incrementAndGet()
                 _currentHost.value = switched
                 _switches.tryEmit(Switch(read.originalUrl, read.host, switched))
