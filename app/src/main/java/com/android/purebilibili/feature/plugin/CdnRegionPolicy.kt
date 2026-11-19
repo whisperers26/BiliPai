@@ -78,9 +78,18 @@ internal fun applyPlaybackCdnPreference(
     // ① 设置里选了具体线路：最高优先，无条件排到最前。
     val host = preference.host
     if (host != null) {
+        // Akamai 链接带自己的 hdnts 令牌，把 UPOS 签名换到 Akamai 上只会 403；
+        // 只有 B 站本身下发了 Akamai 地址时才用它，否则按基础 URL 处理。
+        if (isAkamaiCdnHost(host)) {
+            val issued = candidates.firstOrNull { isAkamaiCdnHost(hostOf(it.videoUrl)) }
+                ?: return applyPlaybackCdnPreference(candidates, PlaybackCdnPreference.BASE_URL, pluginApplied)
+            return (listOf(issued) + candidates).distinctBy { it.videoUrl to it.audioUrl }
+        }
         // 不管原候选是 PCDN 还是常规 CDN，改 host 后就是设置里的线路
-        // （upgcxcode 路径与签名在 host 之间通用）。
-        val base = candidates.first()
+        // （upgcxcode 路径与签名在 host 之间通用）。Akamai 地址的签名不通用，
+        // 所以从第一个可换 host 的候选出发。
+        val base = candidates.firstOrNull { rewriteBilivideoHost(it.videoUrl, host) != null }
+            ?: candidates.first()
         val preferred = base.copy(
             videoUrl = rewriteBilivideoHost(base.videoUrl, host) ?: base.videoUrl,
             audioUrl = base.audioUrl?.let { rewriteBilivideoHost(it, host) ?: it },
@@ -750,7 +759,7 @@ internal fun rewriteBilivideoHost(url: String, newHost: String): String? {
         originalHost.endsWith(".bilivideo.cn") ||
         originalHost.endsWith(".bilivideo.net")
     if (!isBiliHost) return null
-    if (newHost.isBlank()) return null
+    if (newHost.isBlank() || isAkamaiCdnHost(newHost)) return null
 
     val scheme = uri.scheme ?: return null
     val userInfo = uri.rawUserInfo?.let { "$it@" }.orEmpty()
@@ -760,6 +769,10 @@ internal fun rewriteBilivideoHost(url: String, newHost: String): String? {
     val fragment = uri.rawFragment?.let { "#$it" }.orEmpty()
     return "$scheme://$userInfo$newHost$port$path$query$fragment"
 }
+
+/** Akamai media URLs carry their own token; a UPOS signature swapped onto Akamai is refused. */
+internal fun isAkamaiCdnHost(host: String): Boolean =
+    host.lowercase().let { it == "akamaized.net" || it.endsWith(".akamaized.net") }
 
 internal fun hostFromCdnUrl(url: String): String {
     return runCatching { URI(url).host.orEmpty().lowercase() }.getOrDefault("")

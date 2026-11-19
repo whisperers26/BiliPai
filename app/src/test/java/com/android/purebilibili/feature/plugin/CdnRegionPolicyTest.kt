@@ -252,7 +252,7 @@ class CdnRegionPolicyTest {
     }
 
     @Test
-    fun `bundled catalog uses provided overseas upos cdn hosts`() {
+    fun `bundled overseas catalog leads with cosov and mainland mirrors instead of akamai or aliov`() {
         val catalogFile = listOf(
             File("src/main/res/raw/cdn_region_catalog.json"),
             File("app/src/main/res/raw/cdn_region_catalog.json")
@@ -261,9 +261,9 @@ class CdnRegionPolicyTest {
 
         assertEquals(
             listOf(
-                "upos-hz-mirrorakam.akamaized.net",
-                "upos-sz-mirroraliov.bilivideo.com",
-                "upos-sz-mirrorcosov.bilivideo.com"
+                "upos-sz-mirrorcosov.bilivideo.com",
+                "upos-sz-mirrorali.bilivideo.com",
+                "upos-sz-mirrorhw.bilivideo.com"
             ),
             catalog["海外"]
         )
@@ -452,5 +452,28 @@ class CdnRegionPolicyTest {
 
         assertEquals("backup.bilivideo.com", hostFromCdnUrl(preferred.first().videoUrl))
         assertEquals("base.bilivideo.com", hostFromCdnUrl(preferred.last().videoUrl))
+    }
+
+    @Test
+    fun `akamai preference uses issued akamai url and never swaps a upos signature onto it`() {
+        val cosov = "https://upos-sz-mirrorcosov.bilivideo.com/video.m4s?os=cosovbv"
+        val akam = "https://upos-hz-mirrorakam.akamaized.net/video.m4s?os=akam&hdnts=x"
+        val issued = buildPlaybackCdnCandidates(listOf(cosov, akam), emptyList())
+
+        assertEquals(akam, applyPlaybackCdnPreference(issued, PlaybackCdnPreference.AKAMAI).first().videoUrl)
+        val cosovOnly = buildPlaybackCdnCandidates(listOf(cosov), emptyList())
+        assertEquals(cosov, applyPlaybackCdnPreference(cosovOnly, PlaybackCdnPreference.AKAMAI).first().videoUrl)
+        assertEquals(null, rewriteBilivideoHost(cosov, "upos-hz-mirrorakam.akamaized.net"))
+    }
+
+    @Test
+    fun `fixed host preference starts from a swappable upos url when akamai is the base`() {
+        val akam = "https://upos-hz-mirrorakam.akamaized.net/video.m4s?os=akam&hdnts=x"
+        val cosov = "https://upos-sz-mirrorcosov.bilivideo.com/video.m4s?os=cosovbv"
+        val issued = buildPlaybackCdnCandidates(listOf(akam, cosov), emptyList())
+
+        val preferred = applyPlaybackCdnPreference(issued, PlaybackCdnPreference.ALI)
+
+        assertEquals("https://upos-sz-mirrorali.bilivideo.com/video.m4s?os=cosovbv", preferred.first().videoUrl)
     }
 }

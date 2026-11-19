@@ -85,4 +85,10 @@ class PiliPlayerMenuPolicyTest {
         assertTrue(selectPiliCdnUrl(listOf(source), PiliCdnService.HW)
             .startsWith("https://proxy-tf-all-ws.bilivideo.com?url=https%3A%2F%2F"))
     }
+    @Test fun akamaiServiceUsesIssuedAkamaiUrlInsteadOfSwappingUposSignature() {
+        val cosov = "https://upos-sz-mirrorcosov.bilivideo.com/upgcxcode/abc/video.m4s?os=cosovbv&sign=y"
+        val akam = "https://upos-hz-mirrorakam.akamaized.net/upgcxcode/abc/video.m4s?os=akam&hdnts=z"
+        assertEquals(akam, selectPiliCdnUrl(listOf(cosov, akam), PiliCdnService.AKAMAI))
+        assertEquals(cosov, selectPiliCdnUrl(listOf(cosov), PiliCdnService.AKAMAI))
+    }
 }
