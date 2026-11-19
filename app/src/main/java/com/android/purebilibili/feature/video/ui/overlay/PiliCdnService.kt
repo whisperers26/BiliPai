@@ -45,6 +45,10 @@ internal fun selectPiliCdnUrl(urls: List<String>, service: PiliCdnService): Stri
     val candidates = urls.filter { it.isNotBlank() }
     require(candidates.isNotEmpty()) { "当前媒体没有可用播放地址" }
     if (service == PiliCdnService.BASE) return candidates.first()
+    // Akamai URLs carry their own hdnts token: a UPOS signature swapped onto Akamai is a 403.
+    if (service == PiliCdnService.AKAMAI) {
+        return candidates.firstOrNull { URI(it).host.orEmpty().endsWith(".akamaized.net") } ?: candidates.first()
+    }
     var mcdnTf: String? = null
     var mcdnUpgcxcode: String? = null
     for (url in candidates) {
