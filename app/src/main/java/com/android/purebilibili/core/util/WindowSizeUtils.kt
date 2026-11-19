@@ -337,7 +337,15 @@ private fun androidx.compose.material3.adaptive.Posture.toAppFoldingFeatureInfo(
             isFlat = hinge.isFlat,
         )
     }
-    return resolveLayoutFoldingFeatureInfo(isTabletop = isTabletop, hinges = hinges)
+    val primary = selectPrimaryHingeFeature(hinges) ?: return AppFoldingFeatureInfo()
+    return AppFoldingFeatureInfo(
+        posture = resolveAppFoldPosture(isTabletop = isTabletop, hinges = hinges),
+        hingeOrientation = primary.orientation,
+        hingeBounds = primary.bounds,
+        isSeparating = hinges.any { hinge -> hinge.isSeparating },
+        isOccluding = hinges.any { hinge -> hinge.isOccluding },
+        hinges = hinges,
+    )
 }
 
 private fun Context.hasPrecisePointer(): Boolean {
