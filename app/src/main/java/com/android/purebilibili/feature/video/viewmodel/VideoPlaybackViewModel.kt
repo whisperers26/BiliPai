@@ -8750,23 +8750,23 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         val player = exoPlayer ?: return
         com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.playback(
             bufferMs = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0),
-            bitrateBps = (player.videoFormat?.bitrate?.coerceAtLeast(0)?.toLong() ?: 0L) +
-                (player.audioFormat?.bitrate?.coerceAtLeast(0)?.toLong() ?: 0L),
+            videoBitrateBps = player.videoFormat?.bitrate?.coerceAtLeast(0)?.toLong() ?: 0L,
             buffering = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady,
             ready = player.playbackState == Player.STATE_READY
         )
     }
 
     /**
-     * Its own one-second tick: the plugin tick slows to five seconds without plugins, which left
-     * auto routing's playback sample stale (no shortfall race) and its stuck check late.
+     * Its own tick, every second or every quarter second while little is buffered: the plugin
+     * tick slows to five seconds without plugins, which left auto routing's playback sample stale
+     * (no shortfall race) and its stuck checks late.
      */
     private fun startCdnAutoSignal() {
         cdnAutoSignalJob?.cancel()
         cdnAutoSignalJob = viewModelScope.launch {
             while (true) {
                 feedCdnAutoRouting()
-                delay(1_000L)
+                delay(com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.signalIntervalMs())
             }
         }
     }
@@ -9403,7 +9403,20 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             audioUrls = rawAudioUrls
         )
 
-        com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.register(rawVideoUrls, rawAudioUrls)
+        // Every representation of an adaptive manifest is routed too: under auto quality the player
+        // may play one that was not the selected pair.
+        val manifestVideoUrls = adaptiveDashSource?.videoTracks.orEmpty()
+            .flatMap { listOf(it.baseUrl) + it.backupUrl.orEmpty() }
+        val manifestAudioUrls = adaptiveDashSource?.audioTracks.orEmpty()
+            .flatMap { listOf(it.baseUrl) + it.backupUrl.orEmpty() }
+        val selectedBandwidth = (cachedDashVideos + adaptiveDashSource?.videoTracks.orEmpty())
+            .firstOrNull { it.baseUrl == videoUrl || videoUrl in it.backupUrl.orEmpty() }
+            ?.bandwidth?.toLong() ?: 0L
+        com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.register(
+            videoUrls = (rawVideoUrls + manifestVideoUrls).distinct(),
+            audioUrls = (rawAudioUrls + manifestAudioUrls).distinct(),
+            videoBandwidthBps = selectedBandwidth
+        )
         val cdnPlugin = PluginManager
             .getEnabledPlugins(PlaybackCdnPlugin::class)
             .firstOrNull()
@@ -9847,10 +9860,24 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch {
             com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.switches.collect { switch ->
                 val current = _uiState.value as? VideoPlaybackUiState.Success ?: return@collect
-                if (switch.originalUrl !in current.allVideoUrls && switch.originalUrl !in current.allAudioUrls &&
-                    switch.originalUrl != current.playUrl && switch.originalUrl != current.audioUrl
-                ) return@collect
+                // Any representation of this page's video counts: under auto quality it may not be the selected one.
+                val switchVideo = com.android.purebilibili.feature.plugin.cdnSessionKeyOf(switch.originalUrl)
+                val pageVideo = com.android.purebilibili.feature.plugin.cdnSessionKeyOf(current.playUrl)
+                val samePage = if (switchVideo != null && pageVideo != null) switchVideo == pageVideo else
+                    switch.originalUrl in current.allVideoUrls || switch.originalUrl == current.playUrl
+                if (!samePage) return@collect
                 toast("已自动切换到线路：${com.android.purebilibili.feature.plugin.resolveAutoCdnHostLabel(switch.toHost)}")
+            }
+        }
+        viewModelScope.launch {
+            com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.reverts.collect { revert ->
+                if (_uiState.value !is VideoPlaybackUiState.Success) return@collect
+                toast(
+                    com.android.purebilibili.feature.plugin.resolveAutoCdnRevertMessage(
+                        com.android.purebilibili.feature.plugin.resolveAutoCdnHostLabel(revert.fromHost),
+                        revert.reason
+                    )
+                )
             }
         }
         viewModelScope.launch {

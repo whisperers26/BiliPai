@@ -29,9 +29,13 @@ private const val MIN_TOTAL_BYTES = 128_000L
 private const val SHORTFALL_RATE_FACTOR = 1.5
 private const val SHORTFALL_MIN_BYTES = 2L * 1024L * 1024L
 private const val SHORTFALL_BUFFER_MS = 30_000L
-private const val STALL_WINNER_RATE_FACTOR = 1.2
 private const val RACE_MIN_INTERVAL_MS = 8_000L
-private const val RACE_MAX_PER_VIDEO = 10
+private const val RACE_MAX_PER_VIDEO = 12
+// Each switch costs a reconnect, so a host that won stays: 10, 20, 40 s before the next race, 4 at most.
+private const val SWITCH_COOLDOWN_MS = 10_000L
+private const val MAX_SWITCHES_PER_VIDEO = 4
+// A race that found nothing faster waits longer before the next one: 8, 16, 32, then 60 s.
+private const val NO_CHANGE_COOLDOWN_MAX_MS = 60_000L
 private const val REST_MS = 60_000L
 private const val FAILURE_WINDOW_MS = 30_000L
 private const val FAILURE_MEMORY_MS = 60 * 60_000L
@@ -102,10 +106,6 @@ internal fun buildCdnRouteCandidates(issuedUrls: List<String>): List<CdnRoute> {
     return issued + swaps
 }
 
-/** Bytes per second a host needs to carry a [bitrateBps] stream with a 1.2x margin. */
-internal fun cdnStreamNeedBps(bitrateBps: Long): Long =
-    if (bitrateBps <= 0) 0L else (bitrateBps * STALL_WINNER_RATE_FACTOR / 8).toLong()
-
 /** Shaka Player's bandwidth estimator: the lower of a fast and a slow EWMA, in bytes per second. */
 internal class CdnThroughputEstimator {
     private val fast = Ewma(EWMA_FAST_HALF_LIFE_S)
@@ -151,7 +151,14 @@ internal data class CdnPlaybackSignal(
     val rebuffering: Boolean = false,
 )
 
-internal data class CdnRaceResult(val host: String, val bytes: Long, val elapsedMs: Long, val success: Boolean)
+/** One contender's race. [cancelled] means it was cut off after the race was decided: no failure, no rest. */
+internal data class CdnRaceResult(
+    val host: String,
+    val bytes: Long,
+    val elapsedMs: Long,
+    val success: Boolean,
+    val cancelled: Boolean = false,
+)
 
 internal class CdnAutoRouter(
     private val clock: () -> Long,
@@ -166,24 +173,53 @@ internal class CdnAutoRouter(
     private val stats = mutableMapOf<String, HostStats>()
     private val issuedByPath = linkedMapOf<String, List<String>>()
     private val bannedByPath = mutableMapOf<String, MutableSet<String>>()
+    private val videoPaths = mutableSetOf<String>()
     private var networkIdentity: String? = null
     private var limitedUntilMs = 0L
-    private var lastRaceAtMs = Long.MIN_VALUE / 2
+    private var nextRaceAtMs = Long.MIN_VALUE / 2
     private var racesThisVideo = 0
+    private var switchesThisVideo = 0
+    private var noChangeStreak = 0
     private var raceInFlight = false
+    private var sessionKey: String? = null
+
+    /** The highest video bitrate seen this video, bits/s; it only rises, so ABR cannot hide a slow host. */
+    var requiredVideoBps: Long = 0
+        private set
 
     /** The host requests are routed to; null means Bilibili's own assignment. */
     var activeHost: String? = null
         private set
 
+    /**
+     * Registers issued URLs. [sessionKey] names the video (bvid and cid): a quality change or a URL
+     * refresh of the same video keeps the active host. Without a key, a set of only unknown paths
+     * counts as a new video. Returns true when this starts a new video.
+     */
     @Synchronized
-    fun register(issuedVideo: List<String>, issuedAudio: List<String>) {
+    fun register(
+        issuedVideo: List<String>,
+        issuedAudio: List<String>,
+        sessionKey: String? = null,
+        videoBandwidthBps: Long = 0,
+    ): Boolean {
         val byPath = (issuedVideo + issuedAudio).filter { it.isNotBlank() }.groupBy(::pathOf)
-        if (byPath.keys.none { it in issuedByPath }) {
+        val newSession = if (sessionKey != null) sessionKey != this.sessionKey else byPath.keys.none { it in issuedByPath }
+        // Kept even when null, so a keyed video played again after a keyless one starts afresh.
+        this.sessionKey = sessionKey
+        if (newSession) {
             // A new video starts on its own assignment: host speed depends on the file.
             activeHost = null
             racesThisVideo = 0
+            switchesThisVideo = 0
+            noChangeStreak = 0
+            nextRaceAtMs = Long.MIN_VALUE / 2
+            requiredVideoBps = 0
         }
+        // A (re)selected quality sets the bar, so a manual downgrade is judged at its own bitrate;
+        // the player's formats can only raise it from there.
+        if (videoBandwidthBps > 0) requiredVideoBps = videoBandwidthBps
+        issuedVideo.filter { it.isNotBlank() }.map(::pathOf).filterTo(videoPaths) { it.isNotBlank() }
         byPath.forEach { (path, urls) ->
             if (path.isNotBlank()) {
                 issuedByPath.remove(path)
@@ -194,8 +230,14 @@ internal class CdnAutoRouter(
             val oldest = issuedByPath.keys.first()
             issuedByPath.remove(oldest)
             bannedByPath.remove(oldest)
+            videoPaths.remove(oldest)
         }
+        return newSession
     }
+
+    /** True for a registered video track; audio and unknown URLs are false. */
+    @Synchronized
+    fun isVideo(url: String): Boolean = pathOf(url) in videoPaths
 
     @Synchronized
     fun isRegistered(url: String): Boolean = issuedByPath[pathOf(url)]?.contains(url) == true
@@ -225,24 +267,38 @@ internal class CdnAutoRouter(
     @Synchronized
     fun estimateBps(host: String): Long? = stats[host]?.estimator?.estimateBps()
 
+    /** Raises the required rate to [bitrateBps] (a video format's or manifest bandwidth, bits/s). */
+    @Synchronized
+    fun noteVideoBitrate(bitrateBps: Long) {
+        if (bitrateBps > requiredVideoBps) requiredVideoBps = bitrateBps
+    }
+
+    /** True when [host] failed within the last 30 s, so its earlier record no longer vouches for it. */
+    @Synchronized
+    fun recentlyFailed(host: String): Boolean {
+        val now = clock()
+        return stats[host]?.failuresAtMs?.any { now - it <= FAILURE_WINDOW_MS } == true
+    }
+
     /**
      * A failed request on [host] for [url]. A 403 on a swapped host bans it for that path only;
      * a 403 on an issued URL means the signature expired and is not held against the host.
+     * Returns true when [host] has now failed twice within 30 s: it is failing, not slow.
      */
     @Synchronized
-    fun recordFailure(host: String, url: String, status: Int?, swapped: Boolean) {
+    fun recordFailure(host: String, url: String, status: Int?, swapped: Boolean): Boolean {
         val now = clock()
         if (status == 412 || status == 429) {
             limitedUntilMs = now + RATE_LIMIT_BACKOFF_MS
             if (swapped && activeHost == host) activeHost = null
-            return
+            return false
         }
         if (status == 403 || status == 404) {
             if (swapped) {
                 bannedByPath.getOrPut(pathOf(url), ::mutableSetOf) += host
                 if (activeHost == host) activeHost = null
             }
-            return
+            return false
         }
         val entry = stats.getOrPut(host, ::HostStats)
         entry.failuresAtMs.addLast(now)
@@ -254,6 +310,7 @@ internal class CdnAutoRouter(
             entry.restUntilMs = now + REST_MS
             if (activeHost == host) activeHost = null
         }
+        return recent >= 2
     }
 
     /** Whether the current host is in enough trouble to spend bytes on a race. */
@@ -261,15 +318,17 @@ internal class CdnAutoRouter(
     fun shouldRace(signal: CdnPlaybackSignal): Boolean {
         val now = clock()
         if (raceInFlight || now < limitedUntilMs) return false
-        if (now - lastRaceAtMs < RACE_MIN_INTERVAL_MS || racesThisVideo >= RACE_MAX_PER_VIDEO) return false
+        if (now < nextRaceAtMs || racesThisVideo >= RACE_MAX_PER_VIDEO) return false
+        if (switchesThisVideo >= MAX_SWITCHES_PER_VIDEO) return false
         val buffer = signal.bufferMs ?: return false
         if (signal.stuck || signal.rebuffering) return true
         if (signal.metered) return false
         val current = stats[signal.currentHost]?.estimator ?: return false
         val rate = current.estimateBps() ?: return false
-        return signal.bitrateBps > 0 && buffer < SHORTFALL_BUFFER_MS &&
+        val required = maxOf(signal.bitrateBps, requiredVideoBps)
+        return required > 0 && buffer < SHORTFALL_BUFFER_MS &&
             current.totalBytes >= SHORTFALL_MIN_BYTES &&
-            rate * 8 < signal.bitrateBps * SHORTFALL_RATE_FACTOR
+            rate * 8 < required * SHORTFALL_RATE_FACTOR
     }
 
     /**
@@ -280,7 +339,8 @@ internal class CdnAutoRouter(
     @Synchronized
     fun pickChallengers(routes: List<CdnRoute>, currentHost: String, metered: Boolean): List<CdnRoute> {
         val now = clock()
-        val pool = routes.filter { it.host != currentHost }.filter { route ->
+        // The active host is excluded too: when the track still reads elsewhere, it could not reach it.
+        val pool = routes.filter { it.host != currentHost && it.host != activeHost }.filter { route ->
             val entry = stats[route.host]
             entry == null || (entry.restUntilMs <= now && entry.failuresAtMs.count { now - it <= FAILURE_MEMORY_MS } < 2)
         }
@@ -307,7 +367,7 @@ internal class CdnAutoRouter(
     fun beginRace(): Boolean {
         if (raceInFlight) return false
         raceInFlight = true
-        lastRaceAtMs = clock()
+        nextRaceAtMs = clock() + RACE_MIN_INTERVAL_MS
         racesThisVideo++
         return true
     }
@@ -315,31 +375,41 @@ internal class CdnAutoRouter(
     /**
      * Applies a finished race. The fastest finisher becomes active only if it moved the race bytes
      * in at most two-thirds of the time [currentRateBps] needs; otherwise nothing changes. Losers and
-     * the host being left rest for a minute. A winner slower than [minWinnerBps] never switches,
-     * so a stall race does not trade one host that cannot carry the stream for another. Returns
-     * the new active host, or null for no switch.
+     * the host being left rest for a minute; contenders cut off after the decision do not. The
+     * caller passes the current host's best honest rate (see [CdnAutoRoutingRuntime]), so a stuck
+     * request on a host that has been keeping up does not move the video to a slow winner.
+     * Returns the new active host, or null for no switch.
      */
     @Synchronized
-    fun finishRace(
-        currentHost: String,
-        currentRateBps: Long,
-        results: List<CdnRaceResult>,
-        minWinnerBps: Long = 0,
-    ): String? {
+    fun finishRace(currentHost: String, currentRateBps: Long, results: List<CdnRaceResult>): String? {
         raceInFlight = false
         val now = clock()
         results.filter { it.success }.forEach { recordTransfer(it.host, it.bytes, it.elapsedMs) }
-        val winner = results.filter { it.success }.minByOrNull { it.elapsedMs * CDN_RACE_BYTES / it.bytes.coerceAtLeast(1) }
-        results.filter { it !== winner }.forEach { stats.getOrPut(it.host, ::HostStats).restUntilMs = now + REST_MS }
-        winner ?: return null
-        val winnerMs = winner.elapsedMs * CDN_RACE_BYTES / winner.bytes.coerceAtLeast(1)
-        val currentMs = if (currentRateBps <= 0) Long.MAX_VALUE else CDN_RACE_BYTES * 1_000 / currentRateBps
-        if (currentMs != Long.MAX_VALUE && winnerMs * 3 > currentMs * 2) return null
-        if (minWinnerBps > 0 && CDN_RACE_BYTES * 1_000 < minWinnerBps * winnerMs) return null
+        val winner = results.filter { it.success }.minByOrNull(::raceMs)
+        results.filter { it !== winner && !it.cancelled }
+            .forEach { stats.getOrPut(it.host, ::HostStats).restUntilMs = now + REST_MS }
+        val switched = winner?.takeIf { won ->
+            // Never "switch" to where routing already points: that would announce a switch and change nothing.
+            won.host != currentHost && won.host != activeHost &&
+                (currentRateBps <= 0 || raceMs(won) * 3 <= CDN_RACE_BYTES * 1_000 / currentRateBps * 2)
+        }
+        if (switched == null) {
+            noChangeStreak++
+            val wait = RACE_MIN_INTERVAL_MS shl (noChangeStreak - 1).coerceAtMost(4)
+            nextRaceAtMs = now + wait.coerceAtMost(NO_CHANGE_COOLDOWN_MAX_MS)
+            return null
+        }
+        noChangeStreak = 0
+        switchesThisVideo++
+        nextRaceAtMs = now + (SWITCH_COOLDOWN_MS shl (switchesThisVideo - 1).coerceAtMost(4))
         stats.getOrPut(currentHost, ::HostStats).restUntilMs = now + REST_MS
-        activeHost = winner.host
-        return winner.host
+        activeHost = switched.host
+        return switched.host
     }
+
+    /** What the race bytes would have taken this contender, from a partial or a full read. */
+    private fun raceMs(result: CdnRaceResult): Long =
+        result.elapsedMs * CDN_RACE_BYTES / result.bytes.coerceAtLeast(1)
 
     @Synchronized
     fun cancelRace() { raceInFlight = false }

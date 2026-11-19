@@ -7,6 +7,7 @@ import org.junit.Test
 
 class CdnAutoRoutingCurrentHostTest {
     private val url = "https://upos-sz-mirrorcosov.bilivideo.com/upgcxcode/11/22/v.m4s?os=cosovbv&sign=a"
+    private val audio = "https://upos-sz-mirrorcosov.bilivideo.com/upgcxcode/11/22/a.m4s?os=cosovbv&sign=b"
 
     @After
     fun tearDown() {
@@ -18,9 +19,13 @@ class CdnAutoRoutingCurrentHostTest {
     fun `foreground reads publish the current host and disabling clears it`() {
         CdnAutoRoutingRuntime.resetForTest()
         CdnAutoRoutingRuntime.configure(true)
+        CdnAutoRoutingRuntime.register(listOf(url), listOf(audio))
         assertNull(CdnAutoRoutingRuntime.currentHost.value)
 
         CdnAutoRoutingRuntime.noteRead(url, "upos-sz-mirrorhw.bilivideo.com", 0, null)
+        assertEquals("upos-sz-mirrorhw.bilivideo.com", CdnAutoRoutingRuntime.currentHost.value)
+        // Audio often sits on another issued host; it never changes the shown host.
+        CdnAutoRoutingRuntime.noteRead(audio, "upos-sz-mirrorali.bilivideo.com", 0, null)
         assertEquals("upos-sz-mirrorhw.bilivideo.com", CdnAutoRoutingRuntime.currentHost.value)
 
         CdnAutoRoutingRuntime.configure(false)

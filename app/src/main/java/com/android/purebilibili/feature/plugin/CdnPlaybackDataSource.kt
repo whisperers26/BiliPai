@@ -35,7 +35,7 @@ internal class CdnPlaybackDataSource(
     private val isWifi: () -> Boolean = { NetworkModule.appContext?.let { NetworkUtils.isWifi(it) } == true },
     private val mediaChunkBytes: Long = CDN_MEDIA_CHUNK_BYTES
 ) : BaseDataSource(true) {
-    private var spec: DataSpec? = null
+    @Volatile private var spec: DataSpec? = null
     private var candidates: List<String> = emptyList()
     private var consumed = 0L
     private var window = ByteArray(0)
@@ -56,14 +56,28 @@ internal class CdnPlaybackDataSource(
     @Volatile private var inUpstreamRead = false
     @Volatile private var lastReadProgressNs = 0L
     private var routeGeneration = 0
-    private var routeTotal: Long? = null
+    @Volatile private var routeTotal: Long? = null
     private var reopenCount = 0
+    // Time spent opening the current upstream request, added to the first throughput sample so a
+    // slow first byte counts against the host (send to last byte, like the player pays).
+    private var openWaitNs = 0L
+    // The HTTP request in flight on a foreground video track, watched for being stuck; id 0 means none.
+    @Volatile private var requestId = 0L
+    @Volatile private var requestHost = ""
+    @Volatile private var requestPosition = 0L
+    @Volatile private var requestStartedMs = 0L
+    @Volatile private var requestFirstByteMs = -1L
+    @Volatile private var requestBytes = 0L
+    @Volatile private var requestLength = -1L
+    // Time spent inside the request's open and reads; -1 since-mark while the loader is paused.
+    @Volatile private var requestActiveMs = 0L
+    @Volatile private var requestActiveSinceMs = -1L
     private var sampleBytes = 0L
     private var sampleNs = 0L
     private var samplePosition = 0L
     // Bounded-range state for unbounded media reads; chunkBase is null when not chunking.
     private var chunkBase: DataSpec? = null
-    private var chunkTotal: Long? = null
+    @Volatile private var chunkTotal: Long? = null
     private var chunkPosition = 0L
     private var chunkRequested = 0L
     private var chunkReceived = 0L
@@ -105,10 +119,15 @@ internal class CdnPlaybackDataSource(
         if (!parallel) {
             if (shouldReroute()) rerouteAtConsumed(current)
             val readStartedNs = System.nanoTime()
+            if (requestId != 0L) requestActiveSinceMs = nowMs()
             try {
                 inUpstreamRead = true
                 count = upstream.read(buffer, offset, length)
                 if (count > 0) chunkReceived += count
+                if (count > 0 && requestId != 0L) {
+                    if (requestFirstByteMs < 0) requestFirstByteMs = nowMs()
+                    requestBytes += count
+                }
             } catch (error: IOException) {
                 inUpstreamRead = false
                 if (!closed && autoRoute != null && reopenCount < MAX_REROUTES_PER_OPEN) {
@@ -121,7 +140,9 @@ internal class CdnPlaybackDataSource(
                 throw error
             } finally {
                 inUpstreamRead = false
+                leaveRequestActivity()
             }
+            if (count == C.RESULT_END_OF_INPUT) requestId = 0
             if (count == C.RESULT_END_OF_INPUT && openNextChunkIfAny()) return read(buffer, offset, length)
             if (count > 0 && monitored) recordDelegateBytes(count)
             if (count > 0) recordRoutedBytes(current, count, System.nanoTime() - readStartedNs)
@@ -185,6 +206,8 @@ internal class CdnPlaybackDataSource(
             if (autoRoute != null) CdnAutoRoutingRuntime.detach(this)
             autoRoute = null
             preemptRequested = false
+            requestId = 0
+            openWaitNs = 0
             chunkBase = null
             delegateOpen = false
             window = ByteArray(0)
@@ -212,9 +235,18 @@ internal class CdnPlaybackDataSource(
             "open host=$delegateHost position=${dataSpec.position} length=${dataSpec.length} chunked=$chunked"
         )
         if (!chunked) {
-            return try { upstream.open(dataSpec) } catch (error: IOException) {
+            beginRequest(dataSpec.uri.toString(), dataSpec.position, dataSpec.length)
+            val openStartedNs = System.nanoTime()
+            return try {
+                upstream.open(dataSpec).also { opened ->
+                    if (requestLength < 0 && opened > 0) requestLength = opened
+                }
+            } catch (error: IOException) {
                 if (monitored) finishDelegate(false, closed)
                 throw error
+            } finally {
+                openWaitNs += System.nanoTime() - openStartedNs
+                leaveRequestActivity()
             }
         }
         try {
@@ -231,7 +263,14 @@ internal class CdnPlaybackDataSource(
         val base = chunkBase ?: return
         val remaining = chunkTotal?.let { it - position }
         val length = remaining?.let { minOf(it, mediaChunkBytes) } ?: mediaChunkBytes
-        upstream.open(base.buildUpon().setPosition(position).setLength(length).build())
+        beginRequest(base.uri.toString(), position, length)
+        val openStartedNs = System.nanoTime()
+        try {
+            upstream.open(base.buildUpon().setPosition(position).setLength(length).build())
+        } finally {
+            openWaitNs += System.nanoTime() - openStartedNs
+            leaveRequestActivity()
+        }
         delegateOpen = true
         if (chunkTotal == null) {
             chunkTotal = upstream.responseHeaders.entries
@@ -253,6 +292,56 @@ internal class CdnPlaybackDataSource(
         delegateOpen = false
         openChunk(next)
         return true
+    }
+
+    /** Starts watching a foreground video request to [url] (the URL actually opened). */
+    private fun beginRequest(url: String, position: Long, length: Long) {
+        requestId = 0
+        val original = spec?.uri?.toString() ?: return
+        if (background || !CdnAutoRoutingRuntime.enabled || !CdnAutoRoutingRuntime.isVideo(original)) return
+        requestHost = hostFromCdnUrl(url)
+        requestPosition = position
+        requestStartedMs = nowMs()
+        requestFirstByteMs = -1
+        requestBytes = 0
+        requestLength = length.takeIf { it > 0 } ?: -1
+        requestActiveMs = 0
+        requestActiveSinceMs = requestStartedMs
+        requestId = nextRequestId.incrementAndGet()
+        CdnAutoRoutingRuntime.videoRequestStarted(this)
+    }
+
+    private fun leaveRequestActivity() {
+        val since = requestActiveSinceMs
+        if (since < 0) return
+        requestActiveMs += nowMs() - since
+        requestActiveSinceMs = -1
+    }
+
+    /**
+     * The foreground video request in flight, for the stuck-request check. Null when idle, and
+     * while the loader is paused between reads (its rate would decay with a full buffer). Read
+     * from another thread: a snapshot that straddles a new request is discarded.
+     */
+    fun inFlight(nowMs: Long): CdnInFlightRequest? {
+        val id = requestId
+        if (closed || id == 0L) return null
+        val since = requestActiveSinceMs
+        if (since < 0) return null
+        val original = spec?.uri?.toString() ?: return null
+        val snapshot = CdnInFlightRequest(
+            id = id,
+            originalUrl = original,
+            host = requestHost,
+            position = requestPosition,
+            startedMs = requestStartedMs,
+            firstByteMs = requestFirstByteMs.takeIf { it >= 0 },
+            bytes = requestBytes,
+            length = requestLength.takeIf { it > 0 },
+            total = routeTotal ?: chunkTotal,
+            activeMs = requestActiveMs + (nowMs - since).coerceAtLeast(0),
+        )
+        return snapshot.takeIf { requestId == id && nowMs >= it.startedMs }
     }
 
     private fun recordDelegateBytes(count: Int) {
@@ -335,6 +424,7 @@ internal class CdnPlaybackDataSource(
     }
 
     private fun closeUpstreamQuietly() {
+        openWaitNs = 0
         if (monitored) finishDelegate(false, canceled = true)
         runCatching { upstream.close() }
         delegateOpen = false
@@ -344,7 +434,8 @@ internal class CdnPlaybackDataSource(
         if (autoRoute == null) return
         lastReadProgressNs = System.nanoTime()
         sampleBytes += count
-        sampleNs += elapsedNs
+        sampleNs += elapsedNs + openWaitNs
+        openWaitNs = 0
         samplePosition = current.position + consumed + count
         if (sampleBytes >= ROUTED_SAMPLE_BYTES) flushRoutedSample()
     }
@@ -357,7 +448,9 @@ internal class CdnPlaybackDataSource(
             if (!background && original != null) {
                 CdnAutoRoutingRuntime.noteRead(original, route.host, samplePosition, routeTotal)
             }
-            CdnAutoRoutingRuntime.recordTransfer(route.host, sampleBytes, sampleNs / 1_000_000, foreground = !background)
+            if (original != null) {
+                CdnAutoRoutingRuntime.recordTransfer(original, route.host, sampleBytes, sampleNs / 1_000_000, foreground = !background)
+            }
         }
         sampleBytes = 0
         sampleNs = 0
@@ -552,7 +645,9 @@ internal class CdnPlaybackDataSource(
     private fun cancelCalls() { calls.forEach { it.cancel() } }
 
     companion object {
-        private const val MAX_REROUTES_PER_OPEN = 2
+        private const val MAX_REROUTES_PER_OPEN = 3
+        private val nextRequestId = java.util.concurrent.atomic.AtomicLong()
+        private fun nowMs(): Long = System.nanoTime() / 1_000_000
         private const val ROUTED_SAMPLE_BYTES = 64L * 1024L
         private const val PREEMPT_IDLE_MS = 800L
 

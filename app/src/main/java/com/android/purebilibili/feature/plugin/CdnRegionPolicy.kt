@@ -548,6 +548,17 @@ internal fun resolvePlaybackCdnDisplayName(host: String, index: Int): String {
 internal fun resolveAutoCdnHostLabel(host: String): String =
     PILIPLUS_CDN_DISPLAY_NAMES[host.lowercase()] ?: host
 
+/** Toast for auto routing falling back to Bilibili's own line, saying why. */
+internal fun resolveAutoCdnRevertMessage(fromLabel: String, reason: CdnAutoRoutingRuntime.RevertReason): String {
+    val why = when (reason) {
+        CdnAutoRoutingRuntime.RevertReason.REFUSED -> "线路拒绝了该视频"
+        CdnAutoRoutingRuntime.RevertReason.FAILING -> "线路连续请求失败"
+        CdnAutoRoutingRuntime.RevertReason.RATE_LIMITED -> "请求过于频繁"
+        CdnAutoRoutingRuntime.RevertReason.NETWORK_CHANGED -> "网络已切换"
+    }
+    return "已恢复默认线路（$fromLabel：$why）"
+}
+
 private val PILIPLUS_CDN_DISPLAY_NAMES = mapOf(
     "upos-sz-mirrorali.bilivideo.com" to "ali（阿里云）",
     "upos-sz-mirroralib.bilivideo.com" to "alib（阿里云）",
