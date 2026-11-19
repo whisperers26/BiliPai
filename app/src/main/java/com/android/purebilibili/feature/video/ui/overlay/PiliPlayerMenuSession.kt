@@ -92,6 +92,8 @@ data class PiliPlayerMenuSession(
     val onSleepExitAppChange: (Boolean) -> Unit,
     val cdnServiceLabels: List<String>,
     val currentCdnServiceIndex: Int,
+    /** In auto mode, the CDN the router is reading from now; null otherwise or before the first read. */
+    val autoCdnHostLabel: String?,
     val onCdnServiceSelected: ((Int) -> Unit)?,
     val playingVideoCodec: String?,
 )
@@ -148,6 +150,12 @@ fun rememberPiliPlayerMenuSession(
         PiliCdnService.entries.firstOrNull { it.name == storedCdnService } ?: PiliCdnService.AUTO
     }
     val cdnLabels = remember { PiliCdnService.entries.map { it.label } }
+    val autoRoutedHost by com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.currentHost
+        .collectAsStateWithLifecycle()
+    val autoCdnHostLabel = remember(cdnService, autoRoutedHost) {
+        autoRoutedHost?.takeIf { cdnService == PiliCdnService.AUTO }
+            ?.let { com.android.purebilibili.feature.plugin.resolveAutoCdnHostLabel(it) }
+    }
     val sourceKey = remember(videoUrl) { runCatching { java.net.URI(videoUrl).rawPath }.getOrNull().orEmpty() }
     val audioSourceKey = remember(audioUrl) { runCatching { java.net.URI(audioUrl).rawPath }.getOrNull().orEmpty() }
     val originalVideos = remember(player, bvid, cid, sourceKey) {
@@ -312,6 +320,7 @@ fun rememberPiliPlayerMenuSession(
         onSleepExitAppChange = { value -> scope.launch { PiliPlayerMenuStore.setSleepExitApp(context, value) } },
         cdnServiceLabels = cdnLabels,
         currentCdnServiceIndex = cdnService.ordinal,
+        autoCdnHostLabel = autoCdnHostLabel,
         onCdnServiceSelected = if (player != null || actions.onReplacePlaybackSources != null) ({ index ->
             PiliCdnService.entries.getOrNull(index)?.let { selected ->
                 runCatching { applyCdn(selected) }.onSuccess {

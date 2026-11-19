@@ -1117,6 +1117,8 @@ fun VideoSettingsPanel(
             if (cdnCount > 0) {
                 groups.item {
                     val diagnosticsByIndex = cdnLineDiagnostics.associateBy { it.index }
+                    val autoRoutedHost by com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.currentHost
+                        .collectAsState()
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1144,7 +1146,10 @@ fun VideoSettingsPanel(
                             )
                             Spacer(modifier = Modifier.width(customInlineTextGap))
                             VideoSettingsPanelText(
-                                text = diagnosticsByIndex[currentCdnIndex]?.displayName
+                                text = autoRoutedHost
+                                    ?.takeIf { com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.enabled }
+                                    ?.let { "自动 · ${com.android.purebilibili.feature.plugin.resolveAutoCdnHostLabel(it)}" }
+                                    ?: diagnosticsByIndex[currentCdnIndex]?.displayName
                                     ?: "当前线路${currentCdnIndex + 1}",
                                 role = VideoSettingsPanelTextRole.BODY,
 
