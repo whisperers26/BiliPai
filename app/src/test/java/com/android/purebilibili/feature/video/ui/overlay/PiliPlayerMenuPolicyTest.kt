@@ -91,4 +91,9 @@ class PiliPlayerMenuPolicyTest {
         assertEquals(akam, selectPiliCdnUrl(listOf(cosov, akam), PiliCdnService.AKAMAI))
         assertEquals(cosov, selectPiliCdnUrl(listOf(cosov), PiliCdnService.AKAMAI))
     }
+    @Test fun autoServiceIsTheDefaultAndKeepsTheAssignedUrl() {
+        val signed = "https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/00/11/video.m4s?sign=a"
+        assertEquals(PiliCdnService.AUTO, PiliCdnService.entries.first())
+        assertEquals(signed, selectPiliCdnUrl(listOf(signed), PiliCdnService.AUTO))
+    }
 }
