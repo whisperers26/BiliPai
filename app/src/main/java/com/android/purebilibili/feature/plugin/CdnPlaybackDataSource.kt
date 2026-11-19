@@ -8,6 +8,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.BaseDataSource
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.HttpDataSource
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.util.NetworkUtils
 import okhttp3.Call
@@ -48,6 +49,17 @@ internal class CdnPlaybackDataSource(
     private var delegateFirstByteMs: Long? = null
     @Volatile private var closed = true
     private val calls = ConcurrentHashMap.newKeySet<Call>()
+    // Automatic routing state for the non-parallel path; null when the URL is not auto-routed.
+    @Volatile private var autoRoute: CdnRoute? = null
+    @Volatile private var preemptRequested = false
+    @Volatile private var inUpstreamRead = false
+    @Volatile private var lastReadProgressNs = 0L
+    private var routeGeneration = 0
+    private var routeTotal: Long? = null
+    private var reopenCount = 0
+    private var sampleBytes = 0L
+    private var sampleNs = 0L
+    private var samplePosition = 0L
 
     override fun open(dataSpec: DataSpec): Long {
         closed = false
@@ -55,9 +67,11 @@ internal class CdnPlaybackDataSource(
         consumed = 0
         window = ByteArray(0)
         windowOffset = 0
-        if (CdnTransferRuntime.enabled) {
+        if (CdnTransferRuntime.enabled || CdnAutoRoutingRuntime.enabled) {
             val manager = NetworkModule.appContext?.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            CdnTransferRuntime.networkChanged(manager?.activeNetwork?.toString().orEmpty())
+            val identity = manager?.activeNetwork?.toString().orEmpty()
+            if (CdnTransferRuntime.enabled) CdnTransferRuntime.networkChanged(identity)
+            if (CdnAutoRoutingRuntime.enabled) CdnAutoRoutingRuntime.networkChanged(identity)
         }
         candidates = CdnTransferRuntime.candidates(dataSpec.uri.toString())
         val observedMedia = CdnTransferRuntime.observeMediaUrl(dataSpec.uri.toString())
@@ -68,7 +82,8 @@ internal class CdnPlaybackDataSource(
             dataSpec.length >= CDN_MIN_PARALLEL_BYTES &&
             dataSpec.position >= 0 && dataSpec.length - 1 <= Long.MAX_VALUE - dataSpec.position
         transferInitializing(dataSpec)
-        val length = if (parallel) dataSpec.length else openDelegate(dataSpec)
+        reopenCount = 0
+        val length = if (parallel) dataSpec.length else openRouted(dataSpec)
         started = true
         transferStarted(dataSpec)
         return length
@@ -81,13 +96,26 @@ internal class CdnPlaybackDataSource(
         if (current.length != C.LENGTH_UNSET.toLong() && consumed >= current.length) return C.RESULT_END_OF_INPUT
         val count: Int
         if (!parallel) {
+            if (shouldReroute()) rerouteAtConsumed(current)
+            val readStartedNs = System.nanoTime()
             try {
+                inUpstreamRead = true
                 count = upstream.read(buffer, offset, length)
             } catch (error: IOException) {
+                inUpstreamRead = false
+                if (!closed && autoRoute != null && reopenCount < MAX_REROUTES_PER_OPEN) {
+                    // A preempted or failed routed read resumes at the delivered byte on the best route.
+                    if (!preemptRequested) autoRoute?.let { CdnAutoRoutingRuntime.recordFailure(it, current.uri.toString(), null) }
+                    rerouteAtConsumed(current)
+                    return read(buffer, offset, length)
+                }
                 if (monitored) finishDelegate(false, closed)
                 throw error
+            } finally {
+                inUpstreamRead = false
             }
             if (count > 0 && monitored) recordDelegateBytes(count)
+            if (count > 0) recordRoutedBytes(current, count, System.nanoTime() - readStartedNs)
         } else {
             if (windowOffset == window.size) {
                 try {
@@ -124,7 +152,8 @@ internal class CdnPlaybackDataSource(
         return count
     }
 
-    override fun getUri(): Uri? = if (delegateOpen) upstream.uri else spec?.uri
+    // A routed request reports the original URI so the cache never records the mirror as a redirect.
+    override fun getUri(): Uri? = if (delegateOpen && autoRoute == null) upstream.uri else spec?.uri
     override fun getResponseHeaders(): Map<String, List<String>> = if (delegateOpen) upstream.responseHeaders else emptyMap()
 
     fun cancelPendingRequests() {
@@ -143,6 +172,10 @@ internal class CdnPlaybackDataSource(
             val current = spec
             val complete = current != null && current.length >= 0 && consumed >= current.length
             if (monitored) finishDelegate(complete, canceled = true)
+            flushRoutedSample()
+            if (autoRoute != null) CdnAutoRoutingRuntime.detach(this)
+            autoRoute = null
+            preemptRequested = false
             delegateOpen = false
             window = ByteArray(0)
             spec = null
@@ -175,6 +208,109 @@ internal class CdnPlaybackDataSource(
         if (delegateHost.isNotEmpty()) {
             CdnTransferRuntime.finish(delegateHost, success, canceled = canceled)
             delegateHost = ""
+        }
+    }
+
+    /**
+     * Opens [dataSpec] on the auto-routed host when one is active, falling back to the issued URL
+     * when the mirror fails or answers with a different range or file length.
+     */
+    private fun openRouted(dataSpec: DataSpec): Long {
+        autoRoute = null
+        routeTotal = null
+        val original = dataSpec.uri.toString()
+        val route = if (dataSpec.httpMethod == DataSpec.HTTP_METHOD_GET) CdnAutoRoutingRuntime.resolve(original) else null
+        if (route == null) return openDelegate(dataSpec)
+        CdnAutoRoutingRuntime.attach(this)
+        routeGeneration = CdnAutoRoutingRuntime.generation
+        if (route.url != original) {
+            try {
+                val length = openDelegate(dataSpec.withUri(Uri.parse(route.url)))
+                if (acceptRoutedResponse(dataSpec, original)) {
+                    autoRoute = route
+                    return length
+                }
+                // A mirror with a different range or length must never feed this cache entry.
+                CdnAutoRoutingRuntime.recordFailure(route, original, 403)
+            } catch (error: IOException) {
+                if (closed) throw error
+                CdnAutoRoutingRuntime.recordFailure(
+                    route, original, (error as? HttpDataSource.InvalidResponseCodeException)?.responseCode
+                )
+            }
+            closeUpstreamQuietly()
+        }
+        val length = openDelegate(dataSpec)
+        acceptRoutedResponse(dataSpec, original)
+        autoRoute = CdnRoute(hostFromCdnUrl(original), original, issued = true)
+        return length
+    }
+
+    private fun acceptRoutedResponse(dataSpec: DataSpec, original: String): Boolean {
+        val range = upstream.responseHeaders.entries
+            .firstOrNull { it.key.equals("Content-Range", ignoreCase = true) }
+            ?.value?.firstOrNull()?.let(::parseCdnContentRange)
+        if (dataSpec.position > 0 && (range == null || range.start != dataSpec.position)) return false
+        if (range != null && !CdnAutoRoutingRuntime.checkTotal(original, range.total)) return false
+        routeTotal = range?.total
+        return true
+    }
+
+    private fun shouldReroute(): Boolean {
+        val route = autoRoute ?: return false
+        if (reopenCount >= MAX_REROUTES_PER_OPEN) return false
+        if (preemptRequested) return true
+        val generation = CdnAutoRoutingRuntime.generation
+        if (generation == routeGeneration) return false
+        routeGeneration = generation
+        val original = spec?.uri?.toString() ?: return false
+        return CdnAutoRoutingRuntime.resolve(original)?.host?.let { it != route.host } == true
+    }
+
+    /** Resumes the current request at the delivered byte on the best route, never restarting it. */
+    private fun rerouteAtConsumed(current: DataSpec) {
+        reopenCount++
+        preemptRequested = false
+        flushRoutedSample()
+        closeUpstreamQuietly()
+        openRouted(current.subrange(consumed))
+    }
+
+    private fun closeUpstreamQuietly() {
+        if (monitored) finishDelegate(false, canceled = true)
+        runCatching { upstream.close() }
+        delegateOpen = false
+    }
+
+    private fun recordRoutedBytes(current: DataSpec, count: Int, elapsedNs: Long) {
+        if (autoRoute == null) return
+        lastReadProgressNs = System.nanoTime()
+        sampleBytes += count
+        sampleNs += elapsedNs
+        samplePosition = current.position + consumed + count
+        if (sampleBytes >= ROUTED_SAMPLE_BYTES) flushRoutedSample()
+    }
+
+    /** Throughput counts only time spent inside upstream reads, not time the loader was paused. */
+    private fun flushRoutedSample() {
+        val route = autoRoute
+        if (route != null && sampleBytes > 0) {
+            val original = spec?.uri?.toString()
+            if (!background && original != null) {
+                CdnAutoRoutingRuntime.noteRead(original, route.host, samplePosition, routeTotal)
+            }
+            CdnAutoRoutingRuntime.recordTransfer(route.host, sampleBytes, sampleNs / 1_000_000, foreground = !background)
+        }
+        sampleBytes = 0
+        sampleNs = 0
+    }
+
+    /** Called from the race thread after a switch away from [host]. A stalled read is unblocked. */
+    fun preemptIfOn(host: String) {
+        if (closed || autoRoute?.host != host) return
+        preemptRequested = true
+        if (inUpstreamRead && System.nanoTime() - lastReadProgressNs > TimeUnit.MILLISECONDS.toNanos(PREEMPT_IDLE_MS)) {
+            runCatching { upstream.close() }
         }
     }
 
@@ -358,6 +494,10 @@ internal class CdnPlaybackDataSource(
     private fun cancelCalls() { calls.forEach { it.cancel() } }
 
     companion object {
+        private const val MAX_REROUTES_PER_OPEN = 2
+        private const val ROUTED_SAMPLE_BYTES = 64L * 1024L
+        private const val PREEMPT_IDLE_MS = 800L
+
         // A shared dispatcher and connection pool; no per-player executor or hidden scope.
         private val rangeClient: OkHttpClient by lazy {
             NetworkModule.playbackOkHttpClient.newBuilder()
