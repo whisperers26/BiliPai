@@ -34,13 +34,13 @@ internal data class CdnInFlightRequest(
     val bytes: Long,
     val length: Long?,
     val total: Long?,
+    /** Time spent in the request's open and reads, first-byte wait included; pauses excluded. */
+    val activeMs: Long,
 )
 
-/** Bytes per second from the request's start, first-byte wait included: what the player pays. */
-internal fun CdnInFlightRequest.rateBps(nowMs: Long): Long {
-    val elapsed = nowMs - startedMs
-    return if (elapsed <= 0) 0 else bytes * 1_000 / elapsed
-}
+/** Bytes per second over the request's active time: what the player pays while it waits. */
+internal fun CdnInFlightRequest.rateBps(): Long =
+    if (activeMs <= 0) 0 else bytes * 1_000 / activeMs
 
 /** True when [request] will hold up playback: [requiredVideoBps] is in bits/s, 0 when unknown. */
 internal fun isStuckCdnRequest(request: CdnInFlightRequest, nowMs: Long, bufferMs: Long, requiredVideoBps: Long): Boolean {
@@ -53,7 +53,7 @@ internal fun isStuckCdnRequest(request: CdnInFlightRequest, nowMs: Long, bufferM
     if (length < MIN_JUDGED_LENGTH || requiredVideoBps <= 0) return false
     val remaining = length - request.bytes
     if (remaining <= 0) return false
-    val rate = request.rateBps(nowMs)
+    val rate = request.rateBps()
     if (rate * 8 >= requiredVideoBps * SLOW_RATE_FACTOR) return false
     val remainingMs = if (rate <= 0) Long.MAX_VALUE else remaining * 1_000 / rate
     return remainingMs > MIN_REMAINING_MS && remainingMs > bufferMs - BUFFER_SPARE_MS

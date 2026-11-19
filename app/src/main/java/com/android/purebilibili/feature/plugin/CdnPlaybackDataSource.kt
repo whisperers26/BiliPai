@@ -35,7 +35,7 @@ internal class CdnPlaybackDataSource(
     private val isWifi: () -> Boolean = { NetworkModule.appContext?.let { NetworkUtils.isWifi(it) } == true },
     private val mediaChunkBytes: Long = CDN_MEDIA_CHUNK_BYTES
 ) : BaseDataSource(true) {
-    private var spec: DataSpec? = null
+    @Volatile private var spec: DataSpec? = null
     private var candidates: List<String> = emptyList()
     private var consumed = 0L
     private var window = ByteArray(0)
@@ -56,7 +56,7 @@ internal class CdnPlaybackDataSource(
     @Volatile private var inUpstreamRead = false
     @Volatile private var lastReadProgressNs = 0L
     private var routeGeneration = 0
-    private var routeTotal: Long? = null
+    @Volatile private var routeTotal: Long? = null
     private var reopenCount = 0
     // Time spent opening the current upstream request, added to the first throughput sample so a
     // slow first byte counts against the host (send to last byte, like the player pays).
@@ -69,12 +69,15 @@ internal class CdnPlaybackDataSource(
     @Volatile private var requestFirstByteMs = -1L
     @Volatile private var requestBytes = 0L
     @Volatile private var requestLength = -1L
+    // Time spent inside the request's open and reads; -1 since-mark while the loader is paused.
+    @Volatile private var requestActiveMs = 0L
+    @Volatile private var requestActiveSinceMs = -1L
     private var sampleBytes = 0L
     private var sampleNs = 0L
     private var samplePosition = 0L
     // Bounded-range state for unbounded media reads; chunkBase is null when not chunking.
     private var chunkBase: DataSpec? = null
-    private var chunkTotal: Long? = null
+    @Volatile private var chunkTotal: Long? = null
     private var chunkPosition = 0L
     private var chunkRequested = 0L
     private var chunkReceived = 0L
@@ -116,6 +119,7 @@ internal class CdnPlaybackDataSource(
         if (!parallel) {
             if (shouldReroute()) rerouteAtConsumed(current)
             val readStartedNs = System.nanoTime()
+            if (requestId != 0L) requestActiveSinceMs = nowMs()
             try {
                 inUpstreamRead = true
                 count = upstream.read(buffer, offset, length)
@@ -136,6 +140,7 @@ internal class CdnPlaybackDataSource(
                 throw error
             } finally {
                 inUpstreamRead = false
+                leaveRequestActivity()
             }
             if (count == C.RESULT_END_OF_INPUT) requestId = 0
             if (count == C.RESULT_END_OF_INPUT && openNextChunkIfAny()) return read(buffer, offset, length)
@@ -241,6 +246,7 @@ internal class CdnPlaybackDataSource(
                 throw error
             } finally {
                 openWaitNs += System.nanoTime() - openStartedNs
+                leaveRequestActivity()
             }
         }
         try {
@@ -263,6 +269,7 @@ internal class CdnPlaybackDataSource(
             upstream.open(base.buildUpon().setPosition(position).setLength(length).build())
         } finally {
             openWaitNs += System.nanoTime() - openStartedNs
+            leaveRequestActivity()
         }
         delegateOpen = true
         if (chunkTotal == null) {
@@ -298,16 +305,31 @@ internal class CdnPlaybackDataSource(
         requestFirstByteMs = -1
         requestBytes = 0
         requestLength = length.takeIf { it > 0 } ?: -1
+        requestActiveMs = 0
+        requestActiveSinceMs = requestStartedMs
         requestId = nextRequestId.incrementAndGet()
         CdnAutoRoutingRuntime.videoRequestStarted(this)
     }
 
-    /** The foreground video request in flight, for the stuck-request check; null when idle. */
+    private fun leaveRequestActivity() {
+        val since = requestActiveSinceMs
+        if (since < 0) return
+        requestActiveMs += nowMs() - since
+        requestActiveSinceMs = -1
+    }
+
+    /**
+     * The foreground video request in flight, for the stuck-request check. Null when idle, and
+     * while the loader is paused between reads (its rate would decay with a full buffer). Read
+     * from another thread: a snapshot that straddles a new request is discarded.
+     */
     fun inFlight(nowMs: Long): CdnInFlightRequest? {
         val id = requestId
         if (closed || id == 0L) return null
+        val since = requestActiveSinceMs
+        if (since < 0) return null
         val original = spec?.uri?.toString() ?: return null
-        return CdnInFlightRequest(
+        val snapshot = CdnInFlightRequest(
             id = id,
             originalUrl = original,
             host = requestHost,
@@ -317,7 +339,9 @@ internal class CdnPlaybackDataSource(
             bytes = requestBytes,
             length = requestLength.takeIf { it > 0 },
             total = routeTotal ?: chunkTotal,
-        ).takeIf { nowMs >= it.startedMs }
+            activeMs = requestActiveMs + (nowMs - since).coerceAtLeast(0),
+        )
+        return snapshot.takeIf { requestId == id && nowMs >= it.startedMs }
     }
 
     private fun recordDelegateBytes(count: Int) {

@@ -13,6 +13,7 @@ class CdnInFlightPolicyTest {
         CdnInFlightRequest(
             id = 1, originalUrl = "u", host = "h", position = 0, startedMs = 10_000 - elapsedMs,
             firstByteMs = if (firstByte) 10_000 - elapsedMs + 100 else null, bytes = bytes, length = length, total = null,
+            activeMs = elapsedMs,
         )
 
     @Test
@@ -44,8 +45,11 @@ class CdnInFlightPolicyTest {
     }
 
     @Test
-    fun `rate counts the first-byte wait`() {
-        assertEquals(500_000L, request(2_000, 1_000_000).rateBps(10_000))
+    fun `rate counts the first-byte wait but not loader pauses`() {
+        assertEquals(500_000L, request(2_000, 1_000_000).rateBps())
+        // Paused for 30 s with a full buffer: 1 MB in 2 s of activity is still 500 KB/s.
+        val paused = request(2_000, 1_000_000).copy(startedMs = 10_000 - 32_000)
+        assertEquals(500_000L, paused.rateBps())
     }
 
     @Test
