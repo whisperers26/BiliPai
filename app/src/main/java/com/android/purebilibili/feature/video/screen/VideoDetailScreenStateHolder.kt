@@ -29,12 +29,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
-import android.database.ContentObserver
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.os.SystemClock
-import android.provider.Settings
 import android.view.OrientationEventListener
 import android.view.Window
 import android.view.WindowManager
@@ -1988,26 +1984,7 @@ internal fun VideoDetailScreenStateHolder(
             initialValue = false,
             lifecycle = lifecycleOwner.lifecycle
         )
-    val rotationResolver = context.applicationContext.contentResolver
-    var systemAutoRotateEnabled by remember(rotationResolver) {
-        mutableStateOf(
-            Settings.System.getInt(rotationResolver, Settings.System.ACCELEROMETER_ROTATION, 0) != 0
-        )
-    }
-    DisposableEffect(rotationResolver) {
-        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
-            override fun onChange(selfChange: Boolean) {
-                systemAutoRotateEnabled = Settings.System.getInt(
-                    rotationResolver, Settings.System.ACCELEROMETER_ROTATION, 0
-                ) != 0
-            }
-        }
-        rotationResolver.registerContentObserver(
-            Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION), false, observer
-        )
-        observer.onChange(false)
-        onDispose { rotationResolver.unregisterContentObserver(observer) }
-    }
+    val systemAutoRotateEnabled by rememberSystemAutoRotateEnabled()
     // The app switch explicitly opts into sensor rotation, independently of the system lock.
     val sensorAutoRotateEnabled = autoRotateEnabled
 
