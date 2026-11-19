@@ -132,13 +132,12 @@ internal object CdnAutoRoutingRuntime {
     fun register(videoUrls: List<String>, audioUrls: List<String>, videoBandwidthBps: Long = 0) {
         if (!enabled) return
         val sessionKey = videoUrls.firstNotNullOfOrNull(::cdnSessionKeyOf)
-        if (router.register(videoUrls, audioUrls, sessionKey)) {
+        if (router.register(videoUrls, audioUrls, sessionKey, videoBandwidthBps)) {
             clearVideoState()
             rebuffers.newSource()
         } else {
             rebuffers.jumped()
         }
-        router.noteVideoBitrate(videoBandwidthBps)
     }
 
     private fun clearVideoState() {
@@ -276,8 +275,10 @@ internal object CdnAutoRoutingRuntime {
     /** Starts a race when [trigger] holds; returns true when one started. */
     private fun maybeRace(trigger: Trigger, request: CdnInFlightRequest? = null): Boolean {
         if (!enabled) return false
-        val read = request?.let { ReadPosition(it.originalUrl, it.host, it.position + it.bytes, it.total) }
-            ?: lastVideoRead ?: return false
+        val read = (request?.let { ReadPosition(it.originalUrl, it.host, it.position + it.bytes, it.total) }
+            ?: lastVideoRead ?: return false)
+            // During a blocked open the length is unknown; the remembered total keeps the race in the file.
+            .let { if (it.total != null) it else it.copy(total = totalsByPath[pathOf(it.originalUrl)]) }
         val sample = playbackSample?.takeIf { nowMs() - it.atMs <= PLAYBACK_SIGNAL_TTL_MS }
         val metered = isMetered()
         val signal = CdnPlaybackSignal(
@@ -292,8 +293,8 @@ internal object CdnAutoRoutingRuntime {
         val challengers = router.pickChallengers(router.routesFor(read.originalUrl), read.host, metered)
         if (challengers.isEmpty() || !router.beginRace()) return false
         rebuffers.raced()
-        val inFlightRate = request?.rateBps(nowMs())
-            ?: videoSource?.get()?.inFlight(nowMs())?.takeIf { it.host == read.host }?.rateBps(nowMs())
+        val inFlightRate = request?.rateBps()
+            ?: videoSource?.get()?.inFlight(nowMs())?.takeIf { it.host == read.host }?.rateBps()
             ?: 0L
         AppScope.ioScope.launch { race(read, challengers, trigger, inFlightRate) }
         return true
@@ -330,6 +331,11 @@ internal object CdnAutoRoutingRuntime {
                 rebuffers.jumped()
                 switchGeneration.incrementAndGet()
                 pendingSwitch = PendingSwitch(Switch(read.originalUrl, read.host, switched), nowMs())
+                synchronized(sources) { sources.toList() }.forEach { it.preemptIfOn(read.host) }
+            } else if ((trigger == Trigger.STUCK || trigger == Trigger.STUCK_REQUEST) && results.any { it.success }) {
+                // Other hosts answer but this one is stuck despite its record: a hung connection.
+                // Count it, so a second hang drops the record and moves the video, and reconnect.
+                recordFailure(CdnRoute(read.host, read.originalUrl, issued = true), read.originalUrl, null)
                 synchronized(sources) { sources.toList() }.forEach { it.preemptIfOn(read.host) }
             }
         } catch (error: Throwable) {
