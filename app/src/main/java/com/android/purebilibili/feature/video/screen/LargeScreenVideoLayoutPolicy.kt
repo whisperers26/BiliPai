@@ -246,3 +246,15 @@ internal fun resolveLargeScreenTabletopPlayerWidthDp(
     areaWidthDp.coerceAtLeast(0f),
     areaHeightDp.coerceAtLeast(0f) * LARGE_SCREEN_VIDEO_ASPECT_16_9,
 )
+
+/**
+ * Fullscreen while half folded fills only the area above the fold: the player goes edge to edge
+ * there with the status bar hidden, and the unfolded panes stay below the fold. Unfolding again
+ * returns to whole-window fullscreen, and folding a whole-window fullscreen comes back here.
+ */
+internal fun shouldUseTabletopHalfFullscreen(
+    isFullscreenMode: Boolean,
+    tabletopFold: LargeScreenTabletopFold?,
+    isInPipMode: Boolean,
+    isPortraitFullscreen: Boolean,
+): Boolean = isFullscreenMode && tabletopFold != null && !isInPipMode && !isPortraitFullscreen
