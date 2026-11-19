@@ -203,4 +203,13 @@ class CdnAutoRoutingTest {
         assertNull(router.activeHost)
         assertNull(router.estimateBps("upos-sz-mirrorali.bilivideo.com"))
     }
+
+    @Test
+    fun `race window starts where playback reads and stays inside the file`() {
+        assertEquals(CdnByteRange(1_000, 1_000 + CDN_RACE_BYTES - 1), raceRange(1_000, null))
+        assertEquals(CdnByteRange(10_000_000 - CDN_RACE_BYTES, 9_999_999), raceRange(9_999_000, 10_000_000))
+        assertEquals(CdnByteRange(0, 99_999), raceRange(50_000, 100_000))
+        assertEquals(403, parseHttpStatus("CDN invalid range: HTTP 403"))
+        assertNull(parseHttpStatus("timeout"))
+    }
 }
