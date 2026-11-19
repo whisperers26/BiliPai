@@ -9860,9 +9860,12 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch {
             com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.switches.collect { switch ->
                 val current = _uiState.value as? VideoPlaybackUiState.Success ?: return@collect
-                if (switch.originalUrl !in current.allVideoUrls && switch.originalUrl !in current.allAudioUrls &&
-                    switch.originalUrl != current.playUrl && switch.originalUrl != current.audioUrl
-                ) return@collect
+                // Any representation of this page's video counts: under auto quality it may not be the selected one.
+                val switchVideo = com.android.purebilibili.feature.plugin.cdnSessionKeyOf(switch.originalUrl)
+                val pageVideo = com.android.purebilibili.feature.plugin.cdnSessionKeyOf(current.playUrl)
+                val samePage = if (switchVideo != null && pageVideo != null) switchVideo == pageVideo else
+                    switch.originalUrl in current.allVideoUrls || switch.originalUrl == current.playUrl
+                if (!samePage) return@collect
                 toast("已自动切换到线路：${com.android.purebilibili.feature.plugin.resolveAutoCdnHostLabel(switch.toHost)}")
             }
         }
