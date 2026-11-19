@@ -252,7 +252,7 @@ class CdnRegionPolicyTest {
     }
 
     @Test
-    fun `bundled catalog uses provided overseas upos cdn hosts`() {
+    fun `bundled overseas catalog leads with cosov and mainland mirrors instead of akamai or aliov`() {
         val catalogFile = listOf(
             File("src/main/res/raw/cdn_region_catalog.json"),
             File("app/src/main/res/raw/cdn_region_catalog.json")
@@ -261,9 +261,9 @@ class CdnRegionPolicyTest {
 
         assertEquals(
             listOf(
-                "upos-hz-mirrorakam.akamaized.net",
-                "upos-sz-mirroraliov.bilivideo.com",
-                "upos-sz-mirrorcosov.bilivideo.com"
+                "upos-sz-mirrorcosov.bilivideo.com",
+                "upos-sz-mirrorali.bilivideo.com",
+                "upos-sz-mirrorhw.bilivideo.com"
             ),
             catalog["海外"]
         )
