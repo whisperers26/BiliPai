@@ -68,4 +68,139 @@ class CdnAutoRoutingTest {
         estimator.sample(durationMs = 2_000, bytes = 200_000)
         assertTrue(estimator.estimateBps()!! < 700_000)
     }
+
+    @Test
+    fun `new video starts on its own assignment`() {
+        val router = router()
+        router.register(listOf(cosov, akam), listOf(audio))
+        router.beginRace()
+        router.finishRace("upos-sz-mirrorcosov.bilivideo.com", 100_000,
+            listOf(CdnRaceResult("upos-sz-mirrorali.bilivideo.com", CDN_RACE_BYTES, 300, true)))
+        assertEquals("upos-sz-mirrorali.bilivideo.com", router.activeHost)
+        assertEquals(cosov.replace("upos-sz-mirrorcosov", "upos-sz-mirrorali"), router.resolve(cosov))
+        assertEquals(audio.replace("upos-sz-mirrorcosov", "upos-sz-mirrorali"), router.resolve(audio))
+
+        router.register(listOf(cosov.replace("/22/", "/33/")), emptyList())
+        assertNull(router.activeHost)
+    }
+
+    @Test
+    fun `active akamai host resolves to the issued akamai url of the same path`() {
+        val router = router()
+        router.register(listOf(cosov, akam), emptyList())
+        router.beginRace()
+        router.finishRace("upos-sz-mirrorcosov.bilivideo.com", 0,
+            listOf(CdnRaceResult("upos-hz-mirrorakam.akamaized.net", CDN_RACE_BYTES, 500, true)))
+        assertEquals(akam, router.resolve(cosov))
+    }
+
+    @Test
+    fun `switch requires the winner to be clearly faster`() {
+        val router = router()
+        router.register(listOf(cosov), emptyList())
+        // Current host needs 786 ms for the race bytes at 1 MB/s; 600 ms is not two thirds of that.
+        router.beginRace()
+        assertNull(router.finishRace("upos-sz-mirrorcosov.bilivideo.com", 1_000_000,
+            listOf(CdnRaceResult("upos-sz-mirrorali.bilivideo.com", CDN_RACE_BYTES, 600, true))))
+        assertNull(router.activeHost)
+        now += 13_000
+        router.beginRace()
+        assertEquals("upos-sz-mirrorhw.bilivideo.com", router.finishRace("upos-sz-mirrorcosov.bilivideo.com", 1_000_000,
+            listOf(CdnRaceResult("upos-sz-mirrorhw.bilivideo.com", CDN_RACE_BYTES, 400, true))))
+    }
+
+    @Test
+    fun `stuck triggers a race but shortfall needs evidence and races are budgeted`() {
+        val router = router()
+        val host = "upos-sz-mirrorcosov.bilivideo.com"
+        assertTrue(router.shouldRace(CdnPlaybackSignal(host, bufferMs = 1_000, bitrateBps = 0, stuck = true)))
+        assertFalse(router.shouldRace(CdnPlaybackSignal(host, bufferMs = 1_000, bitrateBps = 8_000_000)))
+        assertFalse(router.shouldRace(CdnPlaybackSignal(host, bufferMs = null, bitrateBps = 8_000_000, stuck = true)))
+
+        repeat(10) { router.recordTransfer(host, 500_000, 1_000) }
+        assertTrue(router.shouldRace(CdnPlaybackSignal(host, bufferMs = 10_000, bitrateBps = 8_000_000)))
+        assertFalse(router.shouldRace(CdnPlaybackSignal(host, bufferMs = 40_000, bitrateBps = 8_000_000)))
+        assertFalse(router.shouldRace(CdnPlaybackSignal(host, bufferMs = 10_000, bitrateBps = 8_000_000, metered = true)))
+
+        router.beginRace()
+        assertFalse(router.shouldRace(CdnPlaybackSignal(host, bufferMs = 1_000, bitrateBps = 0, stuck = true)))
+        router.cancelRace()
+        assertFalse(router.shouldRace(CdnPlaybackSignal(host, bufferMs = 1_000, bitrateBps = 0, stuck = true)))
+        now += 13_000
+        assertTrue(router.shouldRace(CdnPlaybackSignal(host, bufferMs = 1_000, bitrateBps = 0, stuck = true)))
+    }
+
+    @Test
+    fun `rate limits stop racing for minutes`() {
+        val router = router()
+        router.recordFailure("upos-sz-mirrorali.bilivideo.com", cosov, 429, swapped = true)
+        val signal = CdnPlaybackSignal("upos-sz-mirrorcosov.bilivideo.com", 1_000, 0, stuck = true)
+        now += 60_000
+        assertFalse(router.shouldRace(signal))
+        now += 5 * 60_000
+        assertTrue(router.shouldRace(signal))
+    }
+
+    @Test
+    fun `challengers include the other issued host and prefer mainland on ties`() {
+        val router = router()
+        val routes = buildCdnRouteCandidates(listOf(cosov, akam))
+        val picked = router.pickChallengers(routes, "upos-sz-mirrorcosov.bilivideo.com", metered = false)
+
+        assertEquals(listOf("upos-hz-mirrorakam.akamaized.net", "upos-sz-mirrorali.bilivideo.com"), picked.map { it.host })
+        assertEquals(1, router.pickChallengers(routes, "upos-sz-mirrorcosov.bilivideo.com", metered = true).size)
+    }
+
+    @Test
+    fun `challengers rank by history and skip resting hosts`() {
+        val router = router()
+        val routes = buildCdnRouteCandidates(listOf(cosov))
+        repeat(4) { router.recordTransfer("upos-tf-all-tx.bilivideo.com", 2_000_000, 1_000) }
+        repeat(4) { router.recordTransfer("upos-sz-mirrorali.bilivideo.com", 200_000, 1_000) }
+        router.recordFailure("upos-sz-mirrorhw.bilivideo.com", cosov, null, swapped = true)
+        router.recordFailure("upos-sz-mirrorhw.bilivideo.com", cosov, null, swapped = true)
+
+        val picked = router.pickChallengers(routes, "upos-sz-mirrorcosov.bilivideo.com", metered = false).map { it.host }
+
+        assertEquals("upos-tf-all-tx.bilivideo.com", picked.first())
+        assertFalse("upos-sz-mirrorhw.bilivideo.com" in picked)
+    }
+
+    @Test
+    fun `swapped 403 bans the host for that path and returns to the assignment`() {
+        val router = router()
+        router.register(listOf(cosov), emptyList())
+        router.beginRace()
+        router.finishRace("upos-sz-mirrorcosov.bilivideo.com", 0,
+            listOf(CdnRaceResult("upos-sz-mirrorali.bilivideo.com", CDN_RACE_BYTES, 300, true)))
+        router.recordFailure("upos-sz-mirrorali.bilivideo.com", cosov.replace("mirrorcosov", "mirrorali"), 403, swapped = true)
+
+        assertNull(router.activeHost)
+        assertFalse(router.routesFor(cosov).any { it.host == "upos-sz-mirrorali.bilivideo.com" })
+        assertEquals(cosov, router.resolve(cosov))
+    }
+
+    @Test
+    fun `issued 403 is an expired signature, not a bad host`() {
+        val router = router()
+        router.register(listOf(cosov), emptyList())
+        router.recordFailure("upos-sz-mirrorcosov.bilivideo.com", cosov, 403, swapped = false)
+        assertTrue(router.routesFor(cosov).any { it.host == "upos-sz-mirrorcosov.bilivideo.com" })
+    }
+
+    @Test
+    fun `network change forgets history and routing`() {
+        val router = router()
+        router.networkChanged("wifi")
+        router.register(listOf(cosov), emptyList())
+        repeat(4) { router.recordTransfer("upos-sz-mirrorali.bilivideo.com", 2_000_000, 1_000) }
+        router.beginRace()
+        router.finishRace("upos-sz-mirrorcosov.bilivideo.com", 0,
+            listOf(CdnRaceResult("upos-sz-mirrorali.bilivideo.com", CDN_RACE_BYTES, 300, true)))
+
+        router.networkChanged("cellular")
+
+        assertNull(router.activeHost)
+        assertNull(router.estimateBps("upos-sz-mirrorali.bilivideo.com"))
+    }
 }

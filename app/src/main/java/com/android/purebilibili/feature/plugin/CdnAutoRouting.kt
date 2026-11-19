@@ -133,3 +133,219 @@ internal class CdnThroughputEstimator {
         fun estimate(): Double = value / (1 - alpha.pow(totalWeight))
     }
 }
+
+/** What the player reports about the current host. Rates in bytes/s, bitrate in bits/s. */
+internal data class CdnPlaybackSignal(
+    val currentHost: String,
+    val bufferMs: Long?,
+    val bitrateBps: Long,
+    val stuck: Boolean = false,
+    val metered: Boolean = false,
+)
+
+internal data class CdnRaceResult(val host: String, val bytes: Long, val elapsedMs: Long, val success: Boolean)
+
+internal class CdnAutoRouter(
+    private val clock: () -> Long,
+    private val random: Random = Random.Default,
+) {
+    private class HostStats {
+        val estimator = CdnThroughputEstimator()
+        val failuresAtMs = ArrayDeque<Long>()
+        var restUntilMs = 0L
+    }
+
+    private val stats = mutableMapOf<String, HostStats>()
+    private val issuedByPath = linkedMapOf<String, List<String>>()
+    private val bannedByPath = mutableMapOf<String, MutableSet<String>>()
+    private var networkIdentity: String? = null
+    private var limitedUntilMs = 0L
+    private var lastRaceAtMs = Long.MIN_VALUE / 2
+    private var racesThisVideo = 0
+    private var raceInFlight = false
+
+    /** The host requests are routed to; null means Bilibili's own assignment. */
+    var activeHost: String? = null
+        private set
+
+    @Synchronized
+    fun register(issuedVideo: List<String>, issuedAudio: List<String>) {
+        val byPath = (issuedVideo + issuedAudio).filter { it.isNotBlank() }.groupBy(::pathOf)
+        if (byPath.keys.none { it in issuedByPath }) {
+            // A new video starts on its own assignment: host speed depends on the file.
+            activeHost = null
+            racesThisVideo = 0
+        }
+        byPath.forEach { (path, urls) ->
+            if (path.isNotBlank()) {
+                issuedByPath.remove(path)
+                issuedByPath[path] = urls.distinct()
+            }
+        }
+        while (issuedByPath.size > MAX_TRACKED_PATHS) {
+            val oldest = issuedByPath.keys.first()
+            issuedByPath.remove(oldest)
+            bannedByPath.remove(oldest)
+        }
+    }
+
+    @Synchronized
+    fun isRegistered(url: String): Boolean = issuedByPath[pathOf(url)]?.contains(url) == true
+
+    /** Candidate routes for the track [url] belongs to, without hosts banned for that path. */
+    @Synchronized
+    fun routesFor(url: String): List<CdnRoute> {
+        val path = pathOf(url)
+        val issued = issuedByPath[path] ?: return emptyList()
+        val banned = bannedByPath[path].orEmpty()
+        return buildCdnRouteCandidates(listOf(url) + issued).filter { it.host !in banned }
+    }
+
+    /** The URL to actually open for an issued [url]: the active host's route when it has one. */
+    @Synchronized
+    fun resolve(url: String): String {
+        val host = activeHost ?: return url
+        return routesFor(url).firstOrNull { it.host == host }?.url ?: url
+    }
+
+    @Synchronized
+    fun recordTransfer(host: String, bytes: Long, activeReadMs: Long) {
+        if (host.isBlank()) return
+        stats.getOrPut(host, ::HostStats).estimator.sample(activeReadMs, bytes)
+    }
+
+    @Synchronized
+    fun estimateBps(host: String): Long? = stats[host]?.estimator?.estimateBps()
+
+    /**
+     * A failed request on [host] for [url]. A 403 on a swapped host bans it for that path only;
+     * a 403 on an issued URL means the signature expired and is not held against the host.
+     */
+    @Synchronized
+    fun recordFailure(host: String, url: String, status: Int?, swapped: Boolean) {
+        val now = clock()
+        if (status == 412 || status == 429) {
+            limitedUntilMs = now + RATE_LIMIT_BACKOFF_MS
+            if (swapped && activeHost == host) activeHost = null
+            return
+        }
+        if (status == 403 || status == 404) {
+            if (swapped) {
+                bannedByPath.getOrPut(pathOf(url), ::mutableSetOf) += host
+                if (activeHost == host) activeHost = null
+            }
+            return
+        }
+        val entry = stats.getOrPut(host, ::HostStats)
+        entry.failuresAtMs.addLast(now)
+        while (entry.failuresAtMs.isNotEmpty() && now - entry.failuresAtMs.first() > FAILURE_MEMORY_MS) {
+            entry.failuresAtMs.removeFirst()
+        }
+        val recent = entry.failuresAtMs.count { now - it <= FAILURE_WINDOW_MS }
+        if (recent >= 2) {
+            entry.restUntilMs = now + REST_MS
+            if (activeHost == host) activeHost = null
+        }
+    }
+
+    /** Whether the current host is in enough trouble to spend bytes on a race. */
+    @Synchronized
+    fun shouldRace(signal: CdnPlaybackSignal): Boolean {
+        val now = clock()
+        if (raceInFlight || now < limitedUntilMs) return false
+        if (now - lastRaceAtMs < RACE_MIN_INTERVAL_MS || racesThisVideo >= RACE_MAX_PER_VIDEO) return false
+        val buffer = signal.bufferMs ?: return false
+        if (signal.stuck) return true
+        if (signal.metered) return false
+        val current = stats[signal.currentHost]?.estimator ?: return false
+        val rate = current.estimateBps() ?: return false
+        return signal.bitrateBps > 0 && buffer < SHORTFALL_BUFFER_MS &&
+            current.totalBytes >= SHORTFALL_MIN_BYTES &&
+            rate * 8 < signal.bitrateBps * SHORTFALL_RATE_FACTOR
+    }
+
+    /**
+     * Up to two challengers (one when metered) by history. The other issued host is always one of
+     * them until it has history; unknown hosts score the lower median; ties go to mainland mirrors;
+     * one challenger in five is drawn at random so history keeps learning.
+     */
+    @Synchronized
+    fun pickChallengers(routes: List<CdnRoute>, currentHost: String, metered: Boolean): List<CdnRoute> {
+        val now = clock()
+        val pool = routes.filter { it.host != currentHost }.filter { route ->
+            val entry = stats[route.host]
+            entry == null || (entry.restUntilMs <= now && entry.failuresAtMs.count { now - it <= FAILURE_MEMORY_MS } < 2)
+        }
+        if (pool.isEmpty()) return emptyList()
+        val known = pool.mapNotNull { estimateBps(it.host) }.sorted()
+        val fallbackScore = if (known.isEmpty()) 0L else known[(known.size - 1) / 2]
+        val ranked = pool.sortedWith(
+            compareByDescending<CdnRoute> { estimateBps(it.host) ?: fallbackScore }
+                .thenBy { if (isOverseasCdnHost(it.host)) 1 else 0 }
+        )
+        val count = if (metered) 1 else 2
+        val chosen = mutableListOf<CdnRoute>()
+        ranked.firstOrNull { it.issued && (stats[it.host]?.estimator?.totalBytes ?: 0L) < MIN_TOTAL_BYTES }
+            ?.let(chosen::add)
+        chosen += ranked.filter { it !in chosen }.take(count - chosen.size)
+        val rest = ranked.filter { it !in chosen }
+        if (count > 1 && chosen.size == count && rest.isNotEmpty() && random.nextInt(5) == 0) {
+            chosen[chosen.lastIndex] = rest.random(random)
+        }
+        return chosen
+    }
+
+    @Synchronized
+    fun beginRace(): Boolean {
+        if (raceInFlight) return false
+        raceInFlight = true
+        lastRaceAtMs = clock()
+        racesThisVideo++
+        return true
+    }
+
+    /**
+     * Applies a finished race. The fastest finisher becomes active only if it moved the race bytes
+     * in at most two-thirds of the time [currentRateBps] needs; otherwise nothing changes. Losers and
+     * the host being left rest for a minute. Returns the new active host, or null for no switch.
+     */
+    @Synchronized
+    fun finishRace(currentHost: String, currentRateBps: Long, results: List<CdnRaceResult>): String? {
+        raceInFlight = false
+        val now = clock()
+        results.filter { it.success }.forEach { recordTransfer(it.host, it.bytes, it.elapsedMs) }
+        val winner = results.filter { it.success }.minByOrNull { it.elapsedMs * CDN_RACE_BYTES / it.bytes.coerceAtLeast(1) }
+        results.filter { it !== winner }.forEach { stats.getOrPut(it.host, ::HostStats).restUntilMs = now + REST_MS }
+        winner ?: return null
+        val winnerMs = winner.elapsedMs * CDN_RACE_BYTES / winner.bytes.coerceAtLeast(1)
+        val currentMs = if (currentRateBps <= 0) Long.MAX_VALUE else CDN_RACE_BYTES * 1_000 / currentRateBps
+        if (currentMs != Long.MAX_VALUE && winnerMs * 3 > currentMs * 2) return null
+        stats.getOrPut(currentHost, ::HostStats).restUntilMs = now + REST_MS
+        activeHost = winner.host
+        return winner.host
+    }
+
+    @Synchronized
+    fun cancelRace() { raceInFlight = false }
+
+    @Synchronized
+    fun networkChanged(identity: String) {
+        if (networkIdentity == identity) return
+        val first = networkIdentity == null
+        networkIdentity = identity
+        if (first) return
+        activeHost = null
+        stats.clear()
+        bannedByPath.clear()
+        limitedUntilMs = 0
+    }
+
+    /** Pins routing back to Bilibili's assignment, e.g. after a manual CDN choice. */
+    @Synchronized
+    fun reset() {
+        activeHost = null
+        raceInFlight = false
+    }
+
+    private fun pathOf(url: String): String = runCatching { URI(url).rawPath.orEmpty() }.getOrDefault("")
+}
