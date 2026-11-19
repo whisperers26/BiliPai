@@ -90,7 +90,9 @@ internal fun resolveVideoDetailSystemBarsVisibilityPolicy(
     isInPipMode: Boolean,
     isScreenActive: Boolean,
     isPortraitFullscreen: Boolean = false,
-    forceShowSystemBarsInPortrait: Boolean = false
+    forceShowSystemBarsInPortrait: Boolean = false,
+    /** Fullscreen above a tabletop fold: only the status bar above the player is hidden. */
+    isTabletopHalfFullscreen: Boolean = false,
 ): VideoDetailSystemBarsVisibilityPolicy {
     if (!isScreenActive || isInPipMode) {
         return VideoDetailSystemBarsVisibilityPolicy(
@@ -110,6 +112,12 @@ internal fun resolveVideoDetailSystemBarsVisibilityPolicy(
         return VideoDetailSystemBarsVisibilityPolicy(
             hideStatusBars = true,
             hideNavigationBars = true
+        )
+    }
+    if (isTabletopHalfFullscreen) {
+        return VideoDetailSystemBarsVisibilityPolicy(
+            hideStatusBars = true,
+            hideNavigationBars = false
         )
     }
     if (isFullscreenMode) {
