@@ -1437,6 +1437,14 @@ internal fun VideoDetailScreenStateHolder(
         manualPortraitHoldActive = manualPortraitHoldActive,
     )
 
+    // 半折叠全屏：播放器只铺满折痕上方，隐藏状态栏，折痕下方保留展开时的详情布局。
+    val isTabletopHalfFullscreen = shouldUseTabletopHalfFullscreen(
+        isFullscreenMode = isFullscreenMode,
+        tabletopFold = largeScreenTabletopFold,
+        isInPipMode = isPipMode,
+        isPortraitFullscreen = isPortraitFullscreen,
+    )
+
     // 「下一集 / 相关视频」的导航 lambda 定义在 isFullscreenMode 之前，用 state 桥接，
     // 让它在点击时刻读到最新全屏状态：全屏中 push 新详情页必须继承全屏意图才不会掉出全屏。
     LaunchedEffect(isFullscreenMode) {
@@ -3479,14 +3487,16 @@ internal fun VideoDetailScreenStateHolder(
         !(useTabletLayout || isLandscape || isFullscreenMode || isPortraitFullscreen)
     val systemBarsVisibilityPolicy = remember(
         isFullscreenMode,
+        isTabletopHalfFullscreen,
         isPortraitFullscreen,
         immersiveVideoPageStatusBar,
         isPipMode,
         isScreenActive
     ) {
         resolveVideoDetailSystemBarsVisibilityPolicy(
-            isFullscreenMode = isFullscreenMode,
-            hideVideoPageStatusBar = immersiveVideoPageStatusBar,
+            // 半折叠全屏只隐藏顶部状态栏；折痕下方的详情仍保留导航栏。
+            isFullscreenMode = isFullscreenMode && !isTabletopHalfFullscreen,
+            hideVideoPageStatusBar = immersiveVideoPageStatusBar || isTabletopHalfFullscreen,
             isInPipMode = isPipMode,
             isScreenActive = isScreenActive,
             isPortraitFullscreen = isPortraitFullscreen
@@ -3763,7 +3773,7 @@ internal fun VideoDetailScreenStateHolder(
         // 装饰塞进小窗都会错位，因此与横屏全屏共用同一层播放面。
         // 竖屏全屏由 PortraitVideoPager 持有播放面，保持挂载、由 pager 自己隐藏装饰层。
         val pipPlayerOnlyLayer = isPipMode && !isPortraitFullscreen
-        if (isFullscreenMode || pipPlayerOnlyLayer) {
+        if ((isFullscreenMode && !isTabletopHalfFullscreen) || pipPlayerOnlyLayer) {
                 // 视图复用不受动画、设备方向策略或分屏开关影响。
                 // 只移动现有播放器；过渡开关仅控制布局动画，不再创建第二份输出面。
                 // 全屏＋物理遮挡铰链：媒体收进首个安全区，不跨缝；软折痕跨整窗。
@@ -3919,7 +3929,7 @@ internal fun VideoDetailScreenStateHolder(
                         returnMediaGeometry,
                         entryOwnsMiuixCardTransition, isCommittedCardReturn, residentCoverSource,
                         uiState is VideoPlaybackUiState.Loading, hasRenderedFirstFrameForReturn,
-                        entryFirstFrameReveal,
+                        entryFirstFrameReveal, isTabletopHalfFullscreen,
                     ) {
                         { playerModifier ->
                             LargeScreenVideoPlayerTransitionHost(
@@ -3948,7 +3958,7 @@ internal fun VideoDetailScreenStateHolder(
                                         viewportWidth = viewportWidth,
                                         alpha = continuousPlayerUnitState,
                                         scale = continuousPlayerUnitState,
-                                        isFullscreen = false,
+                                        isFullscreen = isTabletopHalfFullscreen,
                                         contentTopInset = 0.dp,
                                     )
                                 )
@@ -4104,6 +4114,7 @@ internal fun VideoDetailScreenStateHolder(
                             playerContent = continuousPlayerSlot,
                             transitionChromeAlphaProvider = videoCardDetailChromeAlphaProvider,
                             tabletopFold = largeScreenTabletopFold,
+                            tabletopPlayerFullscreen = isTabletopHalfFullscreen,
                             )
                         }
                     } else {

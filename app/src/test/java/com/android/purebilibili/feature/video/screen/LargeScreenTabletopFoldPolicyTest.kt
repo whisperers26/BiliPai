@@ -11,7 +11,9 @@ import com.android.purebilibili.core.util.WindowSizeClass
 import com.android.purebilibili.core.util.WindowWidthSizeClass
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class LargeScreenTabletopFoldPolicyTest {
 
@@ -62,5 +64,16 @@ class LargeScreenTabletopFoldPolicyTest {
     fun `player fills the area above the fold at 16 by 9`() {
         assertEquals(560f, resolveLargeScreenTabletopPlayerWidthDp(areaWidthDp = 840f, areaHeightDp = 315f))
         assertEquals(840f, resolveLargeScreenTabletopPlayerWidthDp(areaWidthDp = 840f, areaHeightDp = 600f))
+    }
+
+    @Test
+    fun `fullscreen while half folded stays above the fold and follows fold changes`() {
+        val fold = LargeScreenTabletopFold(topPx = 900, bottomPx = 920)
+        assertTrue(shouldUseTabletopHalfFullscreen(true, fold, isInPipMode = false, isPortraitFullscreen = false))
+        // Unfolding a half-fold fullscreen (no fold) returns to whole-window fullscreen.
+        assertFalse(shouldUseTabletopHalfFullscreen(true, null, isInPipMode = false, isPortraitFullscreen = false))
+        assertFalse(shouldUseTabletopHalfFullscreen(false, fold, isInPipMode = false, isPortraitFullscreen = false))
+        assertFalse(shouldUseTabletopHalfFullscreen(true, fold, isInPipMode = true, isPortraitFullscreen = false))
+        assertFalse(shouldUseTabletopHalfFullscreen(true, fold, isInPipMode = false, isPortraitFullscreen = true))
     }
 }

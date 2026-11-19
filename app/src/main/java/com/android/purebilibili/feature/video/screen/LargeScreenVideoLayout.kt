@@ -130,6 +130,8 @@ internal fun LargeScreenVideoLayout(
     transitionChromeAlphaProvider: () -> Float = { 1f },
     /** Half-opened horizontal fold: the player moves above it, the unfolded panes go below. */
     tabletopFold: LargeScreenTabletopFold? = null,
+    /** Fullscreen above the fold: the player fills that whole area, under the hidden status bar. */
+    tabletopPlayerFullscreen: Boolean = false,
 ) {
     val pageColor = AppSurfaceTokens.chromeBackground()
     var layoutOriginYPx by remember { mutableIntStateOf(0) }
@@ -170,12 +172,20 @@ internal fun LargeScreenVideoLayout(
         val tabletopLowerTopDp = tabletopFold?.let { fold ->
             with(density) { (fold.bottomPx - layoutOriginYPx).coerceIn(0, constraints.maxHeight).toDp() }
         }
-        val tabletopStatusBarDp = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
+        val tabletopStatusBarDp = if (tabletopPlayerFullscreen) {
+            0.dp
+        } else {
+            with(density) { WindowInsets.statusBars.getTop(density).toDp() }
+        }
         val tabletopPlayerWidthDp = tabletopTopHeightDp?.let { topHeight ->
-            resolveLargeScreenTabletopPlayerWidthDp(
-                areaWidthDp = windowWidthDp,
-                areaHeightDp = (topHeight - tabletopStatusBarDp).value,
-            )
+            if (tabletopPlayerFullscreen) {
+                windowWidthDp
+            } else {
+                resolveLargeScreenTabletopPlayerWidthDp(
+                    areaWidthDp = windowWidthDp,
+                    areaHeightDp = (topHeight - tabletopStatusBarDp).value,
+                )
+            }
         }
         val applySideStatusBarPadding = tabletopFold == null &&
             !shouldReserveStatusBarAbovePlayer(metrics.mode)
@@ -378,14 +388,21 @@ internal fun LargeScreenVideoLayout(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(tabletopTopHeightDp)
-                        .statusBarsPadding(),
+                        .then(
+                            if (tabletopPlayerFullscreen) Modifier.background(Color.Black)
+                            else Modifier.statusBarsPadding()
+                        ),
                     contentAlignment = Alignment.Center,
                 ) {
                     player(
-                        Modifier
-                            .width(tabletopPlayerWidthDp.dp)
-                            .height((tabletopPlayerWidthDp / LARGE_SCREEN_VIDEO_ASPECT_16_9).dp)
-                            .then(playerBackdropModifier),
+                        if (tabletopPlayerFullscreen) {
+                            Modifier.fillMaxSize().then(playerBackdropModifier)
+                        } else {
+                            Modifier
+                                .width(tabletopPlayerWidthDp.dp)
+                                .height((tabletopPlayerWidthDp / LARGE_SCREEN_VIDEO_ASPECT_16_9).dp)
+                                .then(playerBackdropModifier)
+                        },
                     )
                 }
                 Spacer(Modifier.height((tabletopLowerTopDp - tabletopTopHeightDp).coerceAtLeast(0.dp)))
