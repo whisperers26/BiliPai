@@ -330,6 +330,11 @@ internal fun TabletVideoLayout(
         basePrimaryRatio = layoutPolicy.primaryRatio,
         secondaryPaneMode = secondaryPaneMode
     )
+    // Tabletop 下方的左右分栏沿用完全展开时的比例。
+    val flatPrimaryRatio = resolveTabletPrimaryRatio(
+        basePrimaryRatio = resolveTabletVideoLayoutPolicy(widthDp = configuration.screenWidthDp).primaryRatio,
+        secondaryPaneMode = secondaryPaneMode,
+    )
     val useThreePaneLayout = LocalWindowSizeClass.current.shouldUseThreePaneLayout &&
         !layoutPolicy.useTabletopLayout
     val secondaryPaneHidden = shouldHideTabletSecondaryPane(
@@ -348,6 +353,40 @@ internal fun TabletVideoLayout(
     val activity = remember(context) {
         (context as? android.app.Activity)
             ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
+    }
+
+    // 简介栏：展开态在播放器下方，Tabletop 时在铰链下方左栏，与展开态布局一致。
+    val infoPane: @Composable (Modifier) -> Unit = { paneModifier ->
+        if (contentState != null) {
+            TabletVideoInfoPane(
+                currentPositionMsProvider = { playerState.player.currentPosition },
+                success = contentState,
+                engagementState = engagementState,
+                downloadProgress = downloadProgress,
+                playbackActions = playbackActions,
+                engagementActions = engagementActions,
+                onBgmClick = onBgmClick,
+                onRelatedVideoClick = onRelatedVideoClick,
+                onSearchKeywordClick = onSearchKeywordClick,
+                onOpenBilibiliLink = onOpenBilibiliLink,
+                danmakuEnabled = danmakuChrome.enabled,
+                onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
+                onDanmakuToggle = danmakuChrome.onToggle,
+                onOwnerUploadsClick = {
+                    requestedSecondaryTabName = TabletSecondaryTab.OWNER_UPLOADS.name
+                    secondaryPaneModeName = TabletSecondaryPaneMode.EXPANDED.name
+                },
+                videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
+                videoNoteEnabled = videoNoteEnabled,
+                videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
+                showRelatedVideos = false,
+                modifier = paneModifier,
+            )
+        } else if (uiState is VideoPlaybackUiState.Loading) {
+            com.android.purebilibili.feature.video.ui.components.VideoDetailInfoPaneSkeleton(
+                modifier = paneModifier,
+            )
+        }
     }
 
     AppSplitLayout(
@@ -543,40 +582,10 @@ internal fun TabletVideoLayout(
                     }
                 }
 
-                // Tabletop 把简介移到铰链下方；普通平板仍在播放器下方展示。
-                if (contentState != null && !layoutPolicy.useTabletopLayout) {
-                    TabletVideoInfoPane(
-                        currentPositionMsProvider = { playerState.player.currentPosition },
-                        success = contentState,
-                        engagementState = engagementState,
-                        downloadProgress = downloadProgress,
-                        playbackActions = playbackActions,
-                        engagementActions = engagementActions,
-                        onBgmClick = onBgmClick,
-                        onRelatedVideoClick = onRelatedVideoClick,
-                        onSearchKeywordClick = onSearchKeywordClick,
-                        onOpenBilibiliLink = onOpenBilibiliLink,
-                        danmakuEnabled = danmakuChrome.enabled,
-                        onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
-                        onDanmakuToggle = danmakuChrome.onToggle,
-                        onOwnerUploadsClick = {
-                            requestedSecondaryTabName = TabletSecondaryTab.OWNER_UPLOADS.name
-                            secondaryPaneModeName = TabletSecondaryPaneMode.EXPANDED.name
-                        },
-                        videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
-                        videoNoteEnabled = videoNoteEnabled,
-                        videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
-                        showRelatedVideos = false,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .widthIn(max = layoutPolicy.infoMaxWidthDp.dp)
-                            .align(Alignment.CenterHorizontally)
-                            .videoDetailTransitionChrome(transitionChromeAlphaProvider),
-                    )
-                } else if (uiState is VideoPlaybackUiState.Loading && !layoutPolicy.useTabletopLayout) {
-                    com.android.purebilibili.feature.video.ui.components.VideoDetailInfoPaneSkeleton(
-                        modifier = Modifier
+                // Tabletop 把简介移到铰链下方的左栏；普通平板仍在播放器下方展示。
+                if (!layoutPolicy.useTabletopLayout) {
+                    infoPane(
+                        Modifier
                             .weight(1f)
                             .fillMaxWidth()
                             .widthIn(max = layoutPolicy.infoMaxWidthDp.dp)
@@ -588,74 +597,66 @@ internal fun TabletVideoLayout(
         }
     },
         secondaryContent = {
-            Box(Modifier.fillMaxSize().videoDetailTransitionChrome(transitionChromeAlphaProvider)) {
-                // 📝 右侧：评论 / 相关推荐
-                if (contentState != null) {
-                    val success = contentState
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        TabletSecondaryContent(
-                            success = success,
-                            commentStateHandle = commentStateHandle,
-                            subReplyStateHandle = subReplyStateHandle,
-                            playbackActions = playbackActions,
-                            engagementState = engagementState,
-                            engagementActions = engagementActions,
-                            commentActions = commentActions,
-                            playerState = playerState,
-                            onUpClick = onUpClick,
-                            paneMode = secondaryPaneMode,
-                            onPaneModeChange = { secondaryPaneModeName = it.name },
-                            onRelatedVideoClick = onRelatedVideoClick,
-                            onSearchKeywordClick = onSearchKeywordClick,
-                            showUpBadge = showUpBadge,
-                            showIdentityDecorations = commentMemberDecorationsEnabled,
-                            onOpenBilibiliLink = onOpenBilibiliLink,
-                            externalQueueTitle = externalQueueTitle,
-                            externalQueueContent = externalQueueContent,
-                            requestedTabName = requestedSecondaryTabName,
-                            onRequestedTabConsumed = { requestedSecondaryTabName = null },
-                            danmakuEnabled = danmakuChrome.enabled,
-                            onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
-                            onDanmakuToggle = danmakuChrome.onToggle,
-                            fixedTab = if (useThreePaneLayout) TabletSecondaryTab.COMMENTS else null,
-                            relatedTabFirst = secondaryDefaultTab ==
-                                com.android.purebilibili.core.store.TabletSecondaryDefaultTab.RELATED,
-                            introContent = if (layoutPolicy.useTabletopLayout) {
-                                {
-                                    TabletVideoInfoPane(
-                                        currentPositionMsProvider = { playerState.player.currentPosition },
-                                        success = success,
-                                        engagementState = engagementState,
-                                        downloadProgress = downloadProgress,
-                                        playbackActions = playbackActions,
-                                        engagementActions = engagementActions,
-                                        onBgmClick = onBgmClick,
-                                        onRelatedVideoClick = onRelatedVideoClick,
-                                        onSearchKeywordClick = onSearchKeywordClick,
-                                        onOpenBilibiliLink = onOpenBilibiliLink,
-                                        danmakuEnabled = danmakuChrome.enabled,
-                                        onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
-                                        onDanmakuToggle = danmakuChrome.onToggle,
-                                        onOwnerUploadsClick = {
-                                            requestedSecondaryTabName = TabletSecondaryTab.OWNER_UPLOADS.name
-                                        },
-                                        videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
-                                        videoNoteEnabled = videoNoteEnabled,
-                                        videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
-                                }
-                            } else null,
-                        )
+            val secondaryPane: @Composable (Modifier) -> Unit = { paneModifier ->
+                Box(paneModifier) {
+                    Box(Modifier.fillMaxSize().videoDetailTransitionChrome(transitionChromeAlphaProvider)) {
+                        // 📝 右侧：评论 / 相关推荐
+                        if (contentState != null) {
+                            val success = contentState
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                TabletSecondaryContent(
+                                    success = success,
+                                    commentStateHandle = commentStateHandle,
+                                    subReplyStateHandle = subReplyStateHandle,
+                                    playbackActions = playbackActions,
+                                    engagementState = engagementState,
+                                    engagementActions = engagementActions,
+                                    commentActions = commentActions,
+                                    playerState = playerState,
+                                    onUpClick = onUpClick,
+                                    paneMode = secondaryPaneMode,
+                                    onPaneModeChange = { secondaryPaneModeName = it.name },
+                                    onRelatedVideoClick = onRelatedVideoClick,
+                                    onSearchKeywordClick = onSearchKeywordClick,
+                                    showUpBadge = showUpBadge,
+                                    showIdentityDecorations = commentMemberDecorationsEnabled,
+                                    onOpenBilibiliLink = onOpenBilibiliLink,
+                                    externalQueueTitle = externalQueueTitle,
+                                    externalQueueContent = externalQueueContent,
+                                    requestedTabName = requestedSecondaryTabName,
+                                    onRequestedTabConsumed = { requestedSecondaryTabName = null },
+                                    danmakuEnabled = danmakuChrome.enabled,
+                                    onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
+                                    onDanmakuToggle = danmakuChrome.onToggle,
+                                    fixedTab = if (useThreePaneLayout) TabletSecondaryTab.COMMENTS else null,
+                                    relatedTabFirst = secondaryDefaultTab ==
+                                        com.android.purebilibili.core.store.TabletSecondaryDefaultTab.RELATED,
+                                    introContent = null,
+                                )
+                            }
+                        } else if (uiState is VideoPlaybackUiState.Loading) {
+                            com.android.purebilibili.feature.video.ui.components.VideoDetailSecondaryPaneSkeleton(
+                                showComments = useThreePaneLayout || secondaryDefaultTab ==
+                                    com.android.purebilibili.core.store.TabletSecondaryDefaultTab.COMMENTS,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                     }
-                } else if (uiState is VideoPlaybackUiState.Loading) {
-                    com.android.purebilibili.feature.video.ui.components.VideoDetailSecondaryPaneSkeleton(
-                        showComments = useThreePaneLayout || secondaryDefaultTab ==
-                            com.android.purebilibili.core.store.TabletSecondaryDefaultTab.COMMENTS,
-                        modifier = Modifier.fillMaxSize(),
-                        showIntro = layoutPolicy.useTabletopLayout,
-                    )
                 }
+            }
+            if (layoutPolicy.useTabletopLayout) {
+                // 铰链下方与完全展开时一致：左侧简介，右侧评论 / 相关推荐。
+                Row(Modifier.fillMaxSize()) {
+                    infoPane(
+                        Modifier
+                            .weight(flatPrimaryRatio)
+                            .fillMaxHeight()
+                            .videoDetailTransitionChrome(transitionChromeAlphaProvider),
+                    )
+                    secondaryPane(Modifier.weight(1f - flatPrimaryRatio).fillMaxHeight())
+                }
+            } else {
+                secondaryPane(Modifier.fillMaxSize())
             }
         },
         tertiaryContent = if (useThreePaneLayout) {
