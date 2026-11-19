@@ -1016,7 +1016,7 @@ SettingsItemAnchor("playback.music_lyrics_ui_style") {
 SettingsSingleChoicePreference(
                             icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_router_24),
                             title = settingItemTitle("playback.playback_cdn_preference"),
-                            subtitle = "新视频优先使用此线路；不可用时换备用线路",
+                            subtitle = "自动选线会在播放卡顿时测速并换到更快的线路；选择具体线路则固定使用",
                             options = playbackCdnOptions,
                             selectedValue = playbackCdnPreference,
                             onSelectionChange = { preference ->
