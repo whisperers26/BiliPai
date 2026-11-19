@@ -8744,6 +8744,14 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 // Reuse the existing progress tick, including sessions without active plugins.
                 samplePlaybackAnalytics()
                 pollQualitySwitchTelemetry()
+                exoPlayer?.let { player ->
+                    com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.playback(
+                        bufferMs = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0),
+                        bitrateBps = (player.videoFormat?.bitrate?.coerceAtLeast(0)?.toLong() ?: 0L) +
+                            (player.audioFormat?.bitrate?.coerceAtLeast(0)?.toLong() ?: 0L),
+                        buffering = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady
+                    )
+                }
                 if (CdnTransferRuntime.enabled) {
                     exoPlayer?.let { player ->
                         CdnTransferRuntime.playback(
@@ -9367,6 +9375,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             audioUrls = rawAudioUrls
         )
 
+        com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.register(rawVideoUrls, rawAudioUrls)
         val cdnPlugin = PluginManager
             .getEnabledPlugins(PlaybackCdnPlugin::class)
             .firstOrNull()
