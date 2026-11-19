@@ -28,11 +28,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import kotlin.math.roundToInt
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.store.SettingsManager
@@ -122,8 +128,11 @@ internal fun LargeScreenVideoLayout(
     externalQueueTitle: String = "播放列表",
     externalQueueContent: (@Composable () -> Unit)? = null,
     transitionChromeAlphaProvider: () -> Float = { 1f },
+    /** Half-opened horizontal fold: the player moves above it, the unfolded panes go below. */
+    tabletopFold: LargeScreenTabletopFold? = null,
 ) {
     val pageColor = AppSurfaceTokens.chromeBackground()
+    var layoutOriginYPx by remember { mutableIntStateOf(0) }
     // With a supplied transition host, backing pixels must move inside its media clip.
     // A background on the fixed split slot survives underneath the shrinking player.
     val playerBackdropModifier = if (playerContent == null) {
@@ -137,7 +146,10 @@ internal fun LargeScreenVideoLayout(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(pageColor),
+            .background(pageColor)
+            .onGloballyPositioned { coordinates ->
+                layoutOriginYPx = coordinates.positionInWindow().y.roundToInt()
+            },
     ) {
         val windowWidthDp = maxWidth.value
         val windowHeightDp = maxHeight.value
@@ -149,7 +161,24 @@ internal fun LargeScreenVideoLayout(
                 enableVerticalExpand = true,
             )
         }
-        val applySideStatusBarPadding = !shouldReserveStatusBarAbovePlayer(metrics.mode)
+        val density = LocalDensity.current
+        // Above the fold: the player area; below it: the unfolded panes. Both start from the
+        // unfolded metrics, so the panes keep their unfolded arrangement and widths.
+        val tabletopTopHeightDp = tabletopFold?.let { fold ->
+            with(density) { (fold.topPx - layoutOriginYPx).coerceIn(0, constraints.maxHeight).toDp() }
+        }
+        val tabletopLowerTopDp = tabletopFold?.let { fold ->
+            with(density) { (fold.bottomPx - layoutOriginYPx).coerceIn(0, constraints.maxHeight).toDp() }
+        }
+        val tabletopStatusBarDp = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
+        val tabletopPlayerWidthDp = tabletopTopHeightDp?.let { topHeight ->
+            resolveLargeScreenTabletopPlayerWidthDp(
+                areaWidthDp = windowWidthDp,
+                areaHeightDp = (topHeight - tabletopStatusBarDp).value,
+            )
+        }
+        val applySideStatusBarPadding = tabletopFold == null &&
+            !shouldReserveStatusBarAbovePlayer(metrics.mode)
         val useDetailRail = shouldUseLargeScreenDetailRail(metrics.mode)
         val relatedTabFirst = resolveRelatedTabFirstInSecondary(
             mode = metrics.mode,
@@ -194,7 +223,7 @@ internal fun LargeScreenVideoLayout(
                 onSecondCodecChange = onSecondCodecChange,
                 onAudioQualityChange = onAudioQualityChange,
                 onPlayModeClick = onPlayModeClick,
-                viewportWidthDpOverride = metrics.playerWidthDp.toInt(),
+                viewportWidthDpOverride = (tabletopPlayerWidthDp ?: metrics.playerWidthDp).toInt(),
             )
         }
         val infoPane: @Composable (Modifier, TabletVideoInfoLayout, (Boolean) -> Unit) -> Unit = {
@@ -316,7 +345,58 @@ internal fun LargeScreenVideoLayout(
                 )
             }
         }
-        when (metrics.mode) {
+        // The unfolded panes without the player, for the area below a tabletop fold.
+        val tabletopLowerPanes: @Composable (Modifier) -> Unit = { paneModifier ->
+            if (metrics.mode == LargeScreenVideoLayoutMode.AlmostSquare) {
+                Column(modifier = paneModifier) {
+                    detailRail(Modifier.fillMaxWidth().weight(1f))
+                }
+            } else {
+                Row(modifier = paneModifier) {
+                    intro(Modifier.weight(1f).fillMaxHeight())
+                    if (metrics.sidePaneWidthDp > 0f) {
+                        VerticalDivider(
+                            modifier = Modifier.fillMaxHeight()
+                                .videoDetailTransitionChrome(transitionChromeAlphaProvider),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                            thickness = 1.dp,
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(metrics.sidePaneWidthDp.dp)
+                                .fillMaxHeight(),
+                        ) {
+                            side(false, null)
+                        }
+                    }
+                }
+            }
+        }
+        if (tabletopTopHeightDp != null && tabletopLowerTopDp != null && tabletopPlayerWidthDp != null) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(tabletopTopHeightDp)
+                        .statusBarsPadding(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    player(
+                        Modifier
+                            .width(tabletopPlayerWidthDp.dp)
+                            .height((tabletopPlayerWidthDp / LARGE_SCREEN_VIDEO_ASPECT_16_9).dp)
+                            .then(playerBackdropModifier),
+                    )
+                }
+                Spacer(Modifier.height((tabletopLowerTopDp - tabletopTopHeightDp).coerceAtLeast(0.dp)))
+                tabletopLowerPanes(
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .navigationBarsPadding(),
+                )
+            }
+        } else when (metrics.mode) {
             LargeScreenVideoLayoutMode.VerticalThreePane -> {
                 Row(modifier = Modifier.fillMaxSize()) {
                     Column(

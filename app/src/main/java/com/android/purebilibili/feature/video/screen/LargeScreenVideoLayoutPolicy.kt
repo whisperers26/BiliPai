@@ -1,6 +1,9 @@
 package com.android.purebilibili.feature.video.screen
 
 import com.android.purebilibili.core.store.TabletSecondaryDefaultTab
+import com.android.purebilibili.core.util.AppFoldPosture
+import com.android.purebilibili.core.util.AppHingeOrientation
+import com.android.purebilibili.core.util.AppWindowAdaptiveInfo
 
 /**
  * Large-screen video geometry for the current application window.
@@ -214,3 +217,32 @@ internal fun resolveRelatedTabFirstInSecondary(
     defaultTab: TabletSecondaryDefaultTab,
 ): Boolean = resolveIncludeRelatedTabInSecondary(mode) &&
     defaultTab == TabletSecondaryDefaultTab.RELATED
+
+/**
+ * A half-opened horizontal fold, in window pixels. The large-screen layout keeps its unfolded
+ * arrangement for everything but the player: the player sits above [topPx] and the unfolded
+ * detail panes sit below [bottomPx].
+ */
+internal data class LargeScreenTabletopFold(
+    val topPx: Int,
+    val bottomPx: Int,
+)
+
+internal fun resolveLargeScreenTabletopFold(
+    adaptiveInfo: AppWindowAdaptiveInfo,
+): LargeScreenTabletopFold? {
+    if (adaptiveInfo.posture != AppFoldPosture.Tabletop) return null
+    if (adaptiveInfo.foldingFeature.hingeOrientation != AppHingeOrientation.Horizontal) return null
+    val bounds = adaptiveInfo.foldingFeature.hingeBounds ?: return null
+    if (bounds.top <= 0) return null
+    return LargeScreenTabletopFold(topPx = bounds.top, bottomPx = maxOf(bounds.top, bounds.bottom))
+}
+
+/** Largest 16:9 player that fits the area above the fold. */
+internal fun resolveLargeScreenTabletopPlayerWidthDp(
+    areaWidthDp: Float,
+    areaHeightDp: Float,
+): Float = minOf(
+    areaWidthDp.coerceAtLeast(0f),
+    areaHeightDp.coerceAtLeast(0f) * LARGE_SCREEN_VIDEO_ASPECT_16_9,
+)
