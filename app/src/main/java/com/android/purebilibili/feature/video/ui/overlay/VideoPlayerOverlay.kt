@@ -2302,6 +2302,7 @@ private fun VideoPlayerOverlayContent(
                     onProbeCdnCandidates = onProbeCdnCandidates,
                     cdnServiceLabels = menuSession.cdnServiceLabels,
                     currentCdnServiceIndex = menuSession.currentCdnServiceIndex,
+                    autoCdnHostLabel = menuSession.autoCdnHostLabel,
                     onCdnServiceSelected = menuSession.onCdnServiceSelected,
                     // [New] Codec & Audio
                     currentCodec = currentCodec,

@@ -330,6 +330,7 @@ fun VideoSettingsPanel(
     onSleepExitAppChange: ((Boolean) -> Unit)? = null,
     cdnServiceLabels: List<String> = emptyList(),
     currentCdnServiceIndex: Int = 0,
+    autoCdnHostLabel: String? = null,
     onCdnServiceSelected: ((Int) -> Unit)? = null,
     chapterDisplayMode: ChapterDisplayMode = ChapterDisplayMode.WITH_CONTROLS,
     onChapterDisplayModeChange: ((ChapterDisplayMode) -> Unit)? = null,
@@ -486,7 +487,7 @@ fun VideoSettingsPanel(
                             } else if (playerVolumeUnavailableReason != null) {
                                 PlayerSettingsRow("播放器音量", playerVolumeUnavailableReason, onClick = null)
                             }
-                            if (cdnCount > 0 || cdnServiceLabels.isNotEmpty()) PlayerSettingsRow("CDN 设置", "当前：${cdnServiceLabels.getOrNull(currentCdnServiceIndex) ?: "线路 ${currentCdnIndex + 1}"}，无法播放请切换") { page = "cdn" }
+                            if (cdnCount > 0 || cdnServiceLabels.isNotEmpty()) PlayerSettingsRow("CDN 设置", "当前：${cdnServiceLabels.getOrNull(currentCdnServiceIndex) ?: "线路 ${currentCdnIndex + 1}"}${autoCdnHostLabel?.let { " · $it" }.orEmpty()}，无法播放请切换") { page = "cdn" }
                             PlayerSettingsRow(
                                 "画面变换",
                                 buildList {
@@ -593,7 +594,12 @@ fun VideoSettingsPanel(
                         "cdn", "cdnAdvanced" -> {
                             if (page == "cdn") onCdnServiceSelected?.let { select ->
                                 cdnServiceLabels.forEachIndexed { index, label ->
-                                    PlayerSettingsSelectionRow(label, index == currentCdnServiceIndex) { select(index); onDismiss() }
+                                    val selected = index == currentCdnServiceIndex
+                                    PlayerSettingsSelectionRow(
+                                        label,
+                                        selected,
+                                        subtitle = autoCdnHostLabel?.takeIf { selected }?.let { "当前线路：$it" },
+                                    ) { select(index); onDismiss() }
                                 }
                             }
                             if (cdnServiceLabels.isNotEmpty() && page == "cdn") PlayerSettingsRow("线路诊断") { page = "cdnAdvanced" }
