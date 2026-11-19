@@ -286,6 +286,36 @@ internal fun LargeScreenVideoLayout(
                 }
             }
         }
+        val detailRail: @Composable (Modifier) -> Unit = { paneModifier ->
+            if (success != null) {
+                LargeScreenDetailRailPane(
+                    success = success,
+                    engagementState = engagementState,
+                    commentState = commentStateHandle.value,
+                    subReplyVisible = subReplyStateHandle.value.visible,
+                    downloadProgress = downloadProgress.value,
+                    playbackActions = playbackActions,
+                    engagementActions = engagementActions,
+                    commentActions = commentActions,
+                    infoHeaderContent = { modifier, onExpandedChange ->
+                        infoPane(modifier, TabletVideoInfoLayout.Header, onExpandedChange)
+                    },
+                    relatedContent = { modifier ->
+                        Box(modifier = modifier) { side(false, TabletSecondaryTab.RELATED) }
+                    },
+                    commentsContent = { modifier ->
+                        Box(modifier = modifier) { side(false, TabletSecondaryTab.COMMENTS) }
+                    },
+                    chromeAlphaProvider = transitionChromeAlphaProvider,
+                    modifier = paneModifier,
+                )
+            } else if (uiState is VideoPlaybackUiState.Loading) {
+                com.android.purebilibili.feature.video.ui.components.VideoDetailInfoPaneSkeleton(
+                    modifier = paneModifier
+                        .videoDetailTransitionChrome(transitionChromeAlphaProvider),
+                )
+            }
+        }
         when (metrics.mode) {
             LargeScreenVideoLayoutMode.VerticalThreePane -> {
                 Row(modifier = Modifier.fillMaxSize()) {
@@ -363,40 +393,12 @@ internal fun LargeScreenVideoLayout(
                             .height(metrics.playerHeightDp.dp)
                             .then(playerBackdropModifier),
                     )
-                    if (success != null) {
-                        LargeScreenDetailRailPane(
-                            success = success,
-                            engagementState = engagementState,
-                            commentState = commentStateHandle.value,
-                            subReplyVisible = subReplyStateHandle.value.visible,
-                            downloadProgress = downloadProgress.value,
-                            playbackActions = playbackActions,
-                            engagementActions = engagementActions,
-                            commentActions = commentActions,
-                            infoHeaderContent = { modifier, onExpandedChange ->
-                                infoPane(modifier, TabletVideoInfoLayout.Header, onExpandedChange)
-                            },
-                            relatedContent = { modifier ->
-                                Box(modifier = modifier) { side(false, TabletSecondaryTab.RELATED) }
-                            },
-                            commentsContent = { modifier ->
-                                Box(modifier = modifier) { side(false, TabletSecondaryTab.COMMENTS) }
-                            },
-                            chromeAlphaProvider = transitionChromeAlphaProvider,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .navigationBarsPadding(),
-                        )
-                    } else if (uiState is VideoPlaybackUiState.Loading) {
-                        com.android.purebilibili.feature.video.ui.components.VideoDetailInfoPaneSkeleton(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .navigationBarsPadding()
-                                .videoDetailTransitionChrome(transitionChromeAlphaProvider),
-                        )
-                    }
+                    detailRail(
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .navigationBarsPadding(),
+                    )
                 }
             }
             LargeScreenVideoLayoutMode.Landscape -> {
