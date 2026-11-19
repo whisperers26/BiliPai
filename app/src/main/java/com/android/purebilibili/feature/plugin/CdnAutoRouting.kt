@@ -166,6 +166,7 @@ internal class CdnAutoRouter(
     private val stats = mutableMapOf<String, HostStats>()
     private val issuedByPath = linkedMapOf<String, List<String>>()
     private val bannedByPath = mutableMapOf<String, MutableSet<String>>()
+    private val videoPaths = mutableSetOf<String>()
     private var networkIdentity: String? = null
     private var limitedUntilMs = 0L
     private var lastRaceAtMs = Long.MIN_VALUE / 2
@@ -184,6 +185,7 @@ internal class CdnAutoRouter(
             activeHost = null
             racesThisVideo = 0
         }
+        issuedVideo.filter { it.isNotBlank() }.map(::pathOf).filterTo(videoPaths) { it.isNotBlank() }
         byPath.forEach { (path, urls) ->
             if (path.isNotBlank()) {
                 issuedByPath.remove(path)
@@ -194,8 +196,13 @@ internal class CdnAutoRouter(
             val oldest = issuedByPath.keys.first()
             issuedByPath.remove(oldest)
             bannedByPath.remove(oldest)
+            videoPaths.remove(oldest)
         }
     }
+
+    /** True for a registered video track; audio and unknown URLs are false. */
+    @Synchronized
+    fun isVideo(url: String): Boolean = pathOf(url) in videoPaths
 
     @Synchronized
     fun isRegistered(url: String): Boolean = issuedByPath[pathOf(url)]?.contains(url) == true
@@ -280,7 +287,8 @@ internal class CdnAutoRouter(
     @Synchronized
     fun pickChallengers(routes: List<CdnRoute>, currentHost: String, metered: Boolean): List<CdnRoute> {
         val now = clock()
-        val pool = routes.filter { it.host != currentHost }.filter { route ->
+        // The active host is excluded too: when the track still reads elsewhere, it could not reach it.
+        val pool = routes.filter { it.host != currentHost && it.host != activeHost }.filter { route ->
             val entry = stats[route.host]
             entry == null || (entry.restUntilMs <= now && entry.failuresAtMs.count { now - it <= FAILURE_MEMORY_MS } < 2)
         }
@@ -332,6 +340,8 @@ internal class CdnAutoRouter(
         val winner = results.filter { it.success }.minByOrNull { it.elapsedMs * CDN_RACE_BYTES / it.bytes.coerceAtLeast(1) }
         results.filter { it !== winner }.forEach { stats.getOrPut(it.host, ::HostStats).restUntilMs = now + REST_MS }
         winner ?: return null
+        // Never "switch" to where routing already points: that would announce a switch and change nothing.
+        if (winner.host == currentHost || winner.host == activeHost) return null
         val winnerMs = winner.elapsedMs * CDN_RACE_BYTES / winner.bytes.coerceAtLeast(1)
         val currentMs = if (currentRateBps <= 0) Long.MAX_VALUE else CDN_RACE_BYTES * 1_000 / currentRateBps
         if (currentMs != Long.MAX_VALUE && winnerMs * 3 > currentMs * 2) return null

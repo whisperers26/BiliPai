@@ -174,6 +174,33 @@ class CdnAutoRoutingTest {
     }
 
     @Test
+    fun `a race never switches to the host already in use`() {
+        val router = router()
+        router.register(listOf(cosov), listOf(audio))
+        router.beginRace()
+        assertEquals("upos-sz-mirrorali.bilivideo.com", router.finishRace("upos-sz-mirrorcosov.bilivideo.com", 0,
+            listOf(CdnRaceResult("upos-sz-mirrorali.bilivideo.com", CDN_RACE_BYTES, 300, true))))
+        now += 20_000
+        // Video still reads cosov (say ali refused this track), so ali is active but not in use here.
+        val challengers = router.pickChallengers(router.routesFor(cosov), "upos-sz-mirrorcosov.bilivideo.com", metered = false)
+        assertFalse(challengers.any { it.host == "upos-sz-mirrorali.bilivideo.com" })
+        router.beginRace()
+        assertNull(router.finishRace("upos-sz-mirrorcosov.bilivideo.com", 0,
+            listOf(CdnRaceResult("upos-sz-mirrorali.bilivideo.com", CDN_RACE_BYTES, 100, true))))
+        assertNull(router.finishRace("upos-sz-mirrorhw.bilivideo.com", 0,
+            listOf(CdnRaceResult("upos-sz-mirrorhw.bilivideo.com", CDN_RACE_BYTES, 100, true))))
+    }
+
+    @Test
+    fun `only video tracks are video paths`() {
+        val router = router()
+        router.register(listOf(cosov, akam), listOf(audio))
+        assertTrue(router.isVideo(cosov))
+        assertTrue(router.isVideo(akam))
+        assertFalse(router.isVideo(audio))
+    }
+
+    @Test
     fun `rate limits stop racing for minutes`() {
         val router = router()
         router.recordFailure("upos-sz-mirrorali.bilivideo.com", cosov, 429, swapped = true)
