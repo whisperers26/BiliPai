@@ -516,6 +516,15 @@ internal fun shouldForceInitializeDetachedCommentThreadHostForRoute(
     return routeCommentRootRpid > 0L && aid > 0L && !hasHandledRouteComment
 }
 
+/**
+ * Sensor-driven rotation is allowed only when the app's auto-rotate switch is on and the
+ * system rotation lock is off. The app switch narrows system rotation; it never overrides it.
+ */
+internal fun resolveSensorAutoRotateEnabled(
+    appAutoRotateEnabled: Boolean,
+    systemAutoRotateEnabled: Boolean,
+): Boolean = appAutoRotateEnabled && systemAutoRotateEnabled
+
 internal fun shouldApplyPhoneAutoRotatePolicy(
     isCompactDevice: Boolean
 ): Boolean {
@@ -615,6 +624,11 @@ internal fun resolvePhoneVideoRequestedOrientation(
     isCurrentlyLandscape: Boolean = false,
     systemAutoRotateEnabled: Boolean = autoRotateEnabled,
 ): Int? {
+    // The system rotation lock wins over the app switch: sensor-driven rotation needs both.
+    val sensorAutoRotateEnabled = resolveSensorAutoRotateEnabled(
+        appAutoRotateEnabled = autoRotateEnabled,
+        systemAutoRotateEnabled = systemAutoRotateEnabled,
+    )
     // A size class alone can classify a tablet or a large phone as a foldable. Keep this
     // preference out of compact layouts even if an upstream caller misclassifies the device.
     val preferPortraitForFoldableInnerScreen =
@@ -650,10 +664,10 @@ internal fun resolvePhoneVideoRequestedOrientation(
                 resolveStableOrientationWhenAutoRotateDisabled(
                     requestedOrientation = fullscreenOrientation,
                     currentRequestedOrientation = currentRequestedOrientation,
-                    autoRotateEnabled = autoRotateEnabled || systemAutoRotateEnabled
+                    autoRotateEnabled = systemAutoRotateEnabled
                 )
             }
-            autoRotateEnabled -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+            sensorAutoRotateEnabled -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
             else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
@@ -670,7 +684,7 @@ internal fun resolvePhoneVideoRequestedOrientation(
         return ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     }
     if (resolveEffectivePhoneAutoRotateEnabled(
-            autoRotateEnabled = autoRotateEnabled,
+            autoRotateEnabled = sensorAutoRotateEnabled,
             manualPortraitHoldActive = manualPortraitHoldActive
         )
     ) {
@@ -713,8 +727,8 @@ internal fun resolvePhoneVideoRequestedOrientation(
             preferPortraitForFlatFoldable = preferPortraitForFoldableInnerScreen
         ) ?: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         // The app switch controls portrait/fullscreen transitions. A manual fullscreen
-        // still follows both landscape sides when system rotation is enabled.
-        if (autoRotateEnabled || systemAutoRotateEnabled) {
+        // follows both landscape sides only while system rotation is enabled.
+        if (systemAutoRotateEnabled) {
             preserveCurrentExactLandscapeSideWhileFullscreen(
                 requestedOrientation = fullscreenOrientation,
                 currentRequestedOrientation = currentRequestedOrientation,
@@ -985,7 +999,8 @@ internal fun shouldObservePhoneAutoRotate(
     manualFullscreenRequested: Boolean = false,
     systemAutoRotateEnabled: Boolean = true,
 ): Boolean {
-    if (!systemAutoRotateEnabled && !autoRotateEnabled) return false
+    // A system rotation lock stops all sensor-driven rotation, whatever the app switch says.
+    if (!systemAutoRotateEnabled) return false
     // A cover display may be classified as a compact phone when its metrics refresh.
     // Keep tracking both landscape sides throughout fullscreen, regardless of that label.
     // Even with the app's auto-rotate switch off, an explicit fullscreen exit holds

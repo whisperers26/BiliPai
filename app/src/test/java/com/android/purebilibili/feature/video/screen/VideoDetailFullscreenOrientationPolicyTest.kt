@@ -128,9 +128,13 @@ class VideoDetailFullscreenOrientationPolicyTest {
     }
 
     @Test
-    fun `app auto rotate remains available under system rotation lock`() {
+    fun `system rotation lock disables sensor rotation even with app auto rotate on`() {
         for (appAutoRotate in listOf(false, true)) {
-            assertEquals(appAutoRotate, shouldObservePhoneAutoRotate(
+            assertFalse(resolveSensorAutoRotateEnabled(
+                appAutoRotateEnabled = appAutoRotate,
+                systemAutoRotateEnabled = false,
+            ))
+            assertFalse(shouldObservePhoneAutoRotate(
                 autoRotateEnabled = appAutoRotate,
                 systemAutoRotateEnabled = false,
                 isCompactDevice = true,
@@ -140,16 +144,63 @@ class VideoDetailFullscreenOrientationPolicyTest {
                 manualFullscreenRequested = true,
                 isFullscreenMode = true,
             ))
+            // A manual fullscreen press enters one fixed landscape side instead of following gravity.
+            assertEquals(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+                resolvePhoneVideoRequestedOrientation(
+                    autoRotateEnabled = appAutoRotate,
+                    systemAutoRotateEnabled = false,
+                    fullscreenMode = FullscreenMode.HORIZONTAL,
+                    isCompactDevice = true,
+                    isOrientationDrivenFullscreen = true,
+                    isFullscreenMode = false,
+                    manualFullscreenRequested = true,
+                )
+            )
+            // Inline playback stays portrait even if the device is held sideways.
+            assertEquals(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                resolvePhoneVideoRequestedOrientation(
+                    autoRotateEnabled = appAutoRotate,
+                    systemAutoRotateEnabled = false,
+                    fullscreenMode = FullscreenMode.AUTO,
+                    isCompactDevice = true,
+                    isOrientationDrivenFullscreen = true,
+                    isFullscreenMode = false,
+                    isCurrentlyLandscape = true,
+                )
+            )
+            // Large screens hand orientation back to the system instead of FULL_SENSOR,
+            // which would rotate past the lock.
+            assertEquals(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+                resolvePhoneVideoRequestedOrientation(
+                    autoRotateEnabled = appAutoRotate,
+                    systemAutoRotateEnabled = false,
+                    fullscreenMode = FullscreenMode.AUTO,
+                    isCompactDevice = false,
+                    isOrientationDrivenFullscreen = false,
+                    isFullscreenMode = false,
+                )
+            )
         }
-        assertEquals(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+    }
+
+    @Test
+    fun `sensor rotation needs both the app switch and system rotation`() {
+        assertTrue(resolveSensorAutoRotateEnabled(
+            appAutoRotateEnabled = true,
+            systemAutoRotateEnabled = true,
+        ))
+        assertFalse(resolveSensorAutoRotateEnabled(
+            appAutoRotateEnabled = false,
+            systemAutoRotateEnabled = true,
+        ))
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR,
             resolvePhoneVideoRequestedOrientation(
-                autoRotateEnabled = false,
-                systemAutoRotateEnabled = false,
-                fullscreenMode = FullscreenMode.HORIZONTAL,
-                isCompactDevice = true,
-                isOrientationDrivenFullscreen = true,
+                autoRotateEnabled = true,
+                systemAutoRotateEnabled = true,
+                fullscreenMode = FullscreenMode.AUTO,
+                isCompactDevice = false,
+                isOrientationDrivenFullscreen = false,
                 isFullscreenMode = false,
-                manualFullscreenRequested = true,
             )
         )
     }
