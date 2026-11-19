@@ -1381,6 +1381,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
     //  插件系统（替代旧的SponsorBlockUseCase）
     private var pluginCheckJob: Job? = null
+    private var cdnAutoSignalJob: Job? = null
     private var playbackCdnFallbackJob: Job? = null
     private var playbackCdnPrefetchJob: Job? = null
     private var playbackCdnFallbackState: PlaybackCdnFallbackState = PlaybackCdnFallbackState.Inactive
@@ -2408,6 +2409,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     private val playbackEndListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
             pollQualitySwitchTelemetry()
+            feedCdnAutoRouting()
             if (CdnTransferRuntime.enabled) {
                 CdnTransferRuntime.playback(
                     exoPlayer?.let { (it.bufferedPosition - it.currentPosition).coerceAtLeast(0) } ?: 0L,
@@ -2521,6 +2523,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            feedCdnAutoRouting()
             if (!playWhenReady) {
                 cancelPlaybackStallRecovery()
             } else if (exoPlayer?.playbackState == Player.STATE_BUFFERING) {
@@ -2544,6 +2547,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             newPosition: Player.PositionInfo,
             reason: Int
         ) {
+            // Seeks, skips and source changes always rebuffer; that is not the CDN's fault.
+            com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.positionJumped()
             if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION && finishSleepAfterCurrent()) return
             if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION &&
                 exoPlayer?.repeatMode == Player.REPEAT_MODE_ONE
@@ -2559,6 +2564,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             mediaItem: androidx.media3.common.MediaItem?,
             reason: Int
         ) {
+            com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.positionJumped()
             cancelPlaybackStallRecovery()
             playbackStallRecoveryFirstFrameRendered = false
         }
@@ -8738,22 +8744,42 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    /** Reports the foreground player's buffer and buffering state to CDN auto routing. */
+    private fun feedCdnAutoRouting() {
+        if (!com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.enabled) return
+        val player = exoPlayer ?: return
+        com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.playback(
+            bufferMs = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0),
+            bitrateBps = (player.videoFormat?.bitrate?.coerceAtLeast(0)?.toLong() ?: 0L) +
+                (player.audioFormat?.bitrate?.coerceAtLeast(0)?.toLong() ?: 0L),
+            buffering = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady,
+            ready = player.playbackState == Player.STATE_READY
+        )
+    }
+
+    /**
+     * Its own one-second tick: the plugin tick slows to five seconds without plugins, which left
+     * auto routing's playback sample stale (no shortfall race) and its stuck check late.
+     */
+    private fun startCdnAutoSignal() {
+        cdnAutoSignalJob?.cancel()
+        cdnAutoSignalJob = viewModelScope.launch {
+            while (true) {
+                feedCdnAutoRouting()
+                delay(1_000L)
+            }
+        }
+    }
+
     private fun startPluginCheck() {
         pluginCheckJob?.cancel()
+        startCdnAutoSignal()
         lastPluginDispatchPositionMs = null
         pluginCheckJob = viewModelScope.launch {
             while (true) {
                 // Reuse the existing progress tick, including sessions without active plugins.
                 samplePlaybackAnalytics()
                 pollQualitySwitchTelemetry()
-                exoPlayer?.let { player ->
-                    com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.playback(
-                        bufferMs = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0),
-                        bitrateBps = (player.videoFormat?.bitrate?.coerceAtLeast(0)?.toLong() ?: 0L) +
-                            (player.audioFormat?.bitrate?.coerceAtLeast(0)?.toLong() ?: 0L),
-                        buffering = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady
-                    )
-                }
                 if (CdnTransferRuntime.enabled) {
                     exoPlayer?.let { player ->
                         CdnTransferRuntime.playback(
@@ -9860,6 +9886,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         heartbeatJob?.cancel()
         clearHeartbeatSession()
         pluginCheckJob?.cancel()
+        cdnAutoSignalJob?.cancel()
         playbackCdnFallbackJob?.cancel()
         onlineCountJob?.cancel()  // 👀 取消在线人数轮询
         playbackTransitionMonitorJob?.cancel()

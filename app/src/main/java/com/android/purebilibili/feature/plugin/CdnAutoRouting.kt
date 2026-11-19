@@ -25,11 +25,13 @@ private const val EWMA_SLOW_HALF_LIFE_S = 5.0
 private const val MIN_SAMPLE_BYTES = 16_000L
 private const val MIN_TOTAL_BYTES = 128_000L
 
-private const val SHORTFALL_RATE_FACTOR = 1.2
-private const val SHORTFALL_MIN_BYTES = 4L * 1024L * 1024L
+// Race once throughput is under 1.5x the stream bitrate, so a host is replaced before it stalls.
+private const val SHORTFALL_RATE_FACTOR = 1.5
+private const val SHORTFALL_MIN_BYTES = 2L * 1024L * 1024L
 private const val SHORTFALL_BUFFER_MS = 30_000L
-private const val RACE_MIN_INTERVAL_MS = 12_000L
-private const val RACE_MAX_PER_VIDEO = 6
+private const val STALL_WINNER_RATE_FACTOR = 1.2
+private const val RACE_MIN_INTERVAL_MS = 8_000L
+private const val RACE_MAX_PER_VIDEO = 10
 private const val REST_MS = 60_000L
 private const val FAILURE_WINDOW_MS = 30_000L
 private const val FAILURE_MEMORY_MS = 60 * 60_000L
@@ -100,6 +102,10 @@ internal fun buildCdnRouteCandidates(issuedUrls: List<String>): List<CdnRoute> {
     return issued + swaps
 }
 
+/** Bytes per second a host needs to carry a [bitrateBps] stream with a 1.2x margin. */
+internal fun cdnStreamNeedBps(bitrateBps: Long): Long =
+    if (bitrateBps <= 0) 0L else (bitrateBps * STALL_WINNER_RATE_FACTOR / 8).toLong()
+
 /** Shaka Player's bandwidth estimator: the lower of a fast and a slow EWMA, in bytes per second. */
 internal class CdnThroughputEstimator {
     private val fast = Ewma(EWMA_FAST_HALF_LIFE_S)
@@ -141,6 +147,8 @@ internal data class CdnPlaybackSignal(
     val bitrateBps: Long,
     val stuck: Boolean = false,
     val metered: Boolean = false,
+    /** Short stalls keep recurring in ordinary playback (see [CdnRebufferTracker]). */
+    val rebuffering: Boolean = false,
 )
 
 internal data class CdnRaceResult(val host: String, val bytes: Long, val elapsedMs: Long, val success: Boolean)
@@ -255,7 +263,7 @@ internal class CdnAutoRouter(
         if (raceInFlight || now < limitedUntilMs) return false
         if (now - lastRaceAtMs < RACE_MIN_INTERVAL_MS || racesThisVideo >= RACE_MAX_PER_VIDEO) return false
         val buffer = signal.bufferMs ?: return false
-        if (signal.stuck) return true
+        if (signal.stuck || signal.rebuffering) return true
         if (signal.metered) return false
         val current = stats[signal.currentHost]?.estimator ?: return false
         val rate = current.estimateBps() ?: return false
@@ -307,10 +315,17 @@ internal class CdnAutoRouter(
     /**
      * Applies a finished race. The fastest finisher becomes active only if it moved the race bytes
      * in at most two-thirds of the time [currentRateBps] needs; otherwise nothing changes. Losers and
-     * the host being left rest for a minute. Returns the new active host, or null for no switch.
+     * the host being left rest for a minute. A winner slower than [minWinnerBps] never switches,
+     * so a stall race does not trade one host that cannot carry the stream for another. Returns
+     * the new active host, or null for no switch.
      */
     @Synchronized
-    fun finishRace(currentHost: String, currentRateBps: Long, results: List<CdnRaceResult>): String? {
+    fun finishRace(
+        currentHost: String,
+        currentRateBps: Long,
+        results: List<CdnRaceResult>,
+        minWinnerBps: Long = 0,
+    ): String? {
         raceInFlight = false
         val now = clock()
         results.filter { it.success }.forEach { recordTransfer(it.host, it.bytes, it.elapsedMs) }
@@ -320,6 +335,7 @@ internal class CdnAutoRouter(
         val winnerMs = winner.elapsedMs * CDN_RACE_BYTES / winner.bytes.coerceAtLeast(1)
         val currentMs = if (currentRateBps <= 0) Long.MAX_VALUE else CDN_RACE_BYTES * 1_000 / currentRateBps
         if (currentMs != Long.MAX_VALUE && winnerMs * 3 > currentMs * 2) return null
+        if (minWinnerBps > 0 && CDN_RACE_BYTES * 1_000 < minWinnerBps * winnerMs) return null
         stats.getOrPut(currentHost, ::HostStats).restUntilMs = now + REST_MS
         activeHost = winner.host
         return winner.host
