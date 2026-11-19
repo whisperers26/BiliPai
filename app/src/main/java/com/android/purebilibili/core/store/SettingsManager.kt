@@ -7678,6 +7678,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_DASH_SEGMENT_REQUESTS_ENABLED =
         booleanPreferencesKey("dash_segment_requests_enabled")
     private val KEY_PLAYBACK_CDN_PREFERENCE = stringPreferencesKey("playback_cdn_preference")
+    /** Automatic CDN selection while playing; a concrete line in settings pins it instead. */
+    const val PLAYBACK_CDN_PREFERENCE_DEFAULT = "auto"
     private val KEY_QUALITY_SWITCH_FAILURE_DIALOG_ENABLED =
         booleanPreferencesKey("quality_switch_failure_dialog_enabled")
     private val KEY_QUALITY_SWITCH_FAILURE_DIALOG_ONCE_ENABLED =
@@ -8179,7 +8181,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     fun getPlaybackCdnPreference(context: Context): Flow<String> =
         context.settingsDataStore.data.map { preferences ->
-            preferences[KEY_PLAYBACK_CDN_PREFERENCE] ?: "base_url"
+            preferences[KEY_PLAYBACK_CDN_PREFERENCE] ?: PLAYBACK_CDN_PREFERENCE_DEFAULT
         }
 
     suspend fun setPlaybackCdnPreference(context: Context, preference: String) {

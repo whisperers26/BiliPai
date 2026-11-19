@@ -40,6 +40,7 @@ enum class PlaybackCdnPreference(
     val displayName: String,
     val host: String? = null,
 ) {
+    AUTO("auto", "自动选线（推荐）"),
     BASE_URL("base_url", "基础URL"),
     BACKUP_URL("backup_url", "备用URL"),
     ALI("ali", "ali（阿里云）", "upos-sz-mirrorali.bilivideo.com"),
@@ -64,7 +65,7 @@ enum class PlaybackCdnPreference(
 
     companion object {
         fun fromStorageValue(value: String?): PlaybackCdnPreference =
-            entries.firstOrNull { it.storageValue == value } ?: BASE_URL
+            entries.firstOrNull { it.storageValue == value } ?: AUTO
     }
 }
 

@@ -93,6 +93,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -1369,7 +1370,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     private val playbackCdnPreference = SettingsManager
         .getPlaybackCdnPreference(application.applicationContext)
         .map { PlaybackCdnPreference.fromStorageValue(it) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, PlaybackCdnPreference.BASE_URL)
+        .onEach { com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.configure(it == PlaybackCdnPreference.AUTO) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, PlaybackCdnPreference.AUTO)
 
     // HDR auto-upgrade state
     private val attemptedUpgradeKeys = mutableSetOf<String>()

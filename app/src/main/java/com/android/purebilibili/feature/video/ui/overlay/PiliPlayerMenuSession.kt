@@ -143,9 +143,9 @@ fun rememberPiliPlayerMenuSession(
     }
     val currentAmplification by rememberUpdatedState(amplification)
     val storedCdnService by remember(context) { PiliPlayerMenuStore.cdnService(context) }
-        .collectAsStateWithLifecycle(initialValue = "BASE")
+        .collectAsStateWithLifecycle(initialValue = "AUTO")
     val cdnService = remember(storedCdnService) {
-        PiliCdnService.entries.firstOrNull { it.name == storedCdnService } ?: PiliCdnService.BASE
+        PiliCdnService.entries.firstOrNull { it.name == storedCdnService } ?: PiliCdnService.AUTO
     }
     val cdnLabels = remember { PiliCdnService.entries.map { it.label } }
     val sourceKey = remember(videoUrl) { runCatching { java.net.URI(videoUrl).rawPath }.getOrNull().orEmpty() }
@@ -166,7 +166,7 @@ fun rememberPiliPlayerMenuSession(
         else if (player != null) replacePiliPlayerSources(context, player, video, audio)
     }
     LaunchedEffect(player, bvid, cid, sourceKey, audioSourceKey, cdnService) {
-        if (cdnService != PiliCdnService.BASE) {
+        if (cdnService != PiliCdnService.AUTO && cdnService != PiliCdnService.BASE) {
             runCatching { applyCdn(cdnService) }.onFailure {
                 Toast.makeText(context, it.message ?: "CDN 地址替换失败", Toast.LENGTH_LONG).show()
             }

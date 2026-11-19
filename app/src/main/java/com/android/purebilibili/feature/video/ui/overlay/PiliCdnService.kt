@@ -6,7 +6,7 @@ import java.net.URLEncoder
 
 /** PiliPlus CDNService order, labels and host policies, not aliases for current candidates. */
 enum class PiliCdnService(val label: String, val host: String? = null) {
-    BASE("基础URL（不推荐）"), BACKUP("备用URL"),
+    AUTO("自动选线（推荐）"), BASE("基础URL（不推荐）"), BACKUP("备用URL"),
     ALI("ali（阿里云）", "upos-sz-mirrorali.bilivideo.com"),
     ALIB("alib（阿里云）", "upos-sz-mirroralib.bilivideo.com"),
     ALIO1("alio1（阿里云）", "upos-sz-mirroralio1.bilivideo.com"),
@@ -44,7 +44,8 @@ private fun replaceCdnHost(url: String, host: String, forceHttps: Boolean = fals
 internal fun selectPiliCdnUrl(urls: List<String>, service: PiliCdnService): String {
     val candidates = urls.filter { it.isNotBlank() }
     require(candidates.isNotEmpty()) { "当前媒体没有可用播放地址" }
-    if (service == PiliCdnService.BASE) return candidates.first()
+    // AUTO keeps Bilibili's assignment; the data source then routes it while playing.
+    if (service == PiliCdnService.AUTO || service == PiliCdnService.BASE) return candidates.first()
     // Akamai URLs carry their own hdnts token: a UPOS signature swapped onto Akamai is a 403.
     if (service == PiliCdnService.AKAMAI) {
         return candidates.firstOrNull { URI(it).host.orEmpty().endsWith(".akamaized.net") } ?: candidates.first()

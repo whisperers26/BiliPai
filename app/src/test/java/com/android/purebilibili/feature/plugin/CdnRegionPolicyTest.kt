@@ -476,4 +476,16 @@ class CdnRegionPolicyTest {
 
         assertEquals("https://upos-sz-mirrorali.bilivideo.com/video.m4s?os=cosovbv", preferred.first().videoUrl)
     }
+
+    @Test
+    fun `automatic selection is the default and keeps bilibili's assignment first`() {
+        assertEquals(PlaybackCdnPreference.AUTO, PlaybackCdnPreference.fromStorageValue(null))
+        assertEquals(PlaybackCdnPreference.AUTO, PlaybackCdnPreference.fromStorageValue("unknown"))
+        assertEquals(PlaybackCdnPreference.AUTO, PlaybackCdnPreference.entries.first())
+        assertEquals(null, PlaybackCdnPreference.AUTO.host)
+        val issued = buildPlaybackCdnCandidates(
+            listOf("https://base.bilivideo.com/v", "https://backup.bilivideo.com/v"), emptyList()
+        )
+        assertEquals(issued, applyPlaybackCdnPreference(issued, PlaybackCdnPreference.AUTO))
+    }
 }

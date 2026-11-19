@@ -20,7 +20,7 @@ object PiliPlayerMenuStore {
     private val cdnServiceKey = stringPreferencesKey("playback_cdn_preference")
 
     fun cdnService(context: Context): Flow<String> = context.settingsDataStore.data.map {
-        cdnServiceStorageToName(it[cdnServiceKey] ?: "base_url")
+        cdnServiceStorageToName(it[cdnServiceKey] ?: com.android.purebilibili.core.store.SettingsManager.PLAYBACK_CDN_PREFERENCE_DEFAULT)
     }
 
     suspend fun setCdnService(context: Context, service: String) {
