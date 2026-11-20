@@ -126,8 +126,12 @@ class CdnAutoRoutingTest {
         assertFalse(router.shouldRace(CdnPlaybackSignal(host, bufferMs = 1_000, bitrateBps = 0, stuck = true)))
         router.cancelRace()
         assertFalse(router.shouldRace(CdnPlaybackSignal(host, bufferMs = 1_000, bitrateBps = 0, stuck = true)))
-        now += 13_000
+        now += 2_000
         assertTrue(router.shouldRace(CdnPlaybackSignal(host, bufferMs = 1_000, bitrateBps = 0, stuck = true)))
+        // A shortfall still waits out the eight seconds.
+        assertFalse(router.shouldRace(CdnPlaybackSignal(host, bufferMs = 10_000, bitrateBps = 8_000_000)))
+        now += 6_000
+        assertTrue(router.shouldRace(CdnPlaybackSignal(host, bufferMs = 10_000, bitrateBps = 8_000_000)))
     }
 
     @Test
@@ -147,6 +151,22 @@ class CdnAutoRoutingTest {
             now += 8_000
         }
         assertTrue(router.shouldRace(signal))
+    }
+
+    @Test
+    fun `stalls race two seconds after the last race, whatever the cooldowns`() {
+        val router = router()
+        router.register(listOf(cosov), emptyList())
+        val stalled = CdnPlaybackSignal("h", bufferMs = 0, bitrateBps = 0, stuck = true)
+        repeat(6) {
+            assertTrue(router.shouldRace(stalled))
+            router.beginRace()
+            assertNull(router.finishRace("upos-sz-mirrorcosov.bilivideo.com", 0, emptyList()))
+            now += 1_999
+            assertFalse(router.shouldRace(stalled))
+            now += 1
+        }
+        assertTrue(router.shouldRace(stalled.copy(stuck = false, rebuffering = true)))
     }
 
     @Test
@@ -180,10 +200,11 @@ class CdnAutoRoutingTest {
     }
 
     @Test
-    fun `switches cool down 10, 20, 40 s and never run out`() {
+    fun `shortfall races after a switch cool down 10, 20, 40 s and never run out`() {
         val router = router()
         router.register(listOf(cosov), emptyList())
-        val stuck = CdnPlaybackSignal("h", bufferMs = 0, bitrateBps = 0, stuck = true)
+        repeat(5) { router.recordTransfer("h", 500_000, 1_000) }
+        val stuck = CdnPlaybackSignal("h", bufferMs = 10_000, bitrateBps = 8_000_000)
         val hosts = listOf("upos-sz-mirrorali.bilivideo.com", "upos-sz-mirrorhw.bilivideo.com",
             "upos-sz-mirrorcos.bilivideo.com", "upos-tf-all-hw.bilivideo.com", "upos-sz-mirrorali.bilivideo.com")
         var from = "upos-sz-mirrorcosov.bilivideo.com"
@@ -201,10 +222,11 @@ class CdnAutoRoutingTest {
     }
 
     @Test
-    fun `a race that changes nothing waits 8, 16, 32 then 60 s`() {
+    fun `a shortfall race that changes nothing waits 8, 16, 32 then 60 s`() {
         val router = router()
         router.register(listOf(cosov), emptyList())
-        val stuck = CdnPlaybackSignal("h", bufferMs = 0, bitrateBps = 0, stuck = true)
+        repeat(5) { router.recordTransfer("h", 500_000, 1_000) }
+        val stuck = CdnPlaybackSignal("h", bufferMs = 10_000, bitrateBps = 8_000_000)
         listOf(8_000L, 16_000L, 32_000L, 60_000L, 60_000L).forEach { wait ->
             assertTrue(router.shouldRace(stuck))
             router.beginRace()

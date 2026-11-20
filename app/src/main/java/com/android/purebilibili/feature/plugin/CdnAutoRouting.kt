@@ -35,6 +35,8 @@ private const val RACE_MIN_INTERVAL_MS = 8_000L
 private const val SWITCH_COOLDOWN_MS = 10_000L
 // A race that found nothing faster waits longer before the next one: 8, 16, 32, then 60 s.
 private const val NO_CHANGE_COOLDOWN_MAX_MS = 60_000L
+// While playback is actually stalling, a race may follow the previous one this soon, whatever the cooldowns.
+private const val STALL_RACE_INTERVAL_MS = 2_000L
 private const val REST_MS = 60_000L
 private const val FAILURE_WINDOW_MS = 30_000L
 private const val FAILURE_MEMORY_MS = 60 * 60_000L
@@ -176,6 +178,7 @@ internal class CdnAutoRouter(
     private var networkIdentity: String? = null
     private var limitedUntilMs = 0L
     private var nextRaceAtMs = Long.MIN_VALUE / 2
+    private var stallRaceAtMs = Long.MIN_VALUE / 2
     private var switchesThisVideo = 0
     private var noChangeStreak = 0
     private var raceInFlight = false
@@ -211,6 +214,7 @@ internal class CdnAutoRouter(
             switchesThisVideo = 0
             noChangeStreak = 0
             nextRaceAtMs = Long.MIN_VALUE / 2
+            stallRaceAtMs = Long.MIN_VALUE / 2
             requiredVideoBps = 0
         }
         // A (re)selected quality sets the bar, so a manual downgrade is judged at its own bitrate;
@@ -315,9 +319,10 @@ internal class CdnAutoRouter(
     fun shouldRace(signal: CdnPlaybackSignal): Boolean {
         val now = clock()
         if (raceInFlight || now < limitedUntilMs) return false
-        if (now < nextRaceAtMs) return false
         val buffer = signal.bufferMs ?: return false
-        if (signal.stuck || signal.rebuffering) return true
+        // Playback is starving: the cooldowns that spare a working host reconnects do not apply.
+        if (signal.stuck || signal.rebuffering) return now >= stallRaceAtMs
+        if (now < nextRaceAtMs) return false
         if (signal.metered) return false
         val current = stats[signal.currentHost]?.estimator ?: return false
         val rate = current.estimateBps() ?: return false
@@ -364,6 +369,7 @@ internal class CdnAutoRouter(
         if (raceInFlight) return false
         raceInFlight = true
         nextRaceAtMs = clock() + RACE_MIN_INTERVAL_MS
+        stallRaceAtMs = clock() + STALL_RACE_INTERVAL_MS
         return true
     }
 
@@ -379,6 +385,7 @@ internal class CdnAutoRouter(
     fun finishRace(currentHost: String, currentRateBps: Long, results: List<CdnRaceResult>): String? {
         raceInFlight = false
         val now = clock()
+        stallRaceAtMs = now + STALL_RACE_INTERVAL_MS
         results.filter { it.success }.forEach { recordTransfer(it.host, it.bytes, it.elapsedMs) }
         val winner = results.filter { it.success }.minByOrNull(::raceMs)
         results.filter { it !== winner && !it.cancelled }
@@ -407,7 +414,10 @@ internal class CdnAutoRouter(
         result.elapsedMs * CDN_RACE_BYTES / result.bytes.coerceAtLeast(1)
 
     @Synchronized
-    fun cancelRace() { raceInFlight = false }
+    fun cancelRace() {
+        raceInFlight = false
+        stallRaceAtMs = clock() + STALL_RACE_INTERVAL_MS
+    }
 
     @Synchronized
     fun networkChanged(identity: String) {
