@@ -38,6 +38,8 @@ private const val NO_CHANGE_COOLDOWN_MAX_MS = 60_000L
 // While playback is actually stalling, a race may follow the previous one this soon, whatever the cooldowns.
 private const val STALL_RACE_INTERVAL_MS = 2_000L
 private const val REST_MS = 60_000L
+// A race loser was only slower once; it may race again soon.
+private const val LOSER_REST_MS = 20_000L
 private const val FAILURE_WINDOW_MS = 30_000L
 private const val FAILURE_MEMORY_MS = 60 * 60_000L
 private const val RATE_LIMIT_BACKOFF_MS = 5 * 60_000L
@@ -387,8 +389,10 @@ internal class CdnAutoRouter(
         stallRaceAtMs = now + STALL_RACE_INTERVAL_MS
         results.filter { it.success }.forEach { recordTransfer(it.host, it.bytes, it.elapsedMs) }
         val winner = results.filter { it.success }.minByOrNull(::raceMs)
-        results.filter { it !== winner && !it.cancelled }
-            .forEach { stats.getOrPut(it.host, ::HostStats).restUntilMs = now + REST_MS }
+        results.filter { it !== winner && !it.cancelled }.forEach {
+            val entry = stats.getOrPut(it.host, ::HostStats)
+            entry.restUntilMs = maxOf(entry.restUntilMs, now + if (it.success) LOSER_REST_MS else REST_MS)
+        }
         val switched = winner?.takeIf { won ->
             // Never "switch" to where routing already points: that would announce a switch and change nothing.
             won.host != currentHost && won.host != activeHost &&

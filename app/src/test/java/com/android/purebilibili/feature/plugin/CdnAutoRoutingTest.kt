@@ -352,6 +352,27 @@ class CdnAutoRoutingTest {
     }
 
     @Test
+    fun `slower finishers rest twenty seconds and failed ones a minute`() {
+        val router = router()
+        val routes = buildCdnRouteCandidates(listOf(cosov))
+        router.beginRace()
+        // Ali wins but is not fast enough to switch; tx finished slower; hw failed.
+        router.finishRace("upos-sz-mirrorcosov.bilivideo.com", 5_000_000, listOf(
+            CdnRaceResult("upos-sz-mirrorali.bilivideo.com", CDN_RACE_BYTES, 300, true),
+            CdnRaceResult("upos-tf-all-tx.bilivideo.com", CDN_RACE_BYTES, 500, true),
+            CdnRaceResult("upos-sz-mirrorhw.bilivideo.com", 0, 0, success = false),
+        ))
+        repeat(4) { router.recordTransfer("upos-tf-all-tx.bilivideo.com", 4_000_000, 1_000) }
+        repeat(4) { router.recordTransfer("upos-sz-mirrorhw.bilivideo.com", 4_000_000, 1_000) }
+        fun picked() = router.pickChallengers(routes, "upos-sz-mirrorcosov.bilivideo.com", metered = false).map { it.host }
+        now += 19_000
+        assertFalse("upos-tf-all-tx.bilivideo.com" in picked())
+        now += 1_000
+        assertTrue("upos-tf-all-tx.bilivideo.com" in picked())
+        assertFalse("upos-sz-mirrorhw.bilivideo.com" in picked())
+    }
+
+    @Test
     fun `a host that failed twice races again after its rest`() {
         val router = router()
         val routes = buildCdnRouteCandidates(listOf(cosov))
