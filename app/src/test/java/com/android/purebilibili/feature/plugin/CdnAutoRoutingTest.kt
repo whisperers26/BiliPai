@@ -131,7 +131,7 @@ class CdnAutoRoutingTest {
     }
 
     @Test
-    fun `shortfall races below one and a half times the bitrate, eight seconds apart, twelve per video`() {
+    fun `shortfall races below one and a half times the bitrate, eight seconds apart, without a budget`() {
         val router = router()
         val host = "upos-sz-mirrorcosov.bilivideo.com"
         // 1.3 MB/s after 2.6 MB: 10.4 Mbit/s against an 8 Mbit/s stream is under the 1.5x margin.
@@ -139,13 +139,14 @@ class CdnAutoRoutingTest {
         val signal = CdnPlaybackSignal(host, bufferMs = 10_000, bitrateBps = 8_000_000)
         assertTrue(router.shouldRace(signal))
         assertFalse(router.shouldRace(signal.copy(bitrateBps = 6_000_000)))
-        repeat(12) {
+        repeat(20) {
+            assertTrue(router.shouldRace(signal))
             assertTrue(router.beginRace())
             router.cancelRace()
             assertFalse(router.shouldRace(signal))
             now += 8_000
         }
-        assertFalse(router.shouldRace(signal))
+        assertTrue(router.shouldRace(signal))
     }
 
     @Test
@@ -179,12 +180,12 @@ class CdnAutoRoutingTest {
     }
 
     @Test
-    fun `switches cool down 10, 20, 40 s and stop after four`() {
+    fun `switches cool down 10, 20, 40 s and never run out`() {
         val router = router()
         router.register(listOf(cosov), emptyList())
         val stuck = CdnPlaybackSignal("h", bufferMs = 0, bitrateBps = 0, stuck = true)
         val hosts = listOf("upos-sz-mirrorali.bilivideo.com", "upos-sz-mirrorhw.bilivideo.com",
-            "upos-sz-mirrorcos.bilivideo.com", "upos-tf-all-hw.bilivideo.com")
+            "upos-sz-mirrorcos.bilivideo.com", "upos-tf-all-hw.bilivideo.com", "upos-sz-mirrorali.bilivideo.com")
         var from = "upos-sz-mirrorcosov.bilivideo.com"
         hosts.forEachIndexed { index, to ->
             assertTrue(router.shouldRace(stuck))
@@ -196,7 +197,7 @@ class CdnAutoRoutingTest {
             assertFalse(router.shouldRace(stuck))
             now += 1
         }
-        assertFalse(router.shouldRace(stuck))
+        assertTrue(router.shouldRace(stuck))
     }
 
     @Test

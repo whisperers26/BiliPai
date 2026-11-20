@@ -30,10 +30,9 @@ private const val SHORTFALL_RATE_FACTOR = 1.5
 private const val SHORTFALL_MIN_BYTES = 2L * 1024L * 1024L
 private const val SHORTFALL_BUFFER_MS = 30_000L
 private const val RACE_MIN_INTERVAL_MS = 8_000L
-private const val RACE_MAX_PER_VIDEO = 12
-// Each switch costs a reconnect, so a host that won stays: 10, 20, 40 s before the next race, 4 at most.
+// Each switch costs a reconnect, so a host that won stays: 10, 20, 40 s before the next race.
+// There is no per-video budget: a host that turns slow mid-video can always be left again.
 private const val SWITCH_COOLDOWN_MS = 10_000L
-private const val MAX_SWITCHES_PER_VIDEO = 4
 // A race that found nothing faster waits longer before the next one: 8, 16, 32, then 60 s.
 private const val NO_CHANGE_COOLDOWN_MAX_MS = 60_000L
 private const val REST_MS = 60_000L
@@ -177,7 +176,6 @@ internal class CdnAutoRouter(
     private var networkIdentity: String? = null
     private var limitedUntilMs = 0L
     private var nextRaceAtMs = Long.MIN_VALUE / 2
-    private var racesThisVideo = 0
     private var switchesThisVideo = 0
     private var noChangeStreak = 0
     private var raceInFlight = false
@@ -210,7 +208,6 @@ internal class CdnAutoRouter(
         if (newSession) {
             // A new video starts on its own assignment: host speed depends on the file.
             activeHost = null
-            racesThisVideo = 0
             switchesThisVideo = 0
             noChangeStreak = 0
             nextRaceAtMs = Long.MIN_VALUE / 2
@@ -318,8 +315,7 @@ internal class CdnAutoRouter(
     fun shouldRace(signal: CdnPlaybackSignal): Boolean {
         val now = clock()
         if (raceInFlight || now < limitedUntilMs) return false
-        if (now < nextRaceAtMs || racesThisVideo >= RACE_MAX_PER_VIDEO) return false
-        if (switchesThisVideo >= MAX_SWITCHES_PER_VIDEO) return false
+        if (now < nextRaceAtMs) return false
         val buffer = signal.bufferMs ?: return false
         if (signal.stuck || signal.rebuffering) return true
         if (signal.metered) return false
@@ -368,7 +364,6 @@ internal class CdnAutoRouter(
         if (raceInFlight) return false
         raceInFlight = true
         nextRaceAtMs = clock() + RACE_MIN_INTERVAL_MS
-        racesThisVideo++
         return true
     }
 
