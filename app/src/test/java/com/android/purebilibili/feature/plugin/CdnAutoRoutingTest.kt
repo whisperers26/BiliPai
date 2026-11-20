@@ -352,6 +352,30 @@ class CdnAutoRoutingTest {
     }
 
     @Test
+    fun `a host that failed twice races again after its rest`() {
+        val router = router()
+        val routes = buildCdnRouteCandidates(listOf(cosov))
+        repeat(4) { router.recordTransfer("upos-sz-mirrorhw.bilivideo.com", 2_000_000, 1_000) }
+        router.recordFailure("upos-sz-mirrorhw.bilivideo.com", cosov, null, swapped = true)
+        router.recordFailure("upos-sz-mirrorhw.bilivideo.com", cosov, null, swapped = true)
+        fun picked() = router.pickChallengers(routes, "upos-sz-mirrorcosov.bilivideo.com", metered = false).map { it.host }
+        assertFalse("upos-sz-mirrorhw.bilivideo.com" in picked())
+        now += 60_000
+        assertTrue("upos-sz-mirrorhw.bilivideo.com" in picked())
+    }
+
+    @Test
+    fun `when every host rests the stalled video still races them`() {
+        val router = router()
+        val routes = buildCdnRouteCandidates(listOf(cosov)).take(3)
+        routes.drop(1).forEach {
+            router.recordFailure(it.host, cosov, null, swapped = true)
+            router.recordFailure(it.host, cosov, null, swapped = true)
+        }
+        assertEquals(2, router.pickChallengers(routes, "upos-sz-mirrorcosov.bilivideo.com", metered = false).size)
+    }
+
+    @Test
     fun `swapped 403 bans the host for that path and returns to the assignment`() {
         val router = router()
         router.register(listOf(cosov), emptyList())

@@ -335,16 +335,15 @@ internal class CdnAutoRouter(
     /**
      * Up to two challengers (one when metered) by history. The other issued host is always one of
      * them until it has history; unknown hosts score the lower median; ties go to mainland mirrors;
-     * one challenger in five is drawn at random so history keeps learning.
+     * one challenger in five is drawn at random so history keeps learning. Resting hosts sit out
+     * unless every host rests: a stalled video still gets a race.
      */
     @Synchronized
     fun pickChallengers(routes: List<CdnRoute>, currentHost: String, metered: Boolean): List<CdnRoute> {
         val now = clock()
         // The active host is excluded too: when the track still reads elsewhere, it could not reach it.
-        val pool = routes.filter { it.host != currentHost && it.host != activeHost }.filter { route ->
-            val entry = stats[route.host]
-            entry == null || (entry.restUntilMs <= now && entry.failuresAtMs.count { now - it <= FAILURE_MEMORY_MS } < 2)
-        }
+        val contenders = routes.filter { it.host != currentHost && it.host != activeHost }
+        val pool = contenders.filter { (stats[it.host]?.restUntilMs ?: 0L) <= now }.ifEmpty { contenders }
         if (pool.isEmpty()) return emptyList()
         val known = pool.mapNotNull { estimateBps(it.host) }.sorted()
         val fallbackScore = if (known.isEmpty()) 0L else known[(known.size - 1) / 2]
