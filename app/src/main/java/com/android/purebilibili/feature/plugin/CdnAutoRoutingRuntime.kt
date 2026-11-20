@@ -376,15 +376,18 @@ internal object CdnAutoRoutingRuntime {
 }
 
 /**
- * The rate the current host is judged by, after bilibili-accelerator's stuck-race verdict: the
- * better of what the request in flight gets and the host's [recordBps], so one bad connection on a
- * host that has been keeping up does not move the video; a host that [recentlyFailed] in the last
- * 30 s has no record to vouch for it. A shortfall is judged on the record alone.
+ * The rate the current host is judged by. A slow request in flight while the buffer still holds
+ * ([CdnRaceTrigger.STUCK_REQUEST]) follows bilibili-accelerator's stuck-race verdict: the better of
+ * what the request gets and the host's [recordBps], so one bad connection on a host that has been
+ * keeping up does not move the video. Once the player itself stalls, or the host failed in the
+ * last 30 s, the record proves nothing: a host that delivered bursts earlier can starve playback
+ * now, and judging it on those bursts lets no challenger win. Only the request in flight counts
+ * then. A shortfall is judged on the record alone.
  */
 internal fun cdnJudgedRateBps(trigger: CdnRaceTrigger, recordBps: Long, inFlightRateBps: Long, recentlyFailed: Boolean): Long =
     when {
         trigger == CdnRaceTrigger.SHORTFALL -> recordBps
-        trigger == CdnRaceTrigger.ERRORS || recentlyFailed -> inFlightRateBps
+        trigger != CdnRaceTrigger.STUCK_REQUEST || recentlyFailed -> inFlightRateBps
         else -> maxOf(recordBps, inFlightRateBps)
     }
 
