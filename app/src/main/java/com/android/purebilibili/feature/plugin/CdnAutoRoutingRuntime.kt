@@ -36,6 +36,9 @@ private const val RACE_GRACE_MS = 1_000L
 // A switch is announced only once video actually reads from the new host, within this long.
 private const val SWITCH_CONFIRM_TTL_MS = 20_000L
 
+/** Why a race was started. */
+internal enum class CdnRaceTrigger { SHORTFALL, STUCK, STUCK_REQUEST, REBUFFER, ERRORS }
+
 /**
  * Process-wide glue between [CdnAutoRouter] and the media data sources. Signed URLs stay in
  * memory only. Playback state comes from the foreground player; stale samples count as unknown,
@@ -58,8 +61,6 @@ internal object CdnAutoRoutingRuntime {
     private data class PlaybackSample(val bufferMs: Long, val videoBitrateBps: Long, val atMs: Long)
     private data class ReadPosition(val originalUrl: String, val host: String, val position: Long, val total: Long?)
     private data class PendingSwitch(val switch: Switch, val atMs: Long)
-
-    private enum class Trigger { SHORTFALL, STUCK, STUCK_REQUEST, REBUFFER, ERRORS }
 
     @Volatile private var playbackSample: PlaybackSample? = null
     @Volatile private var lastVideoRead: ReadPosition? = null
@@ -180,7 +181,7 @@ internal object CdnAutoRoutingRuntime {
         val failing = watchRevert(reason) { router.recordFailure(route.host, originalUrl, status, swapped = !route.issued) }
         Logger.d(TAG, "route failed host=${route.host} status=$status swapped=${!route.issued} failing=$failing")
         // A host failing twice in 30 s under the video is raced away from, issued hosts included.
-        if (failing && router.isVideo(originalUrl) && lastVideoRead?.host == route.host) maybeRace(Trigger.ERRORS)
+        if (failing && router.isVideo(originalUrl) && lastVideoRead?.host == route.host) maybeRace(CdnRaceTrigger.ERRORS)
     }
 
     /** Runs [change] and reports a fall-back when it cleared the active host. */
@@ -199,7 +200,7 @@ internal object CdnAutoRoutingRuntime {
     fun recordTransfer(originalUrl: String, host: String, bytes: Long, activeReadMs: Long, foreground: Boolean) {
         if (!router.isVideo(originalUrl)) return
         router.recordTransfer(host, bytes, activeReadMs)
-        if (foreground) maybeRace(Trigger.SHORTFALL)
+        if (foreground) maybeRace(CdnRaceTrigger.SHORTFALL)
     }
 
     fun noteRead(originalUrl: String, host: String, position: Long, total: Long?) {
@@ -238,13 +239,13 @@ internal object CdnAutoRoutingRuntime {
         router.noteVideoBitrate(videoBitrateBps)
         checkInFlight(now, bufferMs.coerceAtLeast(0))
         val episode = rebuffers.episode
-        if (rebuffers.observe(buffering, ready)) maybeRace(Trigger.REBUFFER)
+        if (rebuffers.observe(buffering, ready)) maybeRace(CdnRaceTrigger.REBUFFER)
         if (!buffering) {
             stuckCheck?.cancel()
             stuckCheck = null
             return
         }
-        if (rebuffers.stuck()) maybeRace(Trigger.STUCK)
+        if (rebuffers.stuck()) maybeRace(CdnRaceTrigger.STUCK)
         if (rebuffers.episode != episode) scheduleStuckCheck(rebuffers.episode)
     }
 
@@ -253,7 +254,7 @@ internal object CdnAutoRoutingRuntime {
         if (request.id == racedRequestId) return
         if (!isStuckCdnRequest(request, now, bufferMs, router.requiredVideoBps)) return
         // Each request is raced at most once; a later request on the same host is judged afresh.
-        if (maybeRace(Trigger.STUCK_REQUEST, request)) racedRequestId = request.id
+        if (maybeRace(CdnRaceTrigger.STUCK_REQUEST, request)) racedRequestId = request.id
     }
 
     /** A seek, skip or other position jump in the foreground player: its rebuffer is expected. */
@@ -268,12 +269,12 @@ internal object CdnAutoRoutingRuntime {
         stuckCheck = AppScope.ioScope.launch {
             delay(rebuffers.stuckThresholdMs())
             while (rebuffers.episode == episode && !rebuffers.stuck()) delay(100)
-            if (rebuffers.episode == episode) maybeRace(Trigger.STUCK)
+            if (rebuffers.episode == episode) maybeRace(CdnRaceTrigger.STUCK)
         }
     }
 
     /** Starts a race when [trigger] holds; returns true when one started. */
-    private fun maybeRace(trigger: Trigger, request: CdnInFlightRequest? = null): Boolean {
+    private fun maybeRace(trigger: CdnRaceTrigger, request: CdnInFlightRequest? = null): Boolean {
         if (!enabled) return false
         val read = (request?.let { ReadPosition(it.originalUrl, it.host, it.position + it.bytes, it.total) }
             ?: lastVideoRead ?: return false)
@@ -285,9 +286,9 @@ internal object CdnAutoRoutingRuntime {
             currentHost = read.host,
             bufferMs = sample?.bufferMs,
             bitrateBps = sample?.videoBitrateBps ?: 0,
-            stuck = trigger == Trigger.STUCK || trigger == Trigger.STUCK_REQUEST || trigger == Trigger.ERRORS,
+            stuck = trigger == CdnRaceTrigger.STUCK || trigger == CdnRaceTrigger.STUCK_REQUEST || trigger == CdnRaceTrigger.ERRORS,
             metered = metered,
-            rebuffering = trigger == Trigger.REBUFFER
+            rebuffering = trigger == CdnRaceTrigger.REBUFFER
         )
         if (!router.shouldRace(signal)) return false
         val challengers = router.pickChallengers(router.routesFor(read.originalUrl), read.host, metered)
@@ -300,26 +301,13 @@ internal object CdnAutoRoutingRuntime {
         return true
     }
 
-    /**
-     * The rate the current host is judged by, after bilibili-accelerator's stuck-race verdict: the
-     * better of what the request in flight gets and the host's record, so one bad connection on a
-     * host that has been keeping up does not move the video; a host that failed in the last 30 s
-     * has no record to vouch for it. A shortfall is judged on the record alone.
-     */
-    private fun currentRateBps(host: String, trigger: Trigger, inFlightRateBps: Long): Long {
-        val record = router.estimateBps(host) ?: 0L
-        return when {
-            trigger == Trigger.SHORTFALL -> record
-            trigger == Trigger.ERRORS || router.recentlyFailed(host) -> inFlightRateBps
-            else -> maxOf(record, inFlightRateBps)
-        }
-    }
-
-    private suspend fun race(read: ReadPosition, challengers: List<CdnRoute>, trigger: Trigger, inFlightRateBps: Long) {
+    private suspend fun race(read: ReadPosition, challengers: List<CdnRoute>, trigger: CdnRaceTrigger, inFlightRateBps: Long) {
         try {
             val range = raceRange(read.position, read.total)
             val results = raceChallengers(challengers, read.originalUrl, range)
-            val currentRate = currentRateBps(read.host, trigger, inFlightRateBps)
+            val currentRate = cdnJudgedRateBps(
+                trigger, router.estimateBps(read.host) ?: 0L, inFlightRateBps, router.recentlyFailed(read.host)
+            )
             val switched = router.finishRace(read.host, currentRate, results)
             Logger.i(
                 TAG,
@@ -332,7 +320,7 @@ internal object CdnAutoRoutingRuntime {
                 switchGeneration.incrementAndGet()
                 pendingSwitch = PendingSwitch(Switch(read.originalUrl, read.host, switched), nowMs())
                 synchronized(sources) { sources.toList() }.forEach { it.preemptIfOn(read.host) }
-            } else if ((trigger == Trigger.STUCK || trigger == Trigger.STUCK_REQUEST) && results.any { it.success }) {
+            } else if ((trigger == CdnRaceTrigger.STUCK || trigger == CdnRaceTrigger.STUCK_REQUEST) && results.any { it.success }) {
                 // Other hosts answer but this one is stuck despite its record: a hung connection.
                 // Count it, so a second hang drops the record and moves the video, and reconnect.
                 recordFailure(CdnRoute(read.host, read.originalUrl, issued = true), read.originalUrl, null)
@@ -386,6 +374,22 @@ internal object CdnAutoRoutingRuntime {
     private fun pathOf(url: String): String = runCatching { URI(url).rawPath.orEmpty() }.getOrDefault("")
     private fun nowMs(): Long = System.nanoTime() / 1_000_000
 }
+
+/**
+ * The rate the current host is judged by. A slow request in flight while the buffer still holds
+ * ([CdnRaceTrigger.STUCK_REQUEST]) follows bilibili-accelerator's stuck-race verdict: the better of
+ * what the request gets and the host's [recordBps], so one bad connection on a host that has been
+ * keeping up does not move the video. Once the player itself stalls, or the host failed in the
+ * last 30 s, the record proves nothing: a host that delivered bursts earlier can starve playback
+ * now, and judging it on those bursts lets no challenger win. Only the request in flight counts
+ * then. A shortfall is judged on the record alone.
+ */
+internal fun cdnJudgedRateBps(trigger: CdnRaceTrigger, recordBps: Long, inFlightRateBps: Long, recentlyFailed: Boolean): Long =
+    when {
+        trigger == CdnRaceTrigger.SHORTFALL -> recordBps
+        trigger != CdnRaceTrigger.STUCK_REQUEST || recentlyFailed -> inFlightRateBps
+        else -> maxOf(recordBps, inFlightRateBps)
+    }
 
 /** The race window: [CDN_RACE_BYTES] from where playback is reading, kept inside the file. */
 internal fun raceRange(position: Long, total: Long?): CdnByteRange {

@@ -30,13 +30,16 @@ private const val SHORTFALL_RATE_FACTOR = 1.5
 private const val SHORTFALL_MIN_BYTES = 2L * 1024L * 1024L
 private const val SHORTFALL_BUFFER_MS = 30_000L
 private const val RACE_MIN_INTERVAL_MS = 8_000L
-private const val RACE_MAX_PER_VIDEO = 12
-// Each switch costs a reconnect, so a host that won stays: 10, 20, 40 s before the next race, 4 at most.
+// Each switch costs a reconnect, so a host that won stays: 10, 20, 40 s before the next race.
+// There is no per-video budget: a host that turns slow mid-video can always be left again.
 private const val SWITCH_COOLDOWN_MS = 10_000L
-private const val MAX_SWITCHES_PER_VIDEO = 4
 // A race that found nothing faster waits longer before the next one: 8, 16, 32, then 60 s.
 private const val NO_CHANGE_COOLDOWN_MAX_MS = 60_000L
+// While playback is actually stalling, a race may follow the previous one this soon, whatever the cooldowns.
+private const val STALL_RACE_INTERVAL_MS = 2_000L
 private const val REST_MS = 60_000L
+// A race loser was only slower once; it may race again soon.
+private const val LOSER_REST_MS = 20_000L
 private const val FAILURE_WINDOW_MS = 30_000L
 private const val FAILURE_MEMORY_MS = 60 * 60_000L
 private const val RATE_LIMIT_BACKOFF_MS = 5 * 60_000L
@@ -177,7 +180,7 @@ internal class CdnAutoRouter(
     private var networkIdentity: String? = null
     private var limitedUntilMs = 0L
     private var nextRaceAtMs = Long.MIN_VALUE / 2
-    private var racesThisVideo = 0
+    private var stallRaceAtMs = Long.MIN_VALUE / 2
     private var switchesThisVideo = 0
     private var noChangeStreak = 0
     private var raceInFlight = false
@@ -210,10 +213,10 @@ internal class CdnAutoRouter(
         if (newSession) {
             // A new video starts on its own assignment: host speed depends on the file.
             activeHost = null
-            racesThisVideo = 0
             switchesThisVideo = 0
             noChangeStreak = 0
             nextRaceAtMs = Long.MIN_VALUE / 2
+            stallRaceAtMs = Long.MIN_VALUE / 2
             requiredVideoBps = 0
         }
         // A (re)selected quality sets the bar, so a manual downgrade is judged at its own bitrate;
@@ -318,10 +321,10 @@ internal class CdnAutoRouter(
     fun shouldRace(signal: CdnPlaybackSignal): Boolean {
         val now = clock()
         if (raceInFlight || now < limitedUntilMs) return false
-        if (now < nextRaceAtMs || racesThisVideo >= RACE_MAX_PER_VIDEO) return false
-        if (switchesThisVideo >= MAX_SWITCHES_PER_VIDEO) return false
         val buffer = signal.bufferMs ?: return false
-        if (signal.stuck || signal.rebuffering) return true
+        // Playback is starving: the cooldowns that spare a working host reconnects do not apply.
+        if (signal.stuck || signal.rebuffering) return now >= stallRaceAtMs
+        if (now < nextRaceAtMs) return false
         if (signal.metered) return false
         val current = stats[signal.currentHost]?.estimator ?: return false
         val rate = current.estimateBps() ?: return false
@@ -334,16 +337,15 @@ internal class CdnAutoRouter(
     /**
      * Up to two challengers (one when metered) by history. The other issued host is always one of
      * them until it has history; unknown hosts score the lower median; ties go to mainland mirrors;
-     * one challenger in five is drawn at random so history keeps learning.
+     * one challenger in five is drawn at random so history keeps learning. Resting hosts sit out
+     * unless every host rests: a stalled video still gets a race.
      */
     @Synchronized
     fun pickChallengers(routes: List<CdnRoute>, currentHost: String, metered: Boolean): List<CdnRoute> {
         val now = clock()
         // The active host is excluded too: when the track still reads elsewhere, it could not reach it.
-        val pool = routes.filter { it.host != currentHost && it.host != activeHost }.filter { route ->
-            val entry = stats[route.host]
-            entry == null || (entry.restUntilMs <= now && entry.failuresAtMs.count { now - it <= FAILURE_MEMORY_MS } < 2)
-        }
+        val contenders = routes.filter { it.host != currentHost && it.host != activeHost }
+        val pool = contenders.filter { (stats[it.host]?.restUntilMs ?: 0L) <= now }.ifEmpty { contenders }
         if (pool.isEmpty()) return emptyList()
         val known = pool.mapNotNull { estimateBps(it.host) }.sorted()
         val fallbackScore = if (known.isEmpty()) 0L else known[(known.size - 1) / 2]
@@ -368,7 +370,7 @@ internal class CdnAutoRouter(
         if (raceInFlight) return false
         raceInFlight = true
         nextRaceAtMs = clock() + RACE_MIN_INTERVAL_MS
-        racesThisVideo++
+        stallRaceAtMs = clock() + STALL_RACE_INTERVAL_MS
         return true
     }
 
@@ -384,10 +386,13 @@ internal class CdnAutoRouter(
     fun finishRace(currentHost: String, currentRateBps: Long, results: List<CdnRaceResult>): String? {
         raceInFlight = false
         val now = clock()
+        stallRaceAtMs = now + STALL_RACE_INTERVAL_MS
         results.filter { it.success }.forEach { recordTransfer(it.host, it.bytes, it.elapsedMs) }
         val winner = results.filter { it.success }.minByOrNull(::raceMs)
-        results.filter { it !== winner && !it.cancelled }
-            .forEach { stats.getOrPut(it.host, ::HostStats).restUntilMs = now + REST_MS }
+        results.filter { it !== winner && !it.cancelled }.forEach {
+            val entry = stats.getOrPut(it.host, ::HostStats)
+            entry.restUntilMs = maxOf(entry.restUntilMs, now + if (it.success) LOSER_REST_MS else REST_MS)
+        }
         val switched = winner?.takeIf { won ->
             // Never "switch" to where routing already points: that would announce a switch and change nothing.
             won.host != currentHost && won.host != activeHost &&
@@ -412,7 +417,10 @@ internal class CdnAutoRouter(
         result.elapsedMs * CDN_RACE_BYTES / result.bytes.coerceAtLeast(1)
 
     @Synchronized
-    fun cancelRace() { raceInFlight = false }
+    fun cancelRace() {
+        raceInFlight = false
+        stallRaceAtMs = clock() + STALL_RACE_INTERVAL_MS
+    }
 
     @Synchronized
     fun networkChanged(identity: String) {
