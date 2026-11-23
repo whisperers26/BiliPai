@@ -290,13 +290,13 @@ private const val CONTINUOUS_PLAYER_MORPH_DURATION_MILLIS = 240
 private const val VIDEO_DETAIL_COLLAPSE_SIGNAL_IDLE_TIMEOUT_MS = 120L
 
 @Composable
-private fun CollapsedPlayerNavigationBar(
+internal fun CollapsedPlayerNavigationBar(
     scrollRatio: Float,
     topInset: Dp,
     onBack: () -> Unit,
     onHomeClick: () -> Unit,
     onPlayClick: () -> Unit,
-    onMoreClick: () -> Unit,
+    onMoreClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     if (scrollRatio > 0f) {
@@ -397,7 +397,9 @@ private fun CollapsedPlayerNavigationBar(
                             Text("立即播放", color = AppContentColors.accent())
                         }
                     }
-                    if (useMiuixNonGlassChrome) {
+                    if (onMoreClick == null) {
+                        // The large-screen layout has no collapsed-player settings menu.
+                    } else if (useMiuixNonGlassChrome) {
                         AppIconButton(
                             onClick = onMoreClick,
                             modifier = Modifier
