@@ -707,24 +707,35 @@ object VideoRepository {
         }
     }
     
+    private suspend fun requestHomeWebFeed(idx: Int, refreshCount: Int): RecommendResponse {
+        val cachedKeys = WbiKeyManager.getWbiKeys().getOrNull()
+        val navWbiImg = if (cachedKeys == null) api.getNavInfo().data?.wbi_img else null
+        val resolvedKeys = resolveHomeFeedWbiKeys(
+            cachedKeys = cachedKeys,
+            navWbiImg = navWbiImg
+        ) ?: throw Exception("无法获取 Key")
+        return requestSignedHomeWebFeed(idx, refreshCount, resolvedKeys)
+    }
+
+    private suspend fun requestSignedHomeWebFeed(
+        idx: Int,
+        refreshCount: Int,
+        keys: Pair<String, String>,
+    ): RecommendResponse {
+        val params = buildHomeWebFeedParams(idx, refreshCount)
+        val signedParams = WbiUtils.sign(params, keys.first, keys.second)
+        val feedResp = SharedContentRepository.recommendationResponse(signedParams)
+        if (feedResp.code != 0) {
+            throw ContentRequestException(feedResp.code, feedResp.message)
+        }
+        return feedResp
+    }
+
     //  Web 端推荐流 (WBI 签名)
     private suspend fun fetchWebFeed(idx: Int, refreshCount: Int): Result<List<VideoItem>> {
         try {
-            val cachedKeys = WbiKeyManager.getWbiKeys().getOrNull()
-            val navWbiImg = if (cachedKeys == null) api.getNavInfo().data?.wbi_img else null
-            val resolvedKeys = resolveHomeFeedWbiKeys(
-                cachedKeys = cachedKeys,
-                navWbiImg = navWbiImg
-            ) ?: throw Exception("无法获取 Key")
-            val (imgKey, subKey) = resolvedKeys
+            val feedResp = requestHomeWebFeed(idx, refreshCount)
 
-            val params = buildHomeWebFeedParams(idx, refreshCount)
-            val signedParams = WbiUtils.sign(params, imgKey, subKey)
-            val feedResp = SharedContentRepository.recommendationResponse(signedParams)
-            if (feedResp.code != 0) {
-                throw ContentRequestException(feedResp.code, feedResp.message)
-            }
-            
             //  [调试] 检查 API 是否返回 dimension 字段
             feedResp.data?.item?.take(3)?.forEachIndexed { index, item ->
                 com.android.purebilibili.core.util.Logger.d("VideoRepo", 
@@ -773,20 +784,7 @@ object VideoRepository {
     // 合并推荐的 Web 分支与单独 Web 推荐共用请求参数和当前账号 Cookie。
     private suspend fun fetchMergedWebFeed(idx: Int, refreshCount: Int): Result<List<VideoItem>> {
         try {
-            val cachedKeys = WbiKeyManager.getWbiKeys().getOrNull()
-            val navWbiImg = if (cachedKeys == null) api.getNavInfo().data?.wbi_img else null
-            val resolvedKeys = resolveHomeFeedWbiKeys(
-                cachedKeys = cachedKeys,
-                navWbiImg = navWbiImg
-            ) ?: throw Exception("无法获取 Key")
-            val (imgKey, subKey) = resolvedKeys
-
-            val params = buildHomeWebFeedParams(idx, refreshCount)
-            val signedParams = WbiUtils.sign(params, imgKey, subKey)
-            val feedResp = SharedContentRepository.recommendationResponse(signedParams)
-            if (feedResp.code != 0) {
-                throw ContentRequestException(feedResp.code, feedResp.message)
-            }
+            val feedResp = requestHomeWebFeed(idx, refreshCount)
 
             val list = feedResp.data?.item?.filter { it.adInfo == null }?.map { it.toVideoItem() }?.filter { it.bvid.isNotEmpty() } ?: emptyList()
 
