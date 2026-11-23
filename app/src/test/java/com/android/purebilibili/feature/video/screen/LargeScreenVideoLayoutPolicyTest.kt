@@ -9,6 +9,37 @@ import kotlin.test.assertTrue
 class LargeScreenVideoLayoutPolicyTest {
 
     @Test
+    fun pausedPlayerCollapsesOnlyWhenStackedAboveTheScrollingPanes() {
+        LargeScreenVideoLayoutMode.entries.forEach { mode ->
+            assertEquals(
+                mode == LargeScreenVideoLayoutMode.AlmostSquare,
+                shouldCollapseLargeScreenPlayerOnScroll(
+                    mode = mode,
+                    hasTabletopFold = false,
+                    isPlaybackPaused = true,
+                    isPortraitFullscreen = false,
+                ),
+                "mode=$mode",
+            )
+        }
+    }
+
+    @Test
+    fun playerStaysFullSizeWhilePlayingAcrossAFoldOrInPortraitFullscreen() {
+        fun collapses(fold: Boolean = false, paused: Boolean = true, portrait: Boolean = false) =
+            shouldCollapseLargeScreenPlayerOnScroll(
+                mode = LargeScreenVideoLayoutMode.AlmostSquare,
+                hasTabletopFold = fold,
+                isPlaybackPaused = paused,
+                isPortraitFullscreen = portrait,
+            )
+        assertTrue(collapses())
+        assertFalse(collapses(paused = false))
+        assertFalse(collapses(fold = true))
+        assertFalse(collapses(portrait = true))
+    }
+
+    @Test
     fun landscapeLayoutHidesIntroRelatedAndHonorsConfiguredDefaultTab() {
         assertTrue(resolveIncludeRelatedTabInSecondary(LargeScreenVideoLayoutMode.Landscape))
         assertFalse(resolveIncludeRelatedTabInSecondary(LargeScreenVideoLayoutMode.AlmostSquare))

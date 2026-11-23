@@ -182,6 +182,21 @@ internal fun shouldUseLargeScreenDetailRail(mode: LargeScreenVideoLayoutMode): B
     return mode == LargeScreenVideoLayoutMode.AlmostSquare
 }
 
+/**
+ * A paused or finished player gives its height to the lists, as on the phone layout. Only the
+ * near-square layout stacks the player above them; in the other modes the player has its own
+ * column or sits across a fold, so shrinking it would not give the lists any room.
+ */
+internal fun shouldCollapseLargeScreenPlayerOnScroll(
+    mode: LargeScreenVideoLayoutMode,
+    hasTabletopFold: Boolean,
+    isPlaybackPaused: Boolean,
+    isPortraitFullscreen: Boolean,
+): Boolean = mode == LargeScreenVideoLayoutMode.AlmostSquare &&
+    !hasTabletopFold &&
+    isPlaybackPaused &&
+    !isPortraitFullscreen
+
 internal const val LARGE_SCREEN_DETAIL_RAIL_WIDTH_DP = 104f
 internal const val LARGE_SCREEN_DETAIL_RAIL_ACTION_COLUMNS = 2
 
