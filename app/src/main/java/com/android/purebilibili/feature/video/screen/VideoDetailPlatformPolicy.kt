@@ -934,6 +934,16 @@ internal fun isVideoDrivenLandscapeOrientationLock(requestedOrientation: Int): B
 }
 
 /**
+ * Requests only a video page makes. A page leaving for the mini player can leave one behind, and
+ * restoring it on a later exit would keep the whole app rotating with gravity.
+ */
+private fun isVideoDrivenOrientationRequest(requestedOrientation: Int): Boolean {
+    return isVideoDrivenLandscapeOrientationLock(requestedOrientation) ||
+        requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR ||
+        requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+}
+
+/**
  * 进入详情时记录「离开后应恢复」的方向。已是视频横屏锁时改记 UNSPECIFIED，
  * 避免旧详情 dispose 延迟恢复前、新详情把横屏锁当成入口快照。
  */
@@ -942,7 +952,7 @@ internal fun resolveVideoDetailEntryOrientationSnapshot(
 ): Int {
     val current = currentRequestedOrientation
         ?: return ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-    return if (isVideoDrivenLandscapeOrientationLock(current)) {
+    return if (isVideoDrivenOrientationRequest(current)) {
         ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     } else {
         current
@@ -1071,7 +1081,7 @@ internal fun resolveVideoDetailExitRequestedOrientation(
 ): Int {
     val original = originalRequestedOrientation
         ?: return ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-    return if (isVideoDrivenLandscapeOrientationLock(original)) {
+    return if (isVideoDrivenOrientationRequest(original)) {
         ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     } else {
         original
