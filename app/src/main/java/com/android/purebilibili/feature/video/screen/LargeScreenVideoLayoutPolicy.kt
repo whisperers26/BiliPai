@@ -197,6 +197,20 @@ internal fun shouldCollapseLargeScreenPlayerOnScroll(
     isPlaybackPaused &&
     !isPortraitFullscreen
 
+/**
+ * Pull-to-refresh sits closer to the comment list than the player's collapse handler, so while
+ * the stacked player is collapsed it must stay off or it takes the drag that should expand it.
+ * Layouts that never collapse ignore any offset left from a stacked layout.
+ */
+internal fun shouldEnableLargeScreenCommentPullToRefresh(
+    mode: LargeScreenVideoLayoutMode,
+    hasTabletopFold: Boolean,
+    playerCollapseOffsetPx: Float,
+): Boolean {
+    val playerCanCollapse = mode == LargeScreenVideoLayoutMode.AlmostSquare && !hasTabletopFold
+    return !playerCanCollapse || playerCollapseOffsetPx >= 0f
+}
+
 internal const val LARGE_SCREEN_DETAIL_RAIL_WIDTH_DP = 104f
 internal const val LARGE_SCREEN_DETAIL_RAIL_ACTION_COLUMNS = 2
 
