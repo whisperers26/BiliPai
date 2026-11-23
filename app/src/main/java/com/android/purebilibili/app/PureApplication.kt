@@ -56,6 +56,7 @@ import com.android.purebilibili.core.store.supportsAppIconAppearance
 import com.android.purebilibili.core.util.AnalyticsHelper
 import com.android.purebilibili.core.util.CacheUtils
 import com.android.purebilibili.core.util.CrashReporter
+import com.android.purebilibili.core.util.installSystemRotationLockGuard
 import com.android.purebilibili.core.util.LogCollector
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.feature.settings.applyAppLanguage
@@ -217,6 +218,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         // after rapid scroll-to-top and subsequent scrolling. Keep the established prefetcher
         // until the upstream cache-window path is safe for this feed.
         ComposeFoundationFlags.isUsingCacheWindowInStaggeredGrids = false
+        installSystemRotationLockGuard()
 
         // The matching release stack trace resolves to LazyGridKt.keepAroundItems (line 507)
         // calling LazyGridSpanLayoutProvider.getLineConfiguration with an invalid cache line.

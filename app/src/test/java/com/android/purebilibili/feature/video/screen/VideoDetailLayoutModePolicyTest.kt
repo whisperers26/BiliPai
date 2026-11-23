@@ -1301,6 +1301,23 @@ class VideoDetailLayoutModePolicyTest {
     }
 
     @Test
+    fun videoDetailOrientationSnapshot_neverCarriesSensorModesToOtherPages() {
+        listOf(
+            ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR,
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT,
+        ).forEach { sensorMode ->
+            assertEquals(
+                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+                resolveVideoDetailEntryOrientationSnapshot(sensorMode),
+            )
+            assertEquals(
+                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+                resolveVideoDetailExitRequestedOrientation(sensorMode),
+            )
+        }
+    }
+
+    @Test
     fun videoDetailEntrySnapshot_ignoresAlreadyLockedLandscape() {
         assertEquals(
             ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
