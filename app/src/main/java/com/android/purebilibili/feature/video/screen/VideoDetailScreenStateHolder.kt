@@ -290,13 +290,13 @@ private const val CONTINUOUS_PLAYER_MORPH_DURATION_MILLIS = 240
 private const val VIDEO_DETAIL_COLLAPSE_SIGNAL_IDLE_TIMEOUT_MS = 120L
 
 @Composable
-private fun CollapsedPlayerNavigationBar(
+internal fun CollapsedPlayerNavigationBar(
     scrollRatio: Float,
     topInset: Dp,
     onBack: () -> Unit,
     onHomeClick: () -> Unit,
     onPlayClick: () -> Unit,
-    onMoreClick: () -> Unit,
+    onMoreClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     if (scrollRatio > 0f) {
@@ -397,7 +397,9 @@ private fun CollapsedPlayerNavigationBar(
                             Text("立即播放", color = AppContentColors.accent())
                         }
                     }
-                    if (useMiuixNonGlassChrome) {
+                    if (onMoreClick == null) {
+                        // The large-screen layout has no collapsed-player settings menu.
+                    } else if (useMiuixNonGlassChrome) {
                         AppIconButton(
                             onClick = onMoreClick,
                             modifier = Modifier
@@ -4116,6 +4118,20 @@ internal fun VideoDetailScreenStateHolder(
                             transitionChromeAlphaProvider = videoCardDetailChromeAlphaProvider,
                             tabletopFold = largeScreenTabletopFold,
                             tabletopPlayerFullscreen = isTabletopHalfFullscreen,
+                            isPlaybackPaused = isPlaybackPaused,
+                            expandPlayerForReturnProvider = {
+                                isExitTransitionInProgress || isCommittedCardReturn ||
+                                    (
+                                        entryOwnsMiuixCardTransition && (
+                                            videoCardDepthBackgroundState.phaseProvider() ==
+                                                VideoCardTransitionBackgroundPhase.RETURNING ||
+                                                videoCardDepthBackgroundState
+                                                    .isReturnGestureInProgressProvider() ||
+                                                videoCardDepthBackgroundState
+                                                    .isGestureRestoreInProgressProvider()
+                                            )
+                                        )
+                            },
                             )
                         }
                     } else {
@@ -4380,39 +4396,12 @@ internal fun VideoDetailScreenStateHolder(
                             skipGesturePlayerCollapse,
                             collapseRangePx,
                         ) {
-                            object : NestedScrollConnection {
-                                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                                    val scrollUpdate = reduceVideoDetailPreScroll(
-                                        currentOffsetPx = inlinePlayerCollapseState.offsetPx,
-                                        deltaPx = available.y,
-                                        // 切页后位移可能暂时超出新范围；先允许它从当前位置
-                                        // 平滑回到合法范围，避免手势第一帧被硬夹到新终点。
-                                        minOffsetPx = minOf(
-                                            -collapseRangePx,
-                                            inlinePlayerCollapseState.offsetPx,
-                                        ),
-                                        inlinePortraitScrollEnabled = inlinePortraitScrollEnabled,
-                                        isPortraitFullscreen = isPortraitFullscreen,
-                                        layoutAlreadyCollapsed = skipGesturePlayerCollapse,
-                                    )
-                                    return Offset(0f, inlinePlayerCollapseState.consumeScroll(scrollUpdate))
-                                }
-
-                                override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                                    val scrollUpdate = reduceVideoDetailPostScroll(
-                                        currentOffsetPx = inlinePlayerCollapseState.offsetPx,
-                                        deltaPx = available.y,
-                                        minOffsetPx = minOf(
-                                            -collapseRangePx,
-                                            inlinePlayerCollapseState.offsetPx,
-                                        ),
-                                        inlinePortraitScrollEnabled = inlinePortraitScrollEnabled,
-                                        isPortraitFullscreen = isPortraitFullscreen,
-                                        layoutAlreadyCollapsed = skipGesturePlayerCollapse,
-                                    )
-                                    return Offset(0f, inlinePlayerCollapseState.consumeScroll(scrollUpdate))
-                                }
-                            }
+                            inlinePlayerCollapseState.createScrollConnection(
+                                scrollEnabled = inlinePortraitScrollEnabled,
+                                isPortraitFullscreen = isPortraitFullscreen,
+                                layoutAlreadyCollapsed = skipGesturePlayerCollapse,
+                                collapseRangePx = collapseRangePx,
+                            )
                         }
                         DisposableEffect(nestedScrollConnection) {
                             commentThreadPlayerScrollConnection = nestedScrollConnection
