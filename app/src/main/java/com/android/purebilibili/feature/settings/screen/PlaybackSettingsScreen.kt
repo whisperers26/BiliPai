@@ -217,6 +217,11 @@ fun PlaybackSettingsContent(
     val playbackCdnPreference = remember(playbackCdnPreferenceValue) {
         PlaybackCdnPreference.fromStorageValue(playbackCdnPreferenceValue)
     }
+    val playbackCdnSwitchNoticeEnabled by remember(context) {
+        SettingsManager.getPlaybackCdnSwitchNoticeEnabled(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = SettingsManager.DEFAULT_PLAYBACK_CDN_SWITCH_NOTICE_ENABLED,
+    )
     val playbackCdnOptions = remember {
         PlaybackCdnPreference.entries.map { preference ->
             AppSegmentOption(preference, preference.displayName)
@@ -1030,6 +1035,23 @@ SettingsSingleChoicePreference(
                             iconTint = AppContentColors.secondaryText(),
                         )
 }
+
+                        AppPreferenceDivider()
+
+                        SettingsItemAnchor("playback.playback_cdn_switch_notice") {
+                            AppSwitchPreference(
+                                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_notifications_24),
+                                title = playbackSettingTitle("playback.playback_cdn_switch_notice"),
+                                subtitle = "切换 CDN 或播放线路时显示提示",
+                                checked = playbackCdnSwitchNoticeEnabled,
+                                onCheckedChange = { enabled ->
+                                    scope.launch {
+                                        SettingsManager.setPlaybackCdnSwitchNoticeEnabled(context, enabled)
+                                    }
+                                },
+                                iconTint = AppContentColors.secondaryText(),
+                            )
+                        }
 
                         AppPreferenceDivider()
 
