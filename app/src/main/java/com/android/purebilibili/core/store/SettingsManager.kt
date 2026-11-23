@@ -7680,6 +7680,10 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_PLAYBACK_CDN_PREFERENCE = stringPreferencesKey("playback_cdn_preference")
     /** Automatic CDN selection while playing; a concrete line in settings pins it instead. */
     const val PLAYBACK_CDN_PREFERENCE_DEFAULT = "auto"
+    private val KEY_PLAYBACK_CDN_SWITCH_NOTICE_ENABLED =
+        booleanPreferencesKey("playback_cdn_switch_notice_enabled")
+    /** Line changes happen quietly unless the user asks to see them. */
+    const val DEFAULT_PLAYBACK_CDN_SWITCH_NOTICE_ENABLED = false
     private val KEY_QUALITY_SWITCH_FAILURE_DIALOG_ENABLED =
         booleanPreferencesKey("quality_switch_failure_dialog_enabled")
     private val KEY_QUALITY_SWITCH_FAILURE_DIALOG_ONCE_ENABLED =
@@ -8187,6 +8191,18 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     suspend fun setPlaybackCdnPreference(context: Context, preference: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_PLAYBACK_CDN_PREFERENCE] = preference
+        }
+    }
+
+    fun getPlaybackCdnSwitchNoticeEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { preferences ->
+            preferences[KEY_PLAYBACK_CDN_SWITCH_NOTICE_ENABLED]
+                ?: DEFAULT_PLAYBACK_CDN_SWITCH_NOTICE_ENABLED
+        }
+
+    suspend fun setPlaybackCdnSwitchNoticeEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_PLAYBACK_CDN_SWITCH_NOTICE_ENABLED] = enabled
         }
     }
 
