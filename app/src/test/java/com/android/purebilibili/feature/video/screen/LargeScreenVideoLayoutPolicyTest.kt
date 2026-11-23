@@ -9,6 +9,41 @@ import kotlin.test.assertTrue
 class LargeScreenVideoLayoutPolicyTest {
 
     @Test
+    fun commentRefreshWaitsUntilTheStackedPlayerIsFullyExpanded() {
+        fun refreshEnabled(offsetPx: Float) = shouldEnableLargeScreenCommentPullToRefresh(
+            mode = LargeScreenVideoLayoutMode.AlmostSquare,
+            hasTabletopFold = false,
+            playerCollapseOffsetPx = offsetPx,
+        )
+        assertFalse(refreshEnabled(-900f))
+        assertFalse(refreshEnabled(-1f))
+        assertTrue(refreshEnabled(0f))
+    }
+
+    @Test
+    fun commentRefreshIgnoresLeftoverOffsetInLayoutsThatNeverCollapse() {
+        LargeScreenVideoLayoutMode.entries
+            .filter { it != LargeScreenVideoLayoutMode.AlmostSquare }
+            .forEach { mode ->
+                assertTrue(
+                    shouldEnableLargeScreenCommentPullToRefresh(
+                        mode = mode,
+                        hasTabletopFold = false,
+                        playerCollapseOffsetPx = -900f,
+                    ),
+                    "mode=$mode",
+                )
+            }
+        assertTrue(
+            shouldEnableLargeScreenCommentPullToRefresh(
+                mode = LargeScreenVideoLayoutMode.AlmostSquare,
+                hasTabletopFold = true,
+                playerCollapseOffsetPx = -900f,
+            ),
+        )
+    }
+
+    @Test
     fun pausedPlayerCollapsesOnlyWhenStackedAboveTheScrollingPanes() {
         LargeScreenVideoLayoutMode.entries.forEach { mode ->
             assertEquals(

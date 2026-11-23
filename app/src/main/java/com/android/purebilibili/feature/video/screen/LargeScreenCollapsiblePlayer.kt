@@ -32,7 +32,7 @@ private const val LARGE_SCREEN_PLAYER_RESTORE_DURATION_MS = 240
 @Composable
 internal fun ColumnScope.LargeScreenCollapsiblePlayer(
     expandedPlayerHeightDp: Float,
-    collapseKey: String,
+    collapseState: InlinePortraitPlayerCollapseState,
     isPlaybackPaused: Boolean,
     isPortraitFullscreen: Boolean,
     expandForReturnProvider: () -> Boolean,
@@ -42,7 +42,6 @@ internal fun ColumnScope.LargeScreenCollapsiblePlayer(
     player: @Composable (Modifier) -> Unit,
     detail: @Composable ColumnScope.(NestedScrollConnection) -> Unit,
 ) {
-    val collapseState = rememberInlinePortraitPlayerCollapseState(collapseKey)
     val collapseEnabled = shouldCollapseLargeScreenPlayerOnScroll(
         mode = LargeScreenVideoLayoutMode.AlmostSquare,
         hasTabletopFold = false,

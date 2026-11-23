@@ -925,6 +925,8 @@ internal fun TabletSecondaryContent(
     onDanmakuToggle: () -> Unit = {},
     // Off when a side rail already offers comment sorting, search and composing.
     showCommentChrome: Boolean = true,
+    // Off while a collapsed player above should take the downward drag first.
+    commentPullToRefreshEnabled: Boolean = true,
 ) {
     val commentState by commentStateHandle
     val subReplyState by subReplyStateHandle
@@ -1271,6 +1273,7 @@ internal fun TabletSecondaryContent(
                                 isRefreshing = commentState.isRepliesRefreshing,
                                 onRefresh = commentActions.refreshComments,
                                 modifier = Modifier.fillMaxSize(),
+                                enabled = commentPullToRefreshEnabled,
                             ) {
                                 LazyColumn(
                                 state = listState,
