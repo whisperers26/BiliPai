@@ -229,6 +229,14 @@ internal fun resolveHomeFeedWbiKeys(
     return if (imgKey.isNotEmpty() && subKey.isNotEmpty()) imgKey to subKey else null
 }
 
+/** Rate limits are left alone: retrying them immediately only prolongs the limit. */
+internal fun shouldRetryHomeWebFeed(error: Throwable): Boolean = when (error) {
+    is CancellationException -> false
+    is ContentRequestException -> error.code == -352 || error.code == -403
+    is java.io.IOException -> true
+    else -> false
+}
+
 internal fun buildSubtitleCueCacheKey(
     bvid: String,
     cid: Long,
@@ -714,7 +722,21 @@ object VideoRepository {
             cachedKeys = cachedKeys,
             navWbiImg = navWbiImg
         ) ?: throw Exception("无法获取 Key")
-        return requestSignedHomeWebFeed(idx, refreshCount, resolvedKeys)
+        return try {
+            requestSignedHomeWebFeed(idx, refreshCount, resolvedKeys)
+        } catch (error: Exception) {
+            if (!shouldRetryHomeWebFeed(error)) throw error
+            android.util.Log.w(
+                "VideoRepo",
+                "Home feed failed, retrying with fresh keys: ${error.javaClass.simpleName} " +
+                    "code=${(error as? ContentRequestException)?.code}",
+            )
+            // Cached keys can go stale within their 24h window, and pooled sockets can die
+            // while the app is idle. Neither clears by repeating the same request.
+            if (error is java.io.IOException) NetworkModule.evictIdleConnections()
+            val freshKeys = WbiKeyManager.refreshKeys().getOrNull() ?: resolvedKeys
+            requestSignedHomeWebFeed(idx, refreshCount, freshKeys)
+        }
     }
 
     private suspend fun requestSignedHomeWebFeed(
