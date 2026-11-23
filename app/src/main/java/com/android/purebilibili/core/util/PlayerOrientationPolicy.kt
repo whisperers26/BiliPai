@@ -3,6 +3,7 @@ package com.android.purebilibili.core.util
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.os.Build
+import android.provider.Settings
 
 internal data class PlayerWindowOrientationPolicy(
     val currentWindowWidthDp: Int,
@@ -153,6 +154,32 @@ internal fun resolveEffectivePlayerRequestedOrientation(
 }
 
 /**
+ * Sensor orientation modes follow gravity even under the system rotation lock. While locked they
+ * become a fixed request, keeping the current landscape side. Explicit requests pass through, so
+ * the fullscreen button still works.
+ */
+internal fun resolveSystemLockAwareOrientation(
+    requestedOrientation: Int,
+    systemAutoRotateEnabled: Boolean,
+    currentRequestedOrientation: Int,
+): Int {
+    if (systemAutoRotateEnabled) return requestedOrientation
+    return when (requestedOrientation) {
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE -> when (currentRequestedOrientation) {
+            ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE -> currentRequestedOrientation
+            else -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        }
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR,
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        else -> requestedOrientation
+    }
+}
+
+private fun Activity.isSystemAutoRotateEnabled(): Boolean =
+    Settings.System.getInt(contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) != 0
+
+/**
  * Android 16+ ignores orientation restrictions for target-36+ apps on large screens,
  * and target 37 removes the manifest opt-out. Older Android releases still honor
  * requestedOrientation on tablets, so do not discard a user's fullscreen request there.
@@ -176,7 +203,12 @@ internal fun Activity.applyPlayerRequestedOrientation(
                 "rotation=${policy.displayRotation}"
         )
     }
-    if (this.requestedOrientation == effectiveOrientation) return false
-    this.requestedOrientation = effectiveOrientation
+    val lockAwareOrientation = resolveSystemLockAwareOrientation(
+        requestedOrientation = effectiveOrientation,
+        systemAutoRotateEnabled = isSystemAutoRotateEnabled(),
+        currentRequestedOrientation = this.requestedOrientation,
+    )
+    if (this.requestedOrientation == lockAwareOrientation) return false
+    this.requestedOrientation = lockAwareOrientation
     return true
 }

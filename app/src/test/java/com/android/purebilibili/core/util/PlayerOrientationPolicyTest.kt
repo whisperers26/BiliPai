@@ -9,6 +9,65 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PlayerOrientationPolicyTest {
+    private fun lockedOrientation(requested: Int, current: Int) =
+        resolveSystemLockAwareOrientation(
+            requestedOrientation = requested,
+            systemAutoRotateEnabled = false,
+            currentRequestedOrientation = current,
+        )
+
+    @Test
+    fun `rotation lock replaces every gravity driven request with a fixed one`() {
+        val unspecified = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+            lockedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE, unspecified),
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE,
+            lockedOrientation(
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+                ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE,
+            ),
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            lockedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT, unspecified),
+        )
+        assertEquals(
+            unspecified,
+            lockedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR, unspecified),
+        )
+        assertEquals(
+            unspecified,
+            lockedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR, unspecified),
+        )
+    }
+
+    @Test
+    fun `rotation lock keeps explicit requests and unlocked sensor requests`() {
+        listOf(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+            ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE,
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+            ActivityInfo.SCREEN_ORIENTATION_LOCKED,
+        ).forEach { requested ->
+            assertEquals(
+                requested,
+                lockedOrientation(requested, ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED),
+            )
+        }
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR,
+            resolveSystemLockAwareOrientation(
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR,
+                systemAutoRotateEnabled = true,
+                currentRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+            ),
+        )
+    }
+
     @Test
     fun `Pura style landscape natural cover uses in window fullscreen in both rotations`() {
         val landscape = resolvePlayerWindowOrientationPolicy(
