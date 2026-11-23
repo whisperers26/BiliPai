@@ -229,6 +229,14 @@ internal fun resolveHomeFeedWbiKeys(
     return if (imgKey.isNotEmpty() && subKey.isNotEmpty()) imgKey to subKey else null
 }
 
+/** Rate limits are left alone: retrying them immediately only prolongs the limit. */
+internal fun shouldRetryHomeWebFeed(error: Throwable): Boolean = when (error) {
+    is CancellationException -> false
+    is ContentRequestException -> error.code == -352 || error.code == -403
+    is java.io.IOException -> true
+    else -> false
+}
+
 internal fun buildSubtitleCueCacheKey(
     bvid: String,
     cid: Long,
@@ -707,24 +715,49 @@ object VideoRepository {
         }
     }
     
+    private suspend fun requestHomeWebFeed(idx: Int, refreshCount: Int): RecommendResponse {
+        val cachedKeys = WbiKeyManager.getWbiKeys().getOrNull()
+        val navWbiImg = if (cachedKeys == null) api.getNavInfo().data?.wbi_img else null
+        val resolvedKeys = resolveHomeFeedWbiKeys(
+            cachedKeys = cachedKeys,
+            navWbiImg = navWbiImg
+        ) ?: throw Exception("无法获取 Key")
+        return try {
+            requestSignedHomeWebFeed(idx, refreshCount, resolvedKeys)
+        } catch (error: Exception) {
+            if (!shouldRetryHomeWebFeed(error)) throw error
+            android.util.Log.w(
+                "VideoRepo",
+                "Home feed failed, retrying with fresh keys: ${error.javaClass.simpleName} " +
+                    "code=${(error as? ContentRequestException)?.code}",
+            )
+            // Cached keys can go stale within their 24h window, and pooled sockets can die
+            // while the app is idle. Neither clears by repeating the same request.
+            if (error is java.io.IOException) NetworkModule.evictIdleConnections()
+            val freshKeys = WbiKeyManager.refreshKeys().getOrNull() ?: resolvedKeys
+            requestSignedHomeWebFeed(idx, refreshCount, freshKeys)
+        }
+    }
+
+    private suspend fun requestSignedHomeWebFeed(
+        idx: Int,
+        refreshCount: Int,
+        keys: Pair<String, String>,
+    ): RecommendResponse {
+        val params = buildHomeWebFeedParams(idx, refreshCount)
+        val signedParams = WbiUtils.sign(params, keys.first, keys.second)
+        val feedResp = SharedContentRepository.recommendationResponse(signedParams)
+        if (feedResp.code != 0) {
+            throw ContentRequestException(feedResp.code, feedResp.message)
+        }
+        return feedResp
+    }
+
     //  Web 端推荐流 (WBI 签名)
     private suspend fun fetchWebFeed(idx: Int, refreshCount: Int): Result<List<VideoItem>> {
         try {
-            val cachedKeys = WbiKeyManager.getWbiKeys().getOrNull()
-            val navWbiImg = if (cachedKeys == null) api.getNavInfo().data?.wbi_img else null
-            val resolvedKeys = resolveHomeFeedWbiKeys(
-                cachedKeys = cachedKeys,
-                navWbiImg = navWbiImg
-            ) ?: throw Exception("无法获取 Key")
-            val (imgKey, subKey) = resolvedKeys
+            val feedResp = requestHomeWebFeed(idx, refreshCount)
 
-            val params = buildHomeWebFeedParams(idx, refreshCount)
-            val signedParams = WbiUtils.sign(params, imgKey, subKey)
-            val feedResp = SharedContentRepository.recommendationResponse(signedParams)
-            if (feedResp.code != 0) {
-                throw ContentRequestException(feedResp.code, feedResp.message)
-            }
-            
             //  [调试] 检查 API 是否返回 dimension 字段
             feedResp.data?.item?.take(3)?.forEachIndexed { index, item ->
                 com.android.purebilibili.core.util.Logger.d("VideoRepo", 
@@ -773,20 +806,7 @@ object VideoRepository {
     // 合并推荐的 Web 分支与单独 Web 推荐共用请求参数和当前账号 Cookie。
     private suspend fun fetchMergedWebFeed(idx: Int, refreshCount: Int): Result<List<VideoItem>> {
         try {
-            val cachedKeys = WbiKeyManager.getWbiKeys().getOrNull()
-            val navWbiImg = if (cachedKeys == null) api.getNavInfo().data?.wbi_img else null
-            val resolvedKeys = resolveHomeFeedWbiKeys(
-                cachedKeys = cachedKeys,
-                navWbiImg = navWbiImg
-            ) ?: throw Exception("无法获取 Key")
-            val (imgKey, subKey) = resolvedKeys
-
-            val params = buildHomeWebFeedParams(idx, refreshCount)
-            val signedParams = WbiUtils.sign(params, imgKey, subKey)
-            val feedResp = SharedContentRepository.recommendationResponse(signedParams)
-            if (feedResp.code != 0) {
-                throw ContentRequestException(feedResp.code, feedResp.message)
-            }
+            val feedResp = requestHomeWebFeed(idx, refreshCount)
 
             val list = feedResp.data?.item?.filter { it.adInfo == null }?.map { it.toVideoItem() }?.filter { it.bvid.isNotEmpty() } ?: emptyList()
 
