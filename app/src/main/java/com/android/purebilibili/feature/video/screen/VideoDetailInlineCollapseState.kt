@@ -8,7 +8,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import com.android.purebilibili.feature.video.policy.VideoDetailScrollUpdate
+import com.android.purebilibili.feature.video.policy.reduceVideoDetailPostScroll
+import com.android.purebilibili.feature.video.policy.reduceVideoDetailPreScroll
 
 
 @Stable
@@ -88,3 +93,41 @@ internal fun rememberInlinePortraitPlayerCollapseState(videoBvid: String) =
     rememberSaveable(videoBvid, saver = InlinePortraitPlayerCollapseState.Saver) {
         InlinePortraitPlayerCollapseState()
     }
+
+/** Upward scrolls collapse the player before the list moves; downward leftovers expand it. */
+internal fun InlinePortraitPlayerCollapseState.createScrollConnection(
+    scrollEnabled: Boolean,
+    isPortraitFullscreen: Boolean,
+    layoutAlreadyCollapsed: Boolean,
+    collapseRangePx: Float,
+): NestedScrollConnection = object : NestedScrollConnection {
+    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        val scrollUpdate = reduceVideoDetailPreScroll(
+            currentOffsetPx = offsetPx,
+            deltaPx = available.y,
+            // 切页后位移可能暂时超出新范围；先允许它从当前位置
+            // 平滑回到合法范围，避免手势第一帧被硬夹到新终点。
+            minOffsetPx = minOf(-collapseRangePx, offsetPx),
+            inlinePortraitScrollEnabled = scrollEnabled,
+            isPortraitFullscreen = isPortraitFullscreen,
+            layoutAlreadyCollapsed = layoutAlreadyCollapsed,
+        )
+        return Offset(0f, consumeScroll(scrollUpdate))
+    }
+
+    override fun onPostScroll(
+        consumed: Offset,
+        available: Offset,
+        source: NestedScrollSource,
+    ): Offset {
+        val scrollUpdate = reduceVideoDetailPostScroll(
+            currentOffsetPx = offsetPx,
+            deltaPx = available.y,
+            minOffsetPx = minOf(-collapseRangePx, offsetPx),
+            inlinePortraitScrollEnabled = scrollEnabled,
+            isPortraitFullscreen = isPortraitFullscreen,
+            layoutAlreadyCollapsed = layoutAlreadyCollapsed,
+        )
+        return Offset(0f, consumeScroll(scrollUpdate))
+    }
+}

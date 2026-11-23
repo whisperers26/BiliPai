@@ -4380,39 +4380,12 @@ internal fun VideoDetailScreenStateHolder(
                             skipGesturePlayerCollapse,
                             collapseRangePx,
                         ) {
-                            object : NestedScrollConnection {
-                                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                                    val scrollUpdate = reduceVideoDetailPreScroll(
-                                        currentOffsetPx = inlinePlayerCollapseState.offsetPx,
-                                        deltaPx = available.y,
-                                        // 切页后位移可能暂时超出新范围；先允许它从当前位置
-                                        // 平滑回到合法范围，避免手势第一帧被硬夹到新终点。
-                                        minOffsetPx = minOf(
-                                            -collapseRangePx,
-                                            inlinePlayerCollapseState.offsetPx,
-                                        ),
-                                        inlinePortraitScrollEnabled = inlinePortraitScrollEnabled,
-                                        isPortraitFullscreen = isPortraitFullscreen,
-                                        layoutAlreadyCollapsed = skipGesturePlayerCollapse,
-                                    )
-                                    return Offset(0f, inlinePlayerCollapseState.consumeScroll(scrollUpdate))
-                                }
-
-                                override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                                    val scrollUpdate = reduceVideoDetailPostScroll(
-                                        currentOffsetPx = inlinePlayerCollapseState.offsetPx,
-                                        deltaPx = available.y,
-                                        minOffsetPx = minOf(
-                                            -collapseRangePx,
-                                            inlinePlayerCollapseState.offsetPx,
-                                        ),
-                                        inlinePortraitScrollEnabled = inlinePortraitScrollEnabled,
-                                        isPortraitFullscreen = isPortraitFullscreen,
-                                        layoutAlreadyCollapsed = skipGesturePlayerCollapse,
-                                    )
-                                    return Offset(0f, inlinePlayerCollapseState.consumeScroll(scrollUpdate))
-                                }
-                            }
+                            inlinePlayerCollapseState.createScrollConnection(
+                                scrollEnabled = inlinePortraitScrollEnabled,
+                                isPortraitFullscreen = isPortraitFullscreen,
+                                layoutAlreadyCollapsed = skipGesturePlayerCollapse,
+                                collapseRangePx = collapseRangePx,
+                            )
                         }
                         DisposableEffect(nestedScrollConnection) {
                             commentThreadPlayerScrollConnection = nestedScrollConnection
