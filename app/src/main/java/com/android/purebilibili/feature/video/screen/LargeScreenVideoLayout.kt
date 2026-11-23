@@ -202,6 +202,7 @@ internal fun LargeScreenVideoLayout(
         )
         val includeRelatedTab = resolveIncludeRelatedTabInSecondary(metrics.mode)
         val success = detailContentState ?: (uiState as? VideoPlaybackUiState.Success)
+        val playerCollapseState = rememberInlinePortraitPlayerCollapseState(success?.info?.bvid ?: bvid)
         val player: @Composable (Modifier) -> Unit = { modifier ->
             LargeScreenPlayerHost(
                 modifier = modifier,
@@ -493,7 +494,7 @@ internal fun LargeScreenVideoLayout(
                     Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
                     LargeScreenCollapsiblePlayer(
                         expandedPlayerHeightDp = metrics.playerHeightDp,
-                        collapseKey = success?.info?.bvid ?: bvid,
+                        collapseState = playerCollapseState,
                         isPlaybackPaused = isPlaybackPaused,
                         isPortraitFullscreen = isPortraitFullscreen,
                         expandForReturnProvider = expandPlayerForReturnProvider,
