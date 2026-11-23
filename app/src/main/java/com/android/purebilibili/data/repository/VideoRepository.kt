@@ -237,6 +237,10 @@ internal fun shouldRetryHomeWebFeed(error: Throwable): Boolean = when (error) {
     else -> false
 }
 
+/** Connection and DNS failures often clear moments after waking or changing networks. */
+internal fun resolveHomeWebFeedRetryDelayMs(error: Throwable): Long =
+    if (error is java.io.IOException) 500L else 0L
+
 internal fun buildSubtitleCueCacheKey(
     bvid: String,
     cid: Long,
@@ -734,6 +738,7 @@ object VideoRepository {
             // Cached keys can go stale within their 24h window, and pooled sockets can die
             // while the app is idle. Neither clears by repeating the same request.
             if (error is java.io.IOException) NetworkModule.evictIdleConnections()
+            delay(resolveHomeWebFeedRetryDelayMs(error))
             val freshKeys = WbiKeyManager.refreshKeys().getOrNull() ?: resolvedKeys
             requestSignedHomeWebFeed(idx, refreshCount, freshKeys)
         }
