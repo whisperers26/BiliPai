@@ -89,6 +89,8 @@ internal fun LargeScreenDetailRailPane(
     commentsContent: @Composable (Modifier) -> Unit,
     chromeAlphaProvider: () -> Float = { 1f },
     modifier: Modifier = Modifier,
+    /** Applied to the page area only, so the rail's own scrolling cannot collapse the player. */
+    pagerModifier: Modifier = Modifier,
 ) {
     val bvid = success.info.bvid
     val pages = LargeScreenDetailRailPage.entries
@@ -170,6 +172,7 @@ internal fun LargeScreenDetailRailPane(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
+                .then(pagerModifier)
                 .verticalPriorityHorizontalPagerSwipe(state = pagerState, enabled = true),
         ) { index ->
             Box(modifier = Modifier.fillMaxSize()) {

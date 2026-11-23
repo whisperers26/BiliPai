@@ -4118,6 +4118,20 @@ internal fun VideoDetailScreenStateHolder(
                             transitionChromeAlphaProvider = videoCardDetailChromeAlphaProvider,
                             tabletopFold = largeScreenTabletopFold,
                             tabletopPlayerFullscreen = isTabletopHalfFullscreen,
+                            isPlaybackPaused = isPlaybackPaused,
+                            expandPlayerForReturnProvider = {
+                                isExitTransitionInProgress || isCommittedCardReturn ||
+                                    (
+                                        entryOwnsMiuixCardTransition && (
+                                            videoCardDepthBackgroundState.phaseProvider() ==
+                                                VideoCardTransitionBackgroundPhase.RETURNING ||
+                                                videoCardDepthBackgroundState
+                                                    .isReturnGestureInProgressProvider() ||
+                                                videoCardDepthBackgroundState
+                                                    .isGestureRestoreInProgressProvider()
+                                            )
+                                        )
+                            },
                             )
                         }
                     } else {

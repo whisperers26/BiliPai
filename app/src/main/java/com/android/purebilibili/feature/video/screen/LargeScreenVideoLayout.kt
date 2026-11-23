@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
@@ -63,6 +64,7 @@ import com.android.purebilibili.feature.video.ui.section.VideoPlayerSectionActio
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSectionState
 import com.android.purebilibili.feature.video.ui.section.resolveAllowLivePlayerSharedElementForMorph
 import com.android.purebilibili.feature.video.ui.section.resolveNavigationLiveSurfaceTextureEnabled
+import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
 import com.android.purebilibili.feature.video.viewmodel.CommentUiState
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
 import com.android.purebilibili.feature.video.viewmodel.VideoEngagementUiState
@@ -132,6 +134,10 @@ internal fun LargeScreenVideoLayout(
     tabletopFold: LargeScreenTabletopFold? = null,
     /** Fullscreen above the fold: the player fills that whole area, under the hidden status bar. */
     tabletopPlayerFullscreen: Boolean = false,
+    /** Paused or finished: scrolling the near-square layout's lists collapses the player. */
+    isPlaybackPaused: Boolean = false,
+    /** True during a card return, which needs the player back at full size. */
+    expandPlayerForReturnProvider: () -> Boolean = { false },
 ) {
     val pageColor = AppSurfaceTokens.chromeBackground()
     var layoutOriginYPx by remember { mutableIntStateOf(0) }
@@ -325,7 +331,7 @@ internal fun LargeScreenVideoLayout(
                 }
             }
         }
-        val detailRail: @Composable (Modifier) -> Unit = { paneModifier ->
+        val detailRail: @Composable (Modifier, Modifier) -> Unit = { paneModifier, pagerModifier ->
             if (success != null) {
                 LargeScreenDetailRailPane(
                     success = success,
@@ -347,6 +353,7 @@ internal fun LargeScreenVideoLayout(
                     },
                     chromeAlphaProvider = transitionChromeAlphaProvider,
                     modifier = paneModifier,
+                    pagerModifier = pagerModifier,
                 )
             } else if (uiState is VideoPlaybackUiState.Loading) {
                 com.android.purebilibili.feature.video.ui.components.VideoDetailInfoPaneSkeleton(
@@ -359,7 +366,7 @@ internal fun LargeScreenVideoLayout(
         val tabletopLowerPanes: @Composable (Modifier) -> Unit = { paneModifier ->
             if (metrics.mode == LargeScreenVideoLayoutMode.AlmostSquare) {
                 Column(modifier = paneModifier) {
-                    detailRail(Modifier.fillMaxWidth().weight(1f))
+                    detailRail(Modifier.fillMaxWidth().weight(1f), Modifier)
                 }
             } else {
                 Row(modifier = paneModifier) {
@@ -484,18 +491,25 @@ internal fun LargeScreenVideoLayout(
                 Column(modifier = Modifier.fillMaxSize()) {
                     // Page-colored, matching the status bar color the tablet layout applies.
                     Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-                    player(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(metrics.playerHeightDp.dp)
-                            .then(playerBackdropModifier),
-                    )
-                    detailRail(
-                        Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .navigationBarsPadding(),
-                    )
+                    LargeScreenCollapsiblePlayer(
+                        expandedPlayerHeightDp = metrics.playerHeightDp,
+                        collapseKey = success?.info?.bvid ?: bvid,
+                        isPlaybackPaused = isPlaybackPaused,
+                        isPortraitFullscreen = isPortraitFullscreen,
+                        expandForReturnProvider = expandPlayerForReturnProvider,
+                        onBack = onBack,
+                        onHomeClick = onHomeClick,
+                        onPlay = { playPlayerFromUserAction(playerState.player) },
+                        player = { slotModifier -> player(slotModifier.then(playerBackdropModifier)) },
+                    ) { scrollConnection ->
+                        detailRail(
+                            Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .navigationBarsPadding(),
+                            Modifier.nestedScroll(scrollConnection),
+                        )
+                    }
                 }
             }
             LargeScreenVideoLayoutMode.Landscape -> {
