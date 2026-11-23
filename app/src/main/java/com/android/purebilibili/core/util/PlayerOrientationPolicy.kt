@@ -1,9 +1,14 @@
 package com.android.purebilibili.core.util
 
 import android.app.Activity
+import android.app.Application
 import android.content.pm.ActivityInfo
+import android.database.ContentObserver
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
+import java.util.WeakHashMap
 
 internal data class PlayerWindowOrientationPolicy(
     val currentWindowWidthDp: Int,
@@ -179,6 +184,31 @@ internal fun resolveSystemLockAwareOrientation(
 private fun Activity.isSystemAutoRotateEnabled(): Boolean =
     Settings.System.getInt(contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) != 0
 
+/** What each activity last asked for, before the rotation lock was applied. Main thread only. */
+private val desiredPlayerOrientations = WeakHashMap<Activity, Int>()
+
+/**
+ * Re-applies each activity's last request when the system rotation lock changes, so a sensor mode
+ * set earlier stops following gravity once locked and resumes once unlocked.
+ */
+internal fun Application.installSystemRotationLockGuard() {
+    contentResolver.registerContentObserver(
+        Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION),
+        false,
+        object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                desiredPlayerOrientations.entries.toList().forEach { (activity, desired) ->
+                    if (!activity.isFinishing && !activity.isDestroyed &&
+                        !activity.isInPictureInPictureMode
+                    ) {
+                        activity.applyPlayerRequestedOrientation(desired)
+                    }
+                }
+            }
+        },
+    )
+}
+
 /**
  * Android 16+ ignores orientation restrictions for target-36+ apps on large screens,
  * and target 37 removes the manifest opt-out. Older Android releases still honor
@@ -188,6 +218,7 @@ internal fun Activity.applyPlayerRequestedOrientation(
     requestedOrientation: Int,
     displayContext: AppDisplayContext? = null,
 ): Boolean {
+    desiredPlayerOrientations[this] = requestedOrientation
     val policy = (displayContext ?: resolveAppDisplayContext()).toPlayerWindowOrientationPolicy()
     val effectiveOrientation = resolveEffectivePlayerRequestedOrientation(
         requestedOrientation = requestedOrientation,
