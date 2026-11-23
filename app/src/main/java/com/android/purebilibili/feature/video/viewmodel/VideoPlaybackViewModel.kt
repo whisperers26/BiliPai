@@ -4528,7 +4528,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 currentCdnIndex = nextIndex
             )
             
-            toast("已切换到线路${nextIndex + 1}")
+            toastCdnSwitch("已切换到线路${nextIndex + 1}")
         }
     }
     
@@ -4575,7 +4575,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 currentCdnIndex = index
             )
             
-            toast("已切换到线路${index + 1}")
+            toastCdnSwitch("已切换到线路${index + 1}")
         }
     }
     
@@ -9639,7 +9639,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             }
         }
         if (state.usesCustomRule) {
-            viewModelScope.launch { toast("自定义线路不可用，已切换至原始线路") }
+            toastCdnSwitch("自定义线路不可用，已切换至原始线路")
         }
     }
 
@@ -9855,6 +9855,18 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    /** CDN and line changes only announce themselves when the setting is on. */
+    private fun toastCdnSwitch(msg: String) {
+        viewModelScope.launch {
+            val context = appContext ?: com.android.purebilibili.core.network.NetworkModule.appContext
+                ?: return@launch
+            val noticeEnabled = com.android.purebilibili.core.store.SettingsManager
+                .getPlaybackCdnSwitchNoticeEnabled(context)
+                .first()
+            if (noticeEnabled) toast(msg)
+        }
+    }
+
     init {
         // 自动选线换了节点时，像手动线路切换一样提示；只提示本页视频的切换。
         viewModelScope.launch {
@@ -9866,13 +9878,13 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 val samePage = if (switchVideo != null && pageVideo != null) switchVideo == pageVideo else
                     switch.originalUrl in current.allVideoUrls || switch.originalUrl == current.playUrl
                 if (!samePage) return@collect
-                toast("已自动切换到线路：${com.android.purebilibili.feature.plugin.resolveAutoCdnHostLabel(switch.toHost)}")
+                toastCdnSwitch("已自动切换到线路：${com.android.purebilibili.feature.plugin.resolveAutoCdnHostLabel(switch.toHost)}")
             }
         }
         viewModelScope.launch {
             com.android.purebilibili.feature.plugin.CdnAutoRoutingRuntime.reverts.collect { revert ->
                 if (_uiState.value !is VideoPlaybackUiState.Success) return@collect
-                toast(
+                toastCdnSwitch(
                     com.android.purebilibili.feature.plugin.resolveAutoCdnRevertMessage(
                         com.android.purebilibili.feature.plugin.resolveAutoCdnHostLabel(revert.fromHost),
                         revert.reason
